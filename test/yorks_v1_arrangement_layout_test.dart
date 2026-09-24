@@ -1,3 +1,8 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:flutter/services.dart';
+import 'package:material_ledger/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -20,6 +25,21 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'support/yorks_v1_permission_test_support.dart';
 
 void main() {
+  setUpAll(() async {
+    final font = FontLoader('NexusSans')
+      ..addFont(rootBundle.load('assets/fonts/NotoSans-Regular.ttf'));
+    var directory = File(Platform.resolvedExecutable).parent;
+    while (!directory.path.endsWith('${Platform.pathSeparator}cache') &&
+        directory.path != directory.parent.path) {
+      directory = directory.parent;
+    }
+    final bytes = await File(
+      '${directory.path}/artifacts/material_fonts/MaterialIcons-Regular.otf',
+    ).readAsBytes();
+    final icons = FontLoader('MaterialIcons')
+      ..addFont(Future.value(ByteData.sublistView(bytes)));
+    await Future.wait([font.load(), icons.load()]);
+  });
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   testWidgets(
@@ -70,7 +90,9 @@ void main() {
               ],
             ),
           ],
-          child: const MaterialApp(
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
             home: YorksV1ArrangementScreen(
               requestId: 'request-1',
               embedded: true,
@@ -178,7 +200,9 @@ void main() {
             (ref) async => _inventoryItems,
           ),
         ],
-        child: const MaterialApp(
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.light,
           home: YorksV1ArrangementScreen(
             requestId: 'request-1',
             embedded: true,
@@ -232,7 +256,9 @@ void main() {
             (ref) async => _inventoryItems,
           ),
         ],
-        child: const MaterialApp(
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.light,
           home: YorksV1ArrangementScreen(
             requestId: 'request-1',
             embedded: true,
@@ -292,7 +318,9 @@ void main() {
               'request-1',
             ).overrideWith((ref) async => _pendingClarificationWorkspace),
           ],
-          child: const MaterialApp(
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
             home: YorksV1ArrangementScreen(
               requestId: 'request-1',
               embedded: true,
@@ -363,7 +391,9 @@ void main() {
               'request-1',
             ).overrideWith((ref) async => _pendingClarificationWorkspace),
           ],
-          child: const MaterialApp(
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
             home: YorksV1ArrangementScreen(requestId: 'request-1'),
           ),
         ),
@@ -445,6 +475,8 @@ void main() {
             ),
           ],
           child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
             home: SizedBox(
               width: 1320,
               height: 760,
@@ -525,7 +557,9 @@ void main() {
               (ref) async => _inventoryItems,
             ),
           ],
-          child: const MaterialApp(
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
             home: YorksV1ArrangementScreen(
               requestId: 'request-1',
               embedded: true,
@@ -542,6 +576,91 @@ void main() {
 
       expect(repository.saveInputs, hasLength(1));
       expect(repository.saveInputs.single.lines.single.unitCost, isNull);
+      await tester.pump(const Duration(seconds: 6));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'required external readiness stays visible and duplicate save is blocked',
+    (tester) async {
+      tester.view.physicalSize = const Size(1366, 768);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final repository = _ArrangementRepository();
+      final preferences = await SharedPreferences.getInstance();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+              (ref) => YorksV1TestPermissionController(
+                yorksV1TrustedFeaturePermissionState(),
+              ),
+            ),
+            yorksV1MaterialRequestDetailProvider(
+              'request-1',
+            ).overrideWith((ref) async => _request),
+            canManageCommercialsProvider.overrideWithValue(false),
+            canViewCommercialsProvider.overrideWithValue(false),
+            yorksV1ArrangementRepositoryProvider.overrideWithValue(repository),
+            yorksV1ArrangementWorkspaceProvider('request-1').overrideWith(
+              (ref) async => YorksV1ArrangementWorkspace(
+                requestId: 'request-1',
+                requestState: 'arranging',
+                requestRecordVersion: 1,
+                canBegin: false,
+                canSave: true,
+                canDecide: false,
+                externalSourceReadinessRequired: true,
+                arrangements: _externalSupplierWorkspace.arrangements,
+              ),
+            ),
+            yorksV1ArrangementInventoryProvider.overrideWith(
+              (ref) async => const [],
+            ),
+          ],
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
+            home: YorksV1ArrangementScreen(
+              requestId: 'request-1',
+              embedded: true,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final ready = find.byKey(
+        const ValueKey('external-ready-arrangement-line-2'),
+      );
+      expect(ready, findsOneWidget);
+      final save = find.text('Save arrangement');
+      await tester.ensureVisible(save);
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+      expect(repository.saveInputs, isEmpty);
+      await tester.ensureVisible(ready);
+      await tester.tap(ready);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(save);
+      repository.pendingSave = Completer<void>();
+      // Two taps before the next frame must still execute just one command.
+      await tester.tap(save);
+      await tester.tap(save);
+      await tester.pump();
+      expect(repository.saveInputs, hasLength(1));
+      expect(
+        repository.saveInputs.single.lines.single.externalSourceReady,
+        isTrue,
+      );
+      repository.pendingSave!.complete();
+      await tester.pumpAndSettle();
       await tester.pump(const Duration(seconds: 6));
       expect(tester.takeException(), isNull);
     },
@@ -581,7 +700,9 @@ void main() {
             (ref) async => const [],
           ),
         ],
-        child: const MaterialApp(
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.light,
           home: YorksV1ArrangementScreen(
             requestId: 'request-1',
             embedded: true,
@@ -591,6 +712,21 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    final external = find.byKey(
+      const ValueKey('source-arrangement-line-2-external_supplier'),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('source-arrangement-line-2-warehouse')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(external);
+    await tester.pumpAndSettle();
+    expect(repository.saveInputs, isEmpty);
+    expect(tester.widget<ChoiceChip>(external).selected, isTrue);
+    expect(
+      find.byKey(const ValueKey('external-ready-arrangement-line-2')),
+      findsNothing,
+    );
     expect(find.text('Add supplier details (optional)'), findsOneWidget);
     expect(find.text('Supplier name optional'), findsNothing);
     expect(
@@ -603,6 +739,22 @@ void main() {
         'goldens/r35/arrange_external_supplier_optional_desktop.png',
       ),
     );
+    for (final width in [1920.0, 1024.0, 768.0, 360.0, 1366.0]) {
+      tester.view.physicalSize = Size(width, 900);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(external);
+      expect(tester.widget<ChoiceChip>(external).selected, isTrue);
+      expect(tester.takeException(), isNull);
+      if (width == 768 || width == 360) {
+        await expectLater(
+          find.byType(MaterialApp),
+          matchesGoldenFile(
+            'goldens/r35/arrange_external_quick_${width.toInt()}.png',
+          ),
+        );
+      }
+    }
+    await tester.ensureVisible(find.text('Save arrangement'));
     await tester.tap(find.text('Save arrangement'));
     await tester.pumpAndSettle();
 
@@ -650,7 +802,9 @@ void main() {
             (ref) async => const [],
           ),
         ],
-        child: const MaterialApp(
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.light,
           home: YorksV1ArrangementScreen(
             requestId: 'request-1',
             embedded: true,
@@ -658,6 +812,10 @@ void main() {
         ),
       ),
     );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Availability details (optional)'));
+    await tester.tap(find.text('Availability details (optional)'));
     await tester.pumpAndSettle();
 
     final ready = find.byKey(
@@ -686,6 +844,20 @@ void main() {
     await tester.enterText(expectedDate, '2026-09-01');
     await tester.ensureVisible(reference);
     await tester.enterText(reference, 'QUOTE-2026-91');
+    await tester.ensureVisible(find.text('Availability details (optional)'));
+    await tester.tap(find.text('Availability details (optional)'));
+    await tester.pumpAndSettle();
+    expect(reference, findsNothing);
+    tester.view.physicalSize = const Size(1024, 900);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Availability details (optional)'));
+    await tester.tap(find.text('Availability details (optional)'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(reference);
+    expect(
+      tester.widget<TextFormField>(reference).initialValue,
+      'QUOTE-2026-91',
+    );
     final save = find.text('Save arrangement');
     await tester.ensureVisible(save);
     await tester.tap(save);
@@ -745,7 +917,9 @@ void main() {
             ],
           ),
         ],
-        child: const MaterialApp(
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.light,
           home: YorksV1ArrangementScreen(requestId: 'request-1'),
         ),
       ),
@@ -795,7 +969,9 @@ void main() {
               (ref) async => _inventoryItems,
             ),
           ],
-          child: const MaterialApp(
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
             home: YorksV1ArrangementScreen(
               requestId: 'request-1',
               embedded: true,
@@ -874,7 +1050,9 @@ void main() {
               ],
             ),
           ],
-          child: const MaterialApp(
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
             home: YorksV1ArrangementScreen(
               requestId: 'request-1',
               embedded: true,
@@ -950,7 +1128,9 @@ void main() {
               ],
             ),
           ],
-          child: const MaterialApp(
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
             home: YorksV1ArrangementScreen(
               requestId: 'request-1',
               embedded: true,
@@ -1005,7 +1185,9 @@ void main() {
               (ref) async => _inventoryItems,
             ),
           ],
-          child: const MaterialApp(
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
             home: YorksV1ArrangementScreen(
               requestId: 'request-1',
               embedded: true,
@@ -1091,7 +1273,9 @@ void main() {
               (ref) async => _inventoryItems,
             ),
           ],
-          child: const MaterialApp(
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
             home: YorksV1ArrangementScreen(
               requestId: 'request-1',
               embedded: true,
@@ -1157,7 +1341,9 @@ void main() {
               (ref) async => _inventoryItems,
             ),
           ],
-          child: const MaterialApp(
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
             home: YorksV1ArrangementScreen(requestId: 'request-1'),
           ),
         ),
@@ -1391,6 +1577,7 @@ class _ArrangementRepository implements YorksV1ArrangementRepository {
   final List<YorksV1UpdateProcurementMaterialItemInput> clarificationInputs =
       [];
   bool failNextClarification = false;
+  Completer<void>? pendingSave;
 
   @override
   Future<YorksV1ArrangementWorkspace> begin(
@@ -1425,6 +1612,7 @@ class _ArrangementRepository implements YorksV1ArrangementRepository {
     YorksV1SaveArrangementInput input,
   ) async {
     saveInputs.add(input);
+    await pendingSave?.future;
     return _workingWorkspace;
   }
 

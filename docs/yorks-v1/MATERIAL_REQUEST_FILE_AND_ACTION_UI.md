@@ -92,3 +92,27 @@ on the browser width alone.
 - Existing capability, RLS, document and audit boundaries remain unchanged.
 - Optimized release builds show every primary file glyph; a coloured container
   without its glyph is a failed release state.
+
+## External supplier arrangement refinement — 25 September 2026
+
+Procurement can select Warehouse or External supplier directly, with an explicit
+selected checkmark and the existing Yorks blue styling. Full external supply
+continues to require neither a supplier name nor a reason. Save arrangement is
+the single explicit, server-confirmed handoff; selecting a source never commits
+stock or marks supplier readiness on the user's behalf.
+
+Optional availability/date/reference fields and the overall Procurement note
+start collapsed, preserving entered values while collapsed or resized. Existing
+availability evidence opens initially; a published mandatory readiness policy
+always exposes its controls and continues to block an unconfirmed save. Partial
+and Cannot Provide Now retain their required exception reasons. The server RPC,
+quantity validation, permissions, audit and analytics command paths are unchanged.
+An immediate busy guard prevents repeat Save activation before the next frame.
+
+The arrangement layout tests use the application theme and real fonts. Coverage
+includes direct source selection, blank optional fields, live resizing through
+1366/1024/768/360 widths, retained evidence, mandatory readiness and duplicate
+Save activation. Existing arrangement validation, commercial revocation,
+warehouse matching and retained-reservation tests remain in the focused gate.
+There are no migrations in this UI slice; rollback is the preceding client
+artifact, with no data rollback or historical record changes.
