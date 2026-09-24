@@ -1,0 +1,22 @@
+{
+  "source_commit": "ff9354c",
+  "configuration": "Company enabled; ci.invalid backend; ephemeral CI Android signing",
+  "production_release": false,
+  "files": [
+    {
+      "path": "build/web/main.dart.js",
+      "bytes": 10263683,
+      "sha256": "ae22e3e2ba78c9fc6ea90a32184ad3812b43cd6e441f8214d4c4f2e6438bd630"
+    },
+    {
+      "path": "build/web/flutter_bootstrap.js",
+      "bytes": 14186,
+      "sha256": "8de1e204c062438eab5a00de30ed05b02a8c6dee871c8c7861fa40a347ddbca6"
+    },
+    {
+      "path": "build/app/outputs/flutter-apk/app-release.apk",
+      "bytes": 106813696,
+      "sha256": "b14299db3f566e7c967e77fc10165334a593421d0b1fb204a4cfdc4972b75898"
+    }
+  ]
+}

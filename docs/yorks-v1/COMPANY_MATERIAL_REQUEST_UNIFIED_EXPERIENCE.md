@@ -6,12 +6,13 @@ reduce visible content, and keep both request types in one understandable path.
 
 ## Product approach
 
-Material Requests is the shared destination. A consistent **Project use /
-Company use** control selects the operational context on desktop and mobile.
-The selected context has an icon, text, selected background and checkmark.
-Project-context shortcuts continue directly to their project. Company routes
-remain distinct for stable links and deferred web loading, without a second
-sidebar module or a fictional Company project.
+Material Requests is the shared destination. Its **All Requests** home now
+contains authorized Project and Company requests in one server-paged list.
+Company rows have an explicit Company use label and their own real reference,
+state and unit. Search, My Requests, assigned work and operational counts use
+the combined readable set. Project folders stay Project-only. Creation offers
+Project use and Company use without creating a fictional Company project.
+Company detail routes remain distinct for stable links and deferred loading.
 
 | Step | Shared interaction | Company-specific meaning |
 |---|---|---|
@@ -21,7 +22,7 @@ sidebar module or a fictional Company project.
 | Arrange | Review every line before saving once | Approved Company demand; shared warehouse or explicit external supplier |
 | Dispatch | Review the exact selected quantities | Server-calculated outstanding supply cap |
 | Receive | Review each named item before one confirmation | Designated receiver, with good and exception quantities kept separate |
-| Handover | Review the beneficiary and quantities | Signed-in beneficiary acknowledgement or explicit receiver-witnessed handover |
+| Handover | Review the beneficiary and quantities | Active Yorks-login beneficiary; direct acknowledgement or authorized receiver-witnessed handover |
 | Return / close | Deliberate quantities and reason; server confirmation | Company custody evidence and existing closure checks |
 
 The list is concise: reference/status, purpose, destination/item count and next
@@ -96,7 +97,11 @@ to cross-module Company returns and the complete
 controlled-document set beyond immutable issue evidence. This change does not
 enable Company use in production or authorize deployment.
 
-## Verification record — 25 September 2026
+## Earlier verification record — before the final integration re-audit
+
+The current combined candidate and its exact gate results are recorded in
+[the re-audit report](COMPANY_MR_REAUDIT_2026-09-25.md). The table below is the
+earlier local checkpoint, not evidence for the final combined artifact.
 
 | Check | Result |
 |---|---|
