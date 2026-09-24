@@ -88,16 +88,15 @@ class YorksV1CurrentPermissionSnapshotState {
       ? (error! as YorksV1DomainException).code
       : null;
 
-  /// A confirmed snapshot remains usable while an ordinary background refresh
-  /// is in flight. The protected command still re-authorizes on the server,
-  /// and the Realtime revision channel pauses writes immediately when an
-  /// actual authority change is signalled.
+  /// Realtime reports revisions; it is not the authority for a command. Keep
+  /// the last confirmed snapshot usable through transport interruptions while
+  /// every protected RPC rechecks the actor. An actual revision signal still
+  /// marks that snapshot stale until the replacement is confirmed.
   bool get isTrustedForWrites =>
       snapshot != null &&
       snapshot!.user.isActive &&
       !isInitialLoading &&
       !isStale &&
-      isRevisionSignalHealthy &&
       domainErrorCode != YorksV1DomainErrorCode.unauthenticated &&
       domainErrorCode != YorksV1DomainErrorCode.unauthorized;
 
@@ -403,7 +402,7 @@ class YorksV1CurrentPermissionSnapshotController
         _markRevisionSignalUnavailable(error);
       }
     }
-    if (!_disposed) await refresh(authorityMayHaveChanged: true);
+    if (!_disposed) await refresh(authorityMayHaveChanged: state.isStale);
   }
 
   Future<void> start() async {
@@ -415,9 +414,8 @@ class YorksV1CurrentPermissionSnapshotController
       _disposedSignal.future.then((_) => false),
     ]);
 
-    // Do not hold the first protected projection behind a Realtime join. The
-    // snapshot can safely power read navigation immediately; it remains stale
-    // and write-disabled until the revision channel is confirmed healthy.
+    // Do not hold the protected projection or actions behind a Realtime join.
+    // The command itself revalidates authorization even if the signal is down.
     await refresh();
     // Poll even when the first RPC failed. Otherwise a simultaneous initial
     // RPC + Realtime outage can strand the app on its verification state until
@@ -442,11 +440,9 @@ class YorksV1CurrentPermissionSnapshotController
       return;
     }
     _revisionSignalHealthy = true;
-    // A fast channel join may already have covered the first fetch. Only
-    // perform a second RPC when that first projection was completed before
-    // invalidation became trustworthy.
+    // Only repeat the RPC when an actual revision signal made it stale.
     if (!state.isTrustedForWrites) {
-      await refresh(authorityMayHaveChanged: true);
+      await refresh(authorityMayHaveChanged: state.isStale);
     }
     if (!_disposed) _startSafetyRefresh();
   }
@@ -490,7 +486,7 @@ class YorksV1CurrentPermissionSnapshotController
           if (_disposed || _refreshQueued) continue;
           state = YorksV1CurrentPermissionSnapshotState(
             snapshot: snapshot,
-            isStale: !_revisionSignalHealthy,
+            isStale: false,
             isRevisionSignalHealthy: _revisionSignalHealthy,
           );
           _scheduleAssignmentTransition(snapshot);
@@ -502,8 +498,7 @@ class YorksV1CurrentPermissionSnapshotController
               previous == null ||
               failure.code == YorksV1DomainErrorCode.unauthenticated ||
               failure.code == YorksV1DomainErrorCode.unauthorized;
-          final retainedAuthorityIsCurrent =
-              !mustPurge && !state.isStale && _revisionSignalHealthy;
+          final retainedAuthorityIsCurrent = !mustPurge && !state.isStale;
           state = YorksV1CurrentPermissionSnapshotState(
             snapshot: mustPurge ? null : previous,
             isStale: !mustPurge && !retainedAuthorityIsCurrent,
@@ -523,8 +518,8 @@ class YorksV1CurrentPermissionSnapshotController
     }
   }
 
-  /// Used for logout, expired authentication, or a failed authorization
-  /// revision channel. It synchronously drops every presentation grant.
+  /// Used for logout or an authoritative authentication failure. It
+  /// synchronously drops every presentation grant.
   void invalidateForAuthorizationFailure([Object? error]) {
     if (_disposed) return;
     _assignmentTransitionTimer?.cancel();
@@ -550,7 +545,7 @@ class YorksV1CurrentPermissionSnapshotController
     }
     state = YorksV1CurrentPermissionSnapshotState(
       snapshot: previous,
-      isStale: true,
+      isStale: state.isStale,
       isRevisionSignalHealthy: false,
       error: YorksV1DomainException(
         YorksV1DomainErrorCode.backendUnavailable,
@@ -629,7 +624,7 @@ class YorksV1CurrentPermissionSnapshotController
             _revisionSignalHealthy = true;
             if (!initialJoin.isCompleted) initialJoin.complete(true);
             if (wasJoined && reconnected) {
-              unawaited(refresh(authorityMayHaveChanged: true));
+              unawaited(refresh(authorityMayHaveChanged: state.isStale));
               _startSafetyRefresh();
             }
             return;
@@ -715,7 +710,7 @@ class YorksV1CurrentPermissionSnapshotController
           !_revisionSignalHealthy ||
           foregroundGap >= _foregroundRefreshThreshold;
       if (leftAt != null && authorityNeedsRefresh) {
-        unawaited(refresh(authorityMayHaveChanged: true));
+        unawaited(refresh(authorityMayHaveChanged: this.state.isStale));
       }
       return;
     }

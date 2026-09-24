@@ -45,6 +45,7 @@ bool yorksV1TrustedCommercialAccess(
   String capabilityKey,
 ) =>
     state.error == null &&
+    state.isRevisionSignalHealthy &&
     state.isTrustedForWrites &&
     state.allows(capabilityKey);
 

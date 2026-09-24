@@ -851,7 +851,7 @@ void main() {
 
   group('permission providers and controllers', () {
     test(
-      'retry rejoins revision signal before restoring write trust',
+      'retry rejoins revision signal without gating a confirmed grant',
       () async {
         var joins = 0;
         final controller = YorksV1CurrentPermissionSnapshotController(
@@ -865,7 +865,7 @@ void main() {
         );
         addTearDown(controller.dispose);
         await controller.start();
-        expect(controller.state.isTrustedForWrites, isFalse);
+        expect(controller.state.isTrustedForWrites, isTrue);
 
         await controller.retryVerification();
         expect(joins, 2);
@@ -891,9 +891,9 @@ void main() {
         await controller.start();
 
         expect(controller.state.snapshot?.revision, 7);
-        expect(controller.state.isStale, isTrue);
+        expect(controller.state.isStale, isFalse);
         expect(controller.state.isRevisionSignalHealthy, isFalse);
-        expect(controller.state.isTrustedForWrites, isFalse);
+        expect(controller.state.isTrustedForWrites, isTrue);
         expect(
           controller.state.domainErrorCode,
           YorksV1DomainErrorCode.backendUnavailable,
@@ -934,9 +934,9 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 30));
 
         expect(controller.state.snapshot?.revision, 8);
-        expect(controller.state.isStale, isTrue);
+        expect(controller.state.isStale, isFalse);
         expect(controller.state.isRevisionSignalHealthy, isFalse);
-        expect(controller.state.isTrustedForWrites, isFalse);
+        expect(controller.state.isTrustedForWrites, isTrue);
         expect(repository.currentLoads, greaterThanOrEqualTo(2));
         controller.dispose();
       },
@@ -1258,7 +1258,7 @@ void main() {
     );
 
     test(
-      'revision signal loss keeps reads and marks authority stale',
+      'revision signal loss retains last confirmed action authority',
       () async {
         void Function(Object? error)? unavailable;
         final controller = YorksV1CurrentPermissionSnapshotController(
@@ -1278,9 +1278,9 @@ void main() {
         unavailable!(StateError('channel closed'));
 
         expect(controller.state.snapshot?.revision, 7);
-        expect(controller.state.isStale, isTrue);
+        expect(controller.state.isStale, isFalse);
         expect(controller.state.isRevisionSignalHealthy, isFalse);
-        expect(controller.state.isTrustedForWrites, isFalse);
+        expect(controller.state.isTrustedForWrites, isTrue);
         controller.dispose();
       },
     );
@@ -1323,6 +1323,33 @@ void main() {
 
         expect(controller.state.snapshot?.revision, 8);
         expect(repository.currentLoads, 2);
+        controller.dispose();
+      },
+    );
+
+    test(
+      'mobile resume retains actions while safety refresh is in flight',
+      () async {
+        var now = DateTime.utc(2026, 8, 24, 9);
+        final pending = Completer<YorksV1CurrentPermissionSnapshot>();
+        final repository = _FakePermissionRepository(
+          currentSnapshot: _snapshot(),
+        );
+        final controller = _currentController(repository, now: () => now);
+        await controller.start();
+
+        repository.nextSnapshot = () => pending.future;
+        controller.didChangeAppLifecycleState(AppLifecycleState.paused);
+        now = now.add(const Duration(minutes: 3));
+        controller.didChangeAppLifecycleState(AppLifecycleState.resumed);
+        await _waitFor(() => repository.currentLoads >= 2);
+
+        expect(controller.state.isRefreshing, isTrue);
+        expect(controller.state.isStale, isFalse);
+        expect(controller.state.isTrustedForWrites, isTrue);
+        pending.complete(_snapshot(revision: 8));
+        await _waitFor(() => controller.state.snapshot?.revision == 8);
+        expect(controller.state.isTrustedForWrites, isTrue);
         controller.dispose();
       },
     );

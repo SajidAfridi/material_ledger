@@ -94,8 +94,9 @@ class YorksV1FeatureActionAccess {
   final YorksV1ActionAvailability availability;
 
   /// A confirmed allow remains usable during a routine background refresh.
-  /// Writes pause only when the revision channel is unhealthy or an actual
-  /// authority change has made the retained snapshot stale.
+  /// Writes pause when an actual authority change makes the retained snapshot
+  /// stale. A transport-only Realtime outage keeps confirmed actions usable;
+  /// the protected command still rechecks current authority.
   bool get isWritePaused => isVisible && !canWrite;
 }
 
