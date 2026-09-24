@@ -94,9 +94,9 @@ class YorksV1FeatureActionAccess {
   final YorksV1ActionAvailability availability;
 
   /// A confirmed allow remains usable during a routine background refresh.
-  /// Writes pause when an actual authority change makes the retained snapshot
-  /// stale. A transport-only Realtime outage keeps confirmed actions usable;
-  /// the protected command still rechecks current authority.
+  /// Writes pause when an actual authority change has made the retained
+  /// snapshot stale. Realtime transport loss alone leaves server-checked
+  /// commands available.
   bool get isWritePaused => isVisible && !canWrite;
 }
 
@@ -208,8 +208,8 @@ YorksV1FeatureActionAccess yorksV1FeatureActionAccess(
   return YorksV1FeatureActionAccess(
     isVisible: allowed,
     // Shadow preserves the legacy structural decision. AP-16 keeps a trusted
-    // decision usable during routine polling, but pauses every mutation when
-    // the invalidation channel is unhealthy or the snapshot is stale.
+    // decision usable during routine polling or a dropped invalidation
+    // channel. An actual revision event pauses mutation until it is resolved.
     canWrite: allowed && state.isTrustedForWrites,
     authorizationMode: access.authorizationMode,
     availability: !allowed

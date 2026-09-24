@@ -539,13 +539,12 @@ void main() {
       final standaloneRpc = _RecordingPermissionRpc(
         _workspaceJson(revision: 8),
       );
-      await _repository(
-        rpc: standaloneRpc,
-      ).assignWorkforceOrganizationResponsibility(
-        targetAppUserId: 'usr-engineer',
-        reason: 'Restore retained Workforce responsibility.',
-        idempotencyKey: _idempotencyKey,
-      );
+      await _repository(rpc: standaloneRpc)
+          .assignWorkforceOrganizationResponsibility(
+            targetAppUserId: 'usr-engineer',
+            reason: 'Restore retained Workforce responsibility.',
+            idempotencyKey: _idempotencyKey,
+          );
       expect(
         standaloneRpc.functionName,
         'v1_assign_user_workforce_organization',
@@ -812,9 +811,8 @@ void main() {
         'authoritative_effective',
       );
       await expectLater(
-        _repository(
-          rpc: _RecordingPermissionRpc(response),
-        ).getCurrentSnapshot(),
+        _repository(rpc: _RecordingPermissionRpc(response))
+            .getCurrentSnapshot(),
         throwsA(_domainError(YorksV1DomainErrorCode.unexpectedResponse)),
       );
     });
@@ -825,9 +823,8 @@ void main() {
           'usr-other';
 
       await expectLater(
-        _repository(
-          rpc: _RecordingPermissionRpc(response),
-        ).getUserWorkspace(targetAppUserId: 'usr-engineer'),
+        _repository(rpc: _RecordingPermissionRpc(response))
+            .getUserWorkspace(targetAppUserId: 'usr-engineer'),
         throwsA(_domainError(YorksV1DomainErrorCode.unexpectedResponse)),
       );
     });
@@ -851,29 +848,64 @@ void main() {
 
   group('permission providers and controllers', () {
     test(
-      'retry rejoins revision signal without gating a confirmed grant',
+      'late Realtime join catches up without pausing confirmed actions',
       () async {
-        var joins = 0;
+        final join = Completer<bool>();
+        final pendingCatchup = Completer<YorksV1CurrentPermissionSnapshot>();
+        final repository = _FakePermissionRepository(
+          currentSnapshot: _snapshot(),
+        );
         final controller = YorksV1CurrentPermissionSnapshotController(
           enabled: true,
           authUserId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
           client: null,
-          repository: _FakePermissionRepository(currentSnapshot: _snapshot()),
-          revisionSignalSubscription:
-              ({required onSignal, required onUnavailable}) async =>
-                  ++joins > 1,
+          repository: repository,
+          revisionSignalSubscription: ({
+            required onSignal,
+            required onUnavailable,
+          }) => join.future,
+          safetyRefreshInterval: const Duration(hours: 1),
         );
         addTearDown(controller.dispose);
-        await controller.start();
+        final startup = controller.start();
+        await _waitFor(() => controller.state.snapshot != null);
+        expect(controller.state.isRevisionSignalHealthy, isFalse);
         expect(controller.state.isTrustedForWrites, isTrue);
 
-        await controller.retryVerification();
-        expect(joins, 2);
+        repository.nextSnapshot = () => pendingCatchup.future;
+        join.complete(true);
+        await _waitFor(() => repository.currentLoads == 2);
+        expect(controller.state.isStale, isFalse);
         expect(controller.state.isTrustedForWrites, isTrue);
+
+        pendingCatchup.complete(_snapshot(revision: 8));
+        await startup;
+        expect(controller.state.snapshot?.revision, 8);
       },
     );
+
+    test('retry rejoins revision signal without withdrawing confirmed write access', () async {
+      var joins = 0;
+      final controller = YorksV1CurrentPermissionSnapshotController(
+        enabled: true,
+        authUserId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        client: null,
+        repository: _FakePermissionRepository(currentSnapshot: _snapshot()),
+        revisionSignalSubscription: ({
+          required onSignal,
+          required onUnavailable,
+        }) async => ++joins > 1,
+      );
+      addTearDown(controller.dispose);
+      await controller.start();
+      expect(controller.state.isTrustedForWrites, isTrue);
+
+      await controller.retryVerification();
+      expect(joins, 2);
+      expect(controller.state.isTrustedForWrites, isTrue);
+    });
     test(
-      'unavailable revision signal keeps a readable snapshot and polls',
+      'unavailable revision signal keeps confirmed actions and polls',
       () async {
         final repository = _FakePermissionRepository(
           currentSnapshot: _snapshot(),
@@ -883,8 +915,10 @@ void main() {
           authUserId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
           client: null,
           repository: repository,
-          revisionSignalSubscription:
-              ({required onSignal, required onUnavailable}) async => false,
+          revisionSignalSubscription: ({
+            required onSignal,
+            required onUnavailable,
+          }) async => false,
           safetyRefreshInterval: const Duration(milliseconds: 5),
         );
 
@@ -924,8 +958,10 @@ void main() {
           authUserId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
           client: null,
           repository: repository,
-          revisionSignalSubscription:
-              ({required onSignal, required onUnavailable}) async => false,
+          revisionSignalSubscription: ({
+            required onSignal,
+            required onUnavailable,
+          }) async => false,
           safetyRefreshInterval: const Duration(milliseconds: 5),
         );
 
@@ -939,6 +975,35 @@ void main() {
         expect(controller.state.isTrustedForWrites, isTrue);
         expect(repository.currentLoads, greaterThanOrEqualTo(2));
         controller.dispose();
+      },
+    );
+
+    test(
+      'cold launch retries a temporary permission outage promptly',
+      () async {
+        final repository = _FakePermissionRepository(
+          nextSnapshot: () async => _snapshot(revision: 8),
+        );
+        final controller = YorksV1CurrentPermissionSnapshotController(
+          enabled: true,
+          authUserId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          client: null,
+          repository: repository,
+          revisionSignalSubscription: ({
+            required onSignal,
+            required onUnavailable,
+          }) async => false,
+          safetyRefreshInterval: const Duration(hours: 1),
+          verificationRetryInterval: const Duration(milliseconds: 5),
+        );
+        addTearDown(controller.dispose);
+        await controller.start();
+
+        await Future<void>.delayed(const Duration(milliseconds: 25));
+        await _waitFor(() => controller.state.snapshot?.revision == 8);
+        expect(repository.currentLoads, greaterThanOrEqualTo(2));
+        expect(controller.state.isTrustedForWrites, isTrue);
+        expect(controller.state.isRevisionSignalHealthy, isFalse);
       },
     );
 
@@ -1235,6 +1300,47 @@ void main() {
       },
     );
 
+    test('late failed refresh cannot overwrite a newer revision', () async {
+      final oldRefresh = Completer<YorksV1CurrentPermissionSnapshot>();
+      late Future<void> Function() signal;
+      var laterLoads = 0;
+      final repository = _FakePermissionRepository(
+        currentSnapshot: _snapshot(),
+      );
+      final controller = YorksV1CurrentPermissionSnapshotController(
+        enabled: true,
+        authUserId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        client: null,
+        repository: repository,
+        revisionSignalSubscription:
+            ({required onSignal, required onUnavailable}) async {
+              signal = onSignal;
+              return true;
+            },
+        safetyRefreshInterval: const Duration(hours: 1),
+      );
+      addTearDown(controller.dispose);
+      await controller.start();
+      repository.nextSnapshot = () async {
+        laterLoads++;
+        return laterLoads == 1 ? oldRefresh.future : _snapshot(revision: 9);
+      };
+
+      final refresh = controller.refresh();
+      await _waitFor(() => controller.state.isRefreshing);
+      await signal();
+      expect(controller.state.isStale, isTrue);
+      oldRefresh.completeError(
+        const YorksV1DomainException(YorksV1DomainErrorCode.backendUnavailable),
+      );
+      await refresh;
+
+      expect(laterLoads, 2);
+      expect(controller.state.snapshot?.revision, 9);
+      expect(controller.state.error, isNull);
+      expect(controller.state.isTrustedForWrites, isTrue);
+    });
+
     test(
       'expired authorization purges a previously confirmed snapshot',
       () async {
@@ -1257,31 +1363,103 @@ void main() {
       },
     );
 
+    test('revision signal loss retains confirmed actions without inventing revocation', () async {
+      void Function(Object? error)? unavailable;
+      final controller = YorksV1CurrentPermissionSnapshotController(
+        enabled: true,
+        authUserId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        client: null,
+        repository: _FakePermissionRepository(currentSnapshot: _snapshot()),
+        revisionSignalSubscription:
+            ({required onSignal, required onUnavailable}) async {
+              unavailable = onUnavailable;
+              return true;
+            },
+        safetyRefreshInterval: const Duration(hours: 1),
+      );
+      await controller.start();
+
+      unavailable!(StateError('channel closed'));
+
+      expect(controller.state.snapshot?.revision, 7);
+      expect(controller.state.isStale, isFalse);
+      expect(controller.state.isRevisionSignalHealthy, isFalse);
+      expect(controller.state.isTrustedForWrites, isTrue);
+      controller.dispose();
+    });
+
     test(
-      'revision signal loss retains last confirmed action authority',
+      'reconnect and foreground refresh keep the last confirmed action',
       () async {
-        void Function(Object? error)? unavailable;
+        var now = DateTime.utc(2026, 8, 24, 9);
+        late void Function(Object? error) unavailable;
+        final repository = _FakePermissionRepository(
+          currentSnapshot: _snapshot(),
+        );
         final controller = YorksV1CurrentPermissionSnapshotController(
           enabled: true,
           authUserId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
           client: null,
-          repository: _FakePermissionRepository(currentSnapshot: _snapshot()),
+          repository: repository,
           revisionSignalSubscription:
               ({required onSignal, required onUnavailable}) async {
                 unavailable = onUnavailable;
                 return true;
               },
           safetyRefreshInterval: const Duration(hours: 1),
+          now: () => now,
         );
+        addTearDown(controller.dispose);
+        await controller.start();
+        unavailable(StateError('mobile radio switched networks'));
+
+        final pending = Completer<YorksV1CurrentPermissionSnapshot>();
+        repository.nextSnapshot = () => pending.future;
+        controller.didChangeAppLifecycleState(AppLifecycleState.paused);
+        now = now.add(const Duration(minutes: 3));
+        controller.didChangeAppLifecycleState(AppLifecycleState.resumed);
+        await _waitFor(() => repository.currentLoads == 2);
+
+        expect(controller.state.isRefreshing, isTrue);
+        expect(controller.state.isStale, isFalse);
+        expect(controller.state.isTrustedForWrites, isTrue);
+        pending.completeError(
+          const YorksV1DomainException(
+            YorksV1DomainErrorCode.backendUnavailable,
+          ),
+        );
+        await _waitFor(() => !controller.state.isRefreshing);
+        expect(controller.state.isTrustedForWrites, isTrue);
+        expect(controller.state.snapshot?.revision, 7);
+      },
+    );
+
+    test(
+      'late permission response cannot restore a signed-out actor',
+      () async {
+        final pending = Completer<YorksV1CurrentPermissionSnapshot>();
+        final repository = _FakePermissionRepository(
+          currentSnapshot: _snapshot(),
+        );
+        final controller = _currentController(repository);
+        addTearDown(controller.dispose);
         await controller.start();
 
-        unavailable!(StateError('channel closed'));
+        repository.nextSnapshot = () => pending.future;
+        final refresh = controller.refresh();
+        await _waitFor(() => controller.state.isRefreshing);
+        controller.invalidateForAuthorizationFailure(
+          const YorksV1DomainException(YorksV1DomainErrorCode.unauthenticated),
+        );
+        pending.complete(_snapshot(revision: 8));
+        await refresh;
 
-        expect(controller.state.snapshot?.revision, 7);
-        expect(controller.state.isStale, isFalse);
-        expect(controller.state.isRevisionSignalHealthy, isFalse);
-        expect(controller.state.isTrustedForWrites, isTrue);
-        controller.dispose();
+        expect(controller.state.snapshot, isNull);
+        expect(controller.state.isTrustedForWrites, isFalse);
+        expect(
+          controller.state.domainErrorCode,
+          YorksV1DomainErrorCode.unauthenticated,
+        );
       },
     );
 
@@ -1739,8 +1917,10 @@ YorksV1CurrentPermissionSnapshotController _currentController(
   authUserId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   client: null,
   repository: repository,
-  revisionSignalSubscription:
-      ({required onSignal, required onUnavailable}) async => true,
+  revisionSignalSubscription: ({
+    required onSignal,
+    required onUnavailable,
+  }) async => true,
   safetyRefreshInterval: const Duration(hours: 1),
   now: now,
 );
