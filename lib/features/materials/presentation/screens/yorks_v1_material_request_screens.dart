@@ -16312,69 +16312,15 @@ Future<void> _showRequestWorkspaceInspector(
   BuildContext context, {
   required YorksV1MaterialRequest request,
   required AppLanguage language,
-}) {
-  final media = MediaQuery.of(context);
-  final panelWidth = media.size.width * .92 < 430
-      ? media.size.width * .92
-      : 430.0;
-  final rtl = Directionality.of(context) == TextDirection.rtl;
-  return showGeneralDialog<void>(
-    context: context,
-    useRootNavigator: true,
-    barrierDismissible: true,
-    barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
-    barrierColor: AppColors.scrim.withValues(alpha: .18),
-    transitionDuration: media.disableAnimations
-        ? Duration.zero
-        : const Duration(milliseconds: 180),
-    pageBuilder: (dialogContext, _, _) => SafeArea(
-      child: Align(
-        alignment: AlignmentDirectional.centerEnd,
-        child: Material(
-          key: const ValueKey('material-request-information-panel'),
-          color: Colors.transparent,
-          child: SizedBox(
-            width: panelWidth,
-            height: double.infinity,
-            child: LayoutBuilder(
-              builder: (context, constraints) => SingleChildScrollView(
-                padding: const EdgeInsets.all(AppSpacing.sm),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    minHeight: math.max(
-                      0,
-                      constraints.maxHeight - AppSpacing.sm * 2,
-                    ),
-                  ),
-                  child: _RequestWorkspaceInspector(
-                    request: request,
-                    language: language,
-                    onClose: () => Navigator.of(dialogContext).pop(),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    ),
-    transitionBuilder: (dialogContext, animation, _, child) {
-      if (media.disableAnimations) return child;
-      final curved = CurvedAnimation(
-        parent: animation,
-        curve: Curves.easeOutCubic,
-        reverseCurve: Curves.easeInCubic,
-      );
-      return SlideTransition(
-        position: Tween<Offset>(
-          begin: Offset(rtl ? -0.08 : 0.08, 0),
-          end: Offset.zero,
-        ).animate(curved),
-        child: FadeTransition(opacity: curved, child: child),
-      );
-    },
-  );
-}
+}) => showYorksV1RequestInformationPanel(
+  context,
+  language: language,
+  builder: (dialogContext) => _RequestWorkspaceInspector(
+    request: request,
+    language: language,
+    onClose: () => Navigator.of(dialogContext).pop(),
+  ),
+);
 
 /// Details, request-scoped history and follow-up assignment live together in
 /// the optional inspector. The panel is presentation state only: opening or
@@ -16391,69 +16337,26 @@ class _RequestWorkspaceInspector extends StatelessWidget {
   final VoidCallback onClose;
 
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) => YorksV1RequestInformationSurface(
     key: const ValueKey('material-request-workspace-inspector'),
-    padding: const EdgeInsets.all(AppSpacing.lg),
-    decoration: BoxDecoration(
-      color: AppColors.surfaceContainerLowest,
-      border: Border.all(color: AppColors.line),
-      borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-      boxShadow: const [
-        BoxShadow(
-          color: AppColors.shadow,
-          blurRadius: 12,
-          offset: Offset(0, 4),
-        ),
-      ],
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            const Icon(Icons.view_sidebar_outlined, color: AppColors.blue),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Text(
-                YorksV1MaterialRequestStrings.requestInformation.active(
-                  language,
-                ),
-                style: AppTypography.titleMedium.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-            IconButton(
-              key: const ValueKey('material-request-inspector-close'),
-              tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
-              onPressed: onClose,
-              icon: const Icon(Icons.close_rounded),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.md),
-        const Divider(height: 1),
-        const SizedBox(height: AppSpacing.md),
-        _RequestDetailsRail(
-          request: request,
-          language: language,
-          surface: false,
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        YorksV1MaterialRequestHistorySection(
-          requestId: request.id,
-          language: language,
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        _RequestWorkflowCard(request: request, language: language),
-        const SizedBox(height: AppSpacing.lg),
-        _MaterialRequestPhase2CollaborationSection(
-          request: request,
-          language: language,
-          compact: true,
-        ),
-      ],
-    ),
+    language: language,
+    onClose: onClose,
+    children: [
+      _RequestDetailsRail(request: request, language: language, surface: false),
+      const SizedBox(height: AppSpacing.lg),
+      YorksV1MaterialRequestHistorySection(
+        requestId: request.id,
+        language: language,
+      ),
+      const SizedBox(height: AppSpacing.lg),
+      _RequestWorkflowCard(request: request, language: language),
+      const SizedBox(height: AppSpacing.lg),
+      _MaterialRequestPhase2CollaborationSection(
+        request: request,
+        language: language,
+        compact: true,
+      ),
+    ],
   );
 }
 

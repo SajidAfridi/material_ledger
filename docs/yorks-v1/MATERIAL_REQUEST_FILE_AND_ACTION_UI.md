@@ -55,10 +55,17 @@ markers in its supporting actions.
 ## Request Information
 
 Request Information uses one content model throughout creation, submitted
-detail, arrangement, dispatch, receipt and return routes. Saved workflow views
-open it as an end-aligned side panel above 720 logical pixels and as a tall
-bottom sheet at or below 720. RTL languages place the panel on the corresponding
-directional end.
+detail, arrangement, dispatch, receipt and return routes. The 25 September consistency refinement makes saved detail, arrangement,
+dispatch/receipt and return views share one end-aligned, full-height overlay,
+clamped to 430 logical pixels or 92% of the available viewport on phones.
+RTL languages place it on the corresponding directional end. These routes
+share the rounded surface, spacing, close control, subtle reduced-motion-aware
+transition and bounded internal scroll. The workflow toolbar uses the same
+open/closed panel glyph and expanded semantics; duplicate activation cannot
+open multiple panels. History appears immediately inside the panel, followed
+by workflow state/owner/next-action facts. Each route retains its authorized
+stage-specific content. The draft composer retains its input-aware context
+layout; no submitted history is invented for an unsaved draft.
 
 Opening or closing the panel does not issue a command, refresh protected data,
 or replace working input. Escape, Back, the close control and barrier dismissal
