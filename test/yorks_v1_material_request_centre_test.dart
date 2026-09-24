@@ -8,6 +8,7 @@ import 'package:material_ledger/core/theme/app_theme.dart';
 import 'package:material_ledger/features/materials/presentation/screens/yorks_v1_material_request_centre.dart';
 import 'package:material_ledger/shared/models/app_language.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_request.dart';
+import 'package:material_ledger/shared/models/yorks_v1_material_register.dart';
 
 void main() {
   setUpAll(() async {
@@ -27,6 +28,95 @@ void main() {
       iconFontLoader.load(),
     ]);
   });
+
+  for (final width in [1440.0, 1024.0, 360.0]) {
+    testWidgets('unified register opens native Company rows at $width px', (
+      tester,
+    ) async {
+      await _setViewport(tester, Size(width, 1000));
+      String? companyOpened;
+      String? projectOpened;
+      var loads = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: Scaffold(
+            body: YorksV1MaterialRequestCentre(
+              requests: const [],
+              language: AppLanguage.english,
+              canCreate: true,
+              canCreateCompany: true,
+              onCreate: () {},
+              onCreateCompany: () {},
+              onOpen: (request) => projectOpened = request.id,
+              onOpenCompany: (id) async {
+                companyOpened = id;
+              },
+              onRefresh: () {},
+              registerPageLoader: (query) async {
+                loads++;
+                return YorksV1MaterialRegisterPage(
+                  items: [
+                    YorksV1MaterialRegisterEntry.company(_companyRegisterRow),
+                    YorksV1MaterialRegisterEntry.project(
+                      _summary(
+                        index: 1,
+                        updatedAt: DateTime.utc(2026, 9, 25),
+                      ).toRegisterProjection(),
+                    ),
+                  ],
+                  totalCount: 2,
+                  limit: 15,
+                  offset: 0,
+                  hasMore: false,
+                  metrics: const YorksV1MaterialRequestSummaryMetrics(
+                    total: 2,
+                    open: 2,
+                    inProgress: 0,
+                    dispatched: 0,
+                    received: 0,
+                    closed: 0,
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final row = find.byKey(
+        const ValueKey('material-request-row-company:company-proof'),
+      );
+      await tester.ensureVisible(row);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Company use'), findsWidgets);
+      expect(find.textContaining('Company approver'), findsWidgets);
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile(
+          'goldens/r35/unified_mr_register_${width.toInt()}.png',
+        ),
+      );
+      await tester.tap(row);
+      await tester.pumpAndSettle();
+      final openPreview = find.byKey(
+        const ValueKey('material-request-tablet-open'),
+      );
+      if (companyOpened == null && openPreview.evaluate().isNotEmpty) {
+        await tester.ensureVisible(openPreview);
+        await tester.tap(openPreview);
+        await tester.pumpAndSettle();
+      }
+      expect(companyOpened, 'company-proof');
+      expect(projectOpened, isNull);
+      expect(
+        loads,
+        2,
+        reason: 'Returning from Company workflow refreshes the shared list',
+      );
+    });
+  }
 
   testWidgets('desktop centre groups, searches and opens server requests', (
     tester,
@@ -996,3 +1086,19 @@ Directory _flutterCacheDirectory() {
   }
   throw StateError('Could not locate the Flutter cache from the test runner');
 }
+
+final _companyRegisterRow = <String, dynamic>{
+  'id': 'company-proof',
+  'request_kind': 'company',
+  'state': 'awaiting_company_approval',
+  'category_name': 'Workshop materials',
+  'responsible_unit_name': 'Main workshop',
+  'created_at': '2026-09-25T08:00:00Z',
+  'updated_at': '2026-09-25T08:00:00Z',
+  'request_number': 'CMR-0042',
+  'title': 'Safety equipment',
+  'item_count': 3,
+  'requester_display_name': 'Site Engineer',
+  'current_action_owner_role': 'company_approver',
+  'current_action_code': 'approve',
+};

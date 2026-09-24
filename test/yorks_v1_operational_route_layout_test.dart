@@ -169,7 +169,7 @@ void main() {
         ),
         (
           size: const Size(360, 800),
-          entryKey: const ValueKey('material-request-use-switch'),
+          entryKey: const ValueKey('material-request-centre-create-company'),
         ),
       ]) {
         tester.view.physicalSize = entry.size;

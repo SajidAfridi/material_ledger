@@ -8,6 +8,7 @@ import '../../../../core/widgets/yorks_v1_active_text.dart';
 import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/yorks_v1_material_request.dart';
+import '../../../../shared/models/yorks_v1_material_register.dart';
 import '../../../../shared/models/yorks_v1_material_request_strings.dart';
 import '../../../../shared/models/yorks_v1_company_material_request_strings.dart';
 
@@ -31,6 +32,8 @@ class YorksV1MaterialRequestCentre extends StatefulWidget {
     this.localDraftNotice,
     this.fixedProjectId,
     this.summaryPageLoader,
+    this.registerPageLoader,
+    this.onOpenCompany,
     this.operationsDashboardLoader,
     this.refreshRevision = 0,
   });
@@ -54,6 +57,13 @@ class YorksV1MaterialRequestCentre extends StatefulWidget {
   )?
   operationsDashboardLoader;
   final int refreshRevision;
+  final Future<YorksV1MaterialRegisterPage> Function(
+    YorksV1MaterialRegisterQuery,
+  )?
+  registerPageLoader;
+  final Future<void> Function(String)? onOpenCompany;
+  bool get usesServerPaging =>
+      summaryPageLoader != null || registerPageLoader != null;
 
   @override
   State<YorksV1MaterialRequestCentre> createState() =>
@@ -92,7 +102,7 @@ class _YorksV1MaterialRequestCentreState
   bool _filtersExpanded = false;
   final Set<String> _expandedProjectIds = <String>{};
   int _page = 0;
-  YorksV1MaterialRequestSummaryPage? _serverPage;
+  YorksV1MaterialRegisterPage? _serverPage;
   Object? _serverError;
   bool _serverLoading = false;
   Timer? _serverSearchDebounce;
@@ -110,7 +120,7 @@ class _YorksV1MaterialRequestCentreState
   @override
   void initState() {
     super.initState();
-    if (widget.summaryPageLoader != null) {
+    if (widget.usesServerPaging) {
       unawaited(_loadServerPage());
     }
   }
@@ -118,8 +128,7 @@ class _YorksV1MaterialRequestCentreState
   @override
   void didUpdateWidget(covariant YorksV1MaterialRequestCentre oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if ((oldWidget.summaryPageLoader == null) !=
-            (widget.summaryPageLoader == null) ||
+    if ((!oldWidget.usesServerPaging) != (!widget.usesServerPaging) ||
         oldWidget.fixedProjectId != widget.fixedProjectId ||
         oldWidget.refreshRevision != widget.refreshRevision) {
       unawaited(_loadServerPage());
@@ -146,7 +155,7 @@ class _YorksV1MaterialRequestCentreState
       _page = 0;
       if (oldDateRange != _dateRange) _dateRangeAnchor = DateTime.now().toUtc();
     });
-    if (widget.summaryPageLoader == null) return;
+    if (!widget.usesServerPaging) return;
     _serverSearchDebounce?.cancel();
     if (search) {
       _serverSearchDebounce = Timer(
@@ -158,7 +167,7 @@ class _YorksV1MaterialRequestCentreState
     }
   }
 
-  YorksV1MaterialRequestSummaryQuery get _serverQuery {
+  YorksV1MaterialRegisterQuery get _serverQuery {
     final cutoff = switch (_dateRange) {
       _MaterialRequestCentreDateRange.allTime => null,
       _MaterialRequestCentreDateRange.sevenDays => _dateRangeAnchor.subtract(
@@ -168,30 +177,36 @@ class _YorksV1MaterialRequestCentreState
         const Duration(days: 30),
       ),
     };
-    return YorksV1MaterialRequestSummaryQuery(
-      projectId: widget.fixedProjectId?.trim().isNotEmpty == true
-          ? widget.fixedProjectId
-          : (_project == _allSelection ? null : _project),
-      search: _searchController.text,
-      states: _status == _allSelection
-          ? const []
-          : [YorksV1MaterialRequestState.fromWireValue(_status)!],
-      scopeId: _scope == _allSelection ? null : _scope,
-      requester: _requester == _allSelection ? null : _requester,
-      updatedAfter: cutoff,
-      attentionOnly: _attentionOnly,
-      metric: switch (_metricFilter) {
-        _MaterialRequestMetricFilter.all => 'all',
-        _MaterialRequestMetricFilter.open => 'open',
-        _MaterialRequestMetricFilter.inProgress => 'in_progress',
-        _MaterialRequestMetricFilter.dispatched => 'dispatched',
-        _MaterialRequestMetricFilter.received => 'received',
-        _MaterialRequestMetricFilter.closed => 'closed',
-      },
-      registerView: _registerView,
-      newestFirst: _newestFirst,
-      limit: _view == _MaterialRequestCentreView.projects ? 100 : 15,
-      offset: _view == _MaterialRequestCentreView.projects ? 0 : _page * 15,
+    return YorksV1MaterialRegisterQuery(
+      YorksV1MaterialRequestSummaryQuery(
+        projectId: widget.fixedProjectId?.trim().isNotEmpty == true
+            ? widget.fixedProjectId
+            : (_project == _allSelection ? null : _project),
+        search: _searchController.text,
+        states: _status == _allSelection
+            ? const []
+            : [?YorksV1MaterialRequestState.fromWireValue(_status)],
+        scopeId: _scope == _allSelection ? null : _scope,
+        requester: _requester == _allSelection ? null : _requester,
+        updatedAfter: cutoff,
+        attentionOnly: _attentionOnly,
+        metric: switch (_metricFilter) {
+          _MaterialRequestMetricFilter.all => 'all',
+          _MaterialRequestMetricFilter.open => 'open',
+          _MaterialRequestMetricFilter.inProgress => 'in_progress',
+          _MaterialRequestMetricFilter.dispatched => 'dispatched',
+          _MaterialRequestMetricFilter.received => 'received',
+          _MaterialRequestMetricFilter.closed => 'closed',
+        },
+        registerView: _registerView,
+        newestFirst: _newestFirst,
+        limit: _view == _MaterialRequestCentreView.projects ? 100 : 15,
+        offset: _view == _MaterialRequestCentreView.projects ? 0 : _page * 15,
+      ),
+      nativeState: _status == _allSelection ? null : _status,
+      requestKind: _view == _MaterialRequestCentreView.projects
+          ? 'project'
+          : null,
     );
   }
 
@@ -217,8 +232,14 @@ class _YorksV1MaterialRequestCentreState
   }
 
   Future<void> _loadServerPageOnce() async {
-    final loader = widget.summaryPageLoader;
-    if (loader == null || !mounted) return;
+    if (!widget.usesServerPaging || !mounted) return;
+    Future<YorksV1MaterialRegisterPage> loader(
+      YorksV1MaterialRegisterQuery query,
+    ) async => widget.registerPageLoader != null
+        ? widget.registerPageLoader!(query)
+        : YorksV1MaterialRegisterPage.project(
+            await widget.summaryPageLoader!(query.filters),
+          );
     final query = _serverQuery;
     setState(() {
       _serverLoading = true;
@@ -238,7 +259,7 @@ class _YorksV1MaterialRequestCentreState
           pagesLoaded++;
           if (page.items.isEmpty) break;
         }
-        page = YorksV1MaterialRequestSummaryPage(
+        page = YorksV1MaterialRegisterPage(
           items: items,
           totalCount: page.totalCount,
           limit: items.length,
@@ -320,20 +341,28 @@ class _YorksV1MaterialRequestCentreState
     _metricFilter = _MaterialRequestMetricFilter.all;
   });
 
+  Future<void> _open(YorksV1MaterialRegisterEntry request) async {
+    if (request.isCompany) {
+      await widget.onOpenCompany?.call(request.id);
+      if (mounted) await _loadServerPage();
+    } else {
+      widget.onOpen(request.projectRequest!);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final source = widget.summaryPageLoader == null
+    final source = !widget.usesServerPaging
         ? widget.requests
-        : (_serverPage?.items
-                  .map((summary) => summary.toRegisterProjection())
-                  .toList(growable: false) ??
-              const <YorksV1MaterialRequest>[]);
+              .map(YorksV1MaterialRegisterEntry.project)
+              .toList(growable: false)
+        : (_serverPage?.items ?? const <YorksV1MaterialRegisterEntry>[]);
     final visible = _visibleRequests(source);
-    YorksV1MaterialRequest? selectedRequest;
+    YorksV1MaterialRegisterEntry? selectedRequest;
     if (visible.isNotEmpty) {
       selectedRequest = visible.first;
       for (final request in visible) {
-        if (request.id == _selectedRequestId) {
+        if (request.identity == _selectedRequestId) {
           selectedRequest = request;
           break;
         }
@@ -364,8 +393,9 @@ class _YorksV1MaterialRequestCentreState
             canCreate: widget.canCreate,
             onCreate: widget.onCreate,
             canCreateCompany: widget.canCreateCompany,
+            unified: widget.registerPageLoader != null,
             onCreateCompany: widget.onCreateCompany,
-            onRefresh: widget.summaryPageLoader == null
+            onRefresh: !widget.usesServerPaging
                 ? widget.onRefresh
                 : () => unawaited(_loadServerPage()),
           ),
@@ -401,6 +431,7 @@ class _YorksV1MaterialRequestCentreState
             YorksV1MaterialRequestOperationalInsightsPanel(
               language: widget.language,
               dashboard: _operationsDashboard,
+              projectOnly: widget.registerPageLoader != null,
               loading: _operationsLoading,
               failed: _operationsError != null,
               onRetry: () => unawaited(_loadOperationsDashboard()),
@@ -429,6 +460,9 @@ class _YorksV1MaterialRequestCentreState
                   setState(() => _filtersExpanded = value),
               activeFilterCount: _activeFilterCount,
               filter: _FilterForm(
+                includeCompany:
+                    widget.registerPageLoader != null &&
+                    _view != _MaterialRequestCentreView.projects,
                 language: widget.language,
                 status: _status,
                 project: _project,
@@ -454,14 +488,14 @@ class _YorksV1MaterialRequestCentreState
               requests: visible,
               selectedRequest: selectedRequest,
               onSelectRequest: (request) =>
-                  setState(() => _selectedRequestId = request.id),
+                  setState(() => _selectedRequestId = request.identity),
               serverTotalItems:
-                  widget.summaryPageLoader != null &&
+                  widget.usesServerPaging &&
                       _view == _MaterialRequestCentreView.allRequests
                   ? _serverPage?.totalCount
                   : null,
               serverPageMode:
-                  widget.summaryPageLoader != null &&
+                  widget.usesServerPaging &&
                   _view == _MaterialRequestCentreView.allRequests,
               expandedProjectIds: _expandedProjectIds,
               onProjectExpanded: (projectId) => setState(() {
@@ -472,11 +506,11 @@ class _YorksV1MaterialRequestCentreState
               page: _page,
               onPageChanged: (value) {
                 setState(() => _page = value);
-                if (widget.summaryPageLoader != null) {
+                if (widget.usesServerPaging) {
                   unawaited(_loadServerPage());
                 }
               },
-              onOpen: widget.onOpen,
+              onOpen: _open,
             ),
           if (_serverLoading)
             const Padding(
@@ -513,10 +547,10 @@ class _YorksV1MaterialRequestCentreState
     _metricFilter != _MaterialRequestMetricFilter.all,
   ].where((active) => active).length;
 
-  List<YorksV1MaterialRequest> _visibleRequests(
-    List<YorksV1MaterialRequest> requests,
+  List<YorksV1MaterialRegisterEntry> _visibleRequests(
+    List<YorksV1MaterialRegisterEntry> requests,
   ) {
-    if (widget.summaryPageLoader != null) return requests;
+    if (widget.usesServerPaging) return requests;
     final now = DateTime.now();
     final query = _searchController.text.trim().toLowerCase();
     final source =
@@ -527,8 +561,7 @@ class _YorksV1MaterialRequestCentreState
                   request.projectId != widget.fixedProjectId) {
                 return false;
               }
-              if (_status != _allSelection &&
-                  request.state.wireValue != _status) {
+              if (_status != _allSelection && request.state != _status) {
                 return false;
               }
               if (_project != _allSelection && request.projectId != _project) {
@@ -559,11 +592,11 @@ class _YorksV1MaterialRequestCentreState
               final searchable = [
                 request.requestNumber,
                 request.title,
-                request.projectReference,
-                request.projectName,
-                request.scopeName,
+                request.contextReference,
+                request.contextName,
+                request.scopeLabel,
                 request.requesterDisplayName,
-                for (final line in request.lines) line.description,
+                ...request.descriptions,
               ].whereType<String>().join(' ').toLowerCase();
               return searchable.contains(query);
             })
@@ -689,6 +722,7 @@ class YorksV1MaterialRequestOperationalInsightsPanel extends StatelessWidget {
     required this.failed,
     required this.onRetry,
     this.onOpen,
+    this.projectOnly = false,
   });
 
   final AppLanguage language;
@@ -697,6 +731,7 @@ class YorksV1MaterialRequestOperationalInsightsPanel extends StatelessWidget {
   final bool failed;
   final VoidCallback onRetry;
   final VoidCallback? onOpen;
+  final bool projectOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -712,7 +747,9 @@ class YorksV1MaterialRequestOperationalInsightsPanel extends StatelessWidget {
           },
           leading: const Icon(Icons.insights_outlined, color: AppColors.blue),
           title: YorksV1ActiveText(
-            copy: YorksV1MaterialRequestStrings.insights,
+            copy: projectOnly
+                ? YorksV1MaterialRegisterStrings.projectInsights
+                : YorksV1MaterialRequestStrings.insights,
             language: language,
             style: AppTypography.titleMedium.copyWith(
               fontWeight: FontWeight.w800,
@@ -851,51 +888,50 @@ class _OperationalMetric extends StatelessWidget {
   );
 }
 
-bool _isArchived(YorksV1MaterialRequest request) =>
-    request.state == YorksV1MaterialRequestState.closed ||
-    request.state == YorksV1MaterialRequestState.cancelled;
+bool _isArchived(YorksV1MaterialRegisterEntry request) =>
+    request.state == 'closed' ||
+    request.state == 'cancelled' ||
+    request.state == 'rejected';
 
-bool _isActive(YorksV1MaterialRequest request) =>
-    !_isArchived(request) && !request.state.isDraft;
+bool _isActive(YorksV1MaterialRegisterEntry request) =>
+    !_isArchived(request) && !request.isDraft;
 
-bool _requiresAttention(YorksV1MaterialRequest request) {
-  if (_isArchived(request) || request.state.isDraft) return false;
+bool _requiresAttention(YorksV1MaterialRegisterEntry request) {
+  if (_isArchived(request) || request.isDraft) return false;
   return request.currentActionCode?.trim().isNotEmpty == true ||
-      request.state == YorksV1MaterialRequestState.awaitingRequestApproval ||
-      request.state == YorksV1MaterialRequestState.changesRequested ||
-      request.state == YorksV1MaterialRequestState.arranging ||
-      request.state == YorksV1MaterialRequestState.dispatched ||
-      request.state == YorksV1MaterialRequestState.partiallyDispatched ||
-      request.state == YorksV1MaterialRequestState.partiallyReceived ||
-      request.state == YorksV1MaterialRequestState.received;
+      request.state == 'awaiting_request_approval' ||
+      request.state == 'changes_requested' ||
+      request.state == 'arranging' ||
+      request.state == 'dispatched' ||
+      request.state == 'partially_dispatched' ||
+      request.state == 'partially_received' ||
+      request.state == 'received';
 }
 
 bool _matchesMetricFilter(
-  YorksV1MaterialRequest request,
+  YorksV1MaterialRegisterEntry request,
   _MaterialRequestMetricFilter filter,
 ) => switch (filter) {
   _MaterialRequestMetricFilter.all => true,
   _MaterialRequestMetricFilter.open =>
-    request.state.isDraft ||
-        request.state == YorksV1MaterialRequestState.submitted ||
-        request.state == YorksV1MaterialRequestState.awaitingRequestApproval ||
-        request.state == YorksV1MaterialRequestState.changesRequested,
+    request.isDraft ||
+        request.state == 'submitted' ||
+        request.state == 'awaiting_request_approval' ||
+        request.state == 'changes_requested',
   _MaterialRequestMetricFilter.inProgress =>
     !_isArchived(request) &&
-        !request.state.isDraft &&
-        request.state != YorksV1MaterialRequestState.submitted &&
-        request.state != YorksV1MaterialRequestState.awaitingRequestApproval &&
-        request.state != YorksV1MaterialRequestState.changesRequested &&
-        request.state != YorksV1MaterialRequestState.dispatched &&
-        request.state != YorksV1MaterialRequestState.partiallyDispatched &&
-        request.state != YorksV1MaterialRequestState.received &&
-        request.state != YorksV1MaterialRequestState.partiallyReceived,
+        !request.isDraft &&
+        request.state != 'submitted' &&
+        request.state != 'awaiting_request_approval' &&
+        request.state != 'changes_requested' &&
+        request.state != 'dispatched' &&
+        request.state != 'partially_dispatched' &&
+        request.state != 'received' &&
+        request.state != 'partially_received',
   _MaterialRequestMetricFilter.dispatched =>
-    request.state == YorksV1MaterialRequestState.dispatched ||
-        request.state == YorksV1MaterialRequestState.partiallyDispatched,
+    request.state == 'dispatched' || request.state == 'partially_dispatched',
   _MaterialRequestMetricFilter.received =>
-    request.state == YorksV1MaterialRequestState.received ||
-        request.state == YorksV1MaterialRequestState.partiallyReceived,
+    request.state == 'received' || request.state == 'partially_received',
   _MaterialRequestMetricFilter.closed => _isArchived(request),
 };
 
@@ -917,7 +953,7 @@ class _MaterialRequestCentreMetrics {
   final int closed;
 
   factory _MaterialRequestCentreMetrics.fromRequests(
-    List<YorksV1MaterialRequest> requests,
+    List<YorksV1MaterialRegisterEntry> requests,
   ) => _MaterialRequestCentreMetrics(
     total: requests.length,
     open: requests
@@ -937,20 +973,18 @@ class _MaterialRequestCentreMetrics {
     dispatched: requests
         .where(
           (request) =>
-              request.state == YorksV1MaterialRequestState.dispatched ||
-              request.state == YorksV1MaterialRequestState.partiallyDispatched,
+              request.state == 'dispatched' ||
+              request.state == 'partially_dispatched',
         )
         .length,
     received: requests
         .where(
           (request) =>
-              request.state == YorksV1MaterialRequestState.received ||
-              request.state == YorksV1MaterialRequestState.partiallyReceived,
+              request.state == 'received' ||
+              request.state == 'partially_received',
         )
         .length,
-    closed: requests
-        .where((request) => request.state == YorksV1MaterialRequestState.closed)
-        .length,
+    closed: requests.where((request) => request.state == 'closed').length,
   );
 
   factory _MaterialRequestCentreMetrics.fromSummary(
@@ -968,30 +1002,30 @@ class _MaterialRequestCentreMetrics {
 class _ProjectRequestFolder {
   const _ProjectRequestFolder({required this.requests});
 
-  final List<YorksV1MaterialRequest> requests;
+  final List<YorksV1MaterialRegisterEntry> requests;
 
-  YorksV1MaterialRequest get latest => requests.reduce(
+  YorksV1MaterialRegisterEntry get latest => requests.reduce(
     (current, candidate) =>
         candidate.updatedAt.isAfter(current.updatedAt) ? candidate : current,
   );
-  String get id => latest.projectId;
-  String get reference => latest.projectReference;
-  String get name => latest.projectName;
+  String get id => latest.groupKey;
+  String get reference => latest.contextReference;
+  String get name => latest.contextName;
   int get active => requests.where(_isActive).length;
-  int get closed => requests
-      .where((request) => request.state == YorksV1MaterialRequestState.closed)
-      .length;
+  int get closed =>
+      requests.where((request) => request.state == 'closed').length;
   int get scopeCount =>
-      requests.map((request) => request.scopeId).toSet().length;
+      requests.map((request) => request.scopeLabel).toSet().length;
 }
 
 List<_ProjectRequestFolder> _foldersFor(
-  List<YorksV1MaterialRequest> requests, {
+  List<YorksV1MaterialRegisterEntry> requests, {
   required bool newestFirst,
 }) {
-  final grouped = <String, List<YorksV1MaterialRequest>>{};
+  final grouped = <String, List<YorksV1MaterialRegisterEntry>>{};
   for (final request in requests) {
-    (grouped[request.projectId] ??= []).add(request);
+    if (request.isCompany) continue;
+    (grouped[request.groupKey] ??= []).add(request);
   }
   return grouped.values
       .map((requests) {
@@ -1018,9 +1052,11 @@ class _CentreHeader extends StatelessWidget {
     required this.canCreateCompany,
     required this.onCreateCompany,
     required this.onRefresh,
+    this.unified = false,
   });
 
   final AppLanguage language;
+  final bool unified;
   final bool canCreate;
   final VoidCallback? onCreate;
   final bool canCreateCompany;
@@ -1063,8 +1099,10 @@ class _CentreHeader extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.xs),
               YorksV1ActiveText(
-                copy: YorksV1MaterialRequestStrings
-                    .materialRequestCentreDescription,
+                copy: unified
+                    ? YorksV1MaterialRegisterStrings.description
+                    : YorksV1MaterialRequestStrings
+                          .materialRequestCentreDescription,
                 language: language,
                 style: AppTypography.bodyMedium.copyWith(
                   color: AppColors.muted,
@@ -1421,16 +1459,16 @@ class _MainCentrePanel extends StatelessWidget {
   final int activeFilterCount;
   final Widget filter;
   final List<_ProjectRequestFolder> folders;
-  final List<YorksV1MaterialRequest> requests;
-  final YorksV1MaterialRequest? selectedRequest;
-  final ValueChanged<YorksV1MaterialRequest> onSelectRequest;
+  final List<YorksV1MaterialRegisterEntry> requests;
+  final YorksV1MaterialRegisterEntry? selectedRequest;
+  final ValueChanged<YorksV1MaterialRegisterEntry> onSelectRequest;
   final int? serverTotalItems;
   final bool serverPageMode;
   final Set<String> expandedProjectIds;
   final ValueChanged<String> onProjectExpanded;
   final int page;
   final ValueChanged<int> onPageChanged;
-  final ValueChanged<YorksV1MaterialRequest> onOpen;
+  final ValueChanged<YorksV1MaterialRegisterEntry> onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -1450,7 +1488,7 @@ class _MainCentrePanel extends StatelessWidget {
         ? folders.sublist(start, end)
         : const <_ProjectRequestFolder>[];
     final pageRequests = showProjects
-        ? const <YorksV1MaterialRequest>[]
+        ? const <YorksV1MaterialRegisterEntry>[]
         : requests.sublist(start, end);
     final tabletMasterDetail =
         !showProjects &&
@@ -1891,7 +1929,7 @@ class _ProjectFolderResults extends StatelessWidget {
   final AppLanguage language;
   final Set<String> expandedProjectIds;
   final ValueChanged<String> onProjectExpanded;
-  final ValueChanged<YorksV1MaterialRequest> onOpen;
+  final ValueChanged<YorksV1MaterialRegisterEntry> onOpen;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -1923,7 +1961,7 @@ class _ExpandableProjectFolder extends StatelessWidget {
   final AppLanguage language;
   final bool expanded;
   final VoidCallback onExpanded;
-  final ValueChanged<YorksV1MaterialRequest> onOpen;
+  final ValueChanged<YorksV1MaterialRegisterEntry> onOpen;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -2074,15 +2112,17 @@ class _ExplorerRequestRow extends StatelessWidget {
     required this.onOpen,
   });
 
-  final YorksV1MaterialRequest request;
+  final YorksV1MaterialRegisterEntry request;
   final AppLanguage language;
-  final ValueChanged<YorksV1MaterialRequest> onOpen;
+  final ValueChanged<YorksV1MaterialRegisterEntry> onOpen;
 
   @override
   Widget build(BuildContext context) => Material(
     color: Colors.transparent,
     child: InkWell(
-      key: ValueKey('material-request-row-${request.id}'),
+      key: ValueKey(
+        'material-request-row-${request.isCompany ? request.identity : request.id}',
+      ),
       onTap: () => onOpen(request),
       borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
       child: ConstrainedBox(
@@ -2113,7 +2153,7 @@ class _ExplorerRequestRow extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${request.requestNumber ?? YorksV1MaterialRequestStrings.draft.active(language)} · ${request.title?.trim().isNotEmpty == true ? request.title! : request.scopeName}',
+                      '${request.requestNumber ?? YorksV1MaterialRequestStrings.draft.active(language)} · ${request.title?.trim().isNotEmpty == true ? request.title! : request.scopeLabel}',
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: AppTypography.labelLarge.copyWith(
@@ -2123,7 +2163,7 @@ class _ExplorerRequestRow extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${request.scopeName} · ${YorksV1MaterialRequestStrings.itemsCount(request.displayItemCount).active(language)}',
+                      '${request.scopeLabel} · ${YorksV1MaterialRequestStrings.itemsCount(request.displayItemCount).active(language)}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTypography.labelSmall.copyWith(
@@ -2310,7 +2350,7 @@ class _FolderLatest extends StatelessWidget {
         Text(
           request.title?.trim().isNotEmpty == true
               ? request.title!
-              : request.scopeName,
+              : request.scopeLabel,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: AppTypography.labelSmall.copyWith(color: AppColors.muted),
@@ -2329,9 +2369,9 @@ class _RequestResults extends StatelessWidget {
     required this.onOpen,
   });
 
-  final List<YorksV1MaterialRequest> requests;
+  final List<YorksV1MaterialRegisterEntry> requests;
   final AppLanguage language;
-  final ValueChanged<YorksV1MaterialRequest> onOpen;
+  final ValueChanged<YorksV1MaterialRegisterEntry> onOpen;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -2357,11 +2397,11 @@ class _TabletRequestWorkspace extends StatelessWidget {
     required this.onOpen,
   });
 
-  final List<YorksV1MaterialRequest> requests;
-  final YorksV1MaterialRequest? selectedRequest;
+  final List<YorksV1MaterialRegisterEntry> requests;
+  final YorksV1MaterialRegisterEntry? selectedRequest;
   final AppLanguage language;
-  final ValueChanged<YorksV1MaterialRequest> onSelect;
-  final ValueChanged<YorksV1MaterialRequest> onOpen;
+  final ValueChanged<YorksV1MaterialRegisterEntry> onSelect;
+  final ValueChanged<YorksV1MaterialRegisterEntry> onOpen;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -2407,7 +2447,7 @@ class _TabletRequestPreview extends StatelessWidget {
     required this.onOpen,
   });
 
-  final YorksV1MaterialRequest? request;
+  final YorksV1MaterialRegisterEntry? request;
   final AppLanguage language;
   final VoidCallback? onOpen;
 
@@ -2476,7 +2516,7 @@ class _TabletRequestPreview extends StatelessWidget {
                 Text(
                   request.title?.trim().isNotEmpty == true
                       ? request.title!
-                      : request.projectName,
+                      : request.contextName,
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                   style: AppTypography.titleMedium.copyWith(
@@ -2485,7 +2525,7 @@ class _TabletRequestPreview extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
-                  '${request.projectReference} · ${request.scopeName} · '
+                  '${request.contextReferenceFor(language)} · ${request.scopeLabel} · '
                   '${YorksV1MaterialRequestStrings.itemsCount(request.displayItemCount).active(language)}',
                   style: AppTypography.bodySmall.copyWith(
                     color: AppColors.muted,
@@ -2524,9 +2564,9 @@ class _RequestCentreRow extends StatelessWidget {
     this.selected = false,
   });
 
-  final YorksV1MaterialRequest request;
+  final YorksV1MaterialRegisterEntry request;
   final AppLanguage language;
-  final ValueChanged<YorksV1MaterialRequest> onOpen;
+  final ValueChanged<YorksV1MaterialRegisterEntry> onOpen;
   final bool selected;
 
   @override
@@ -2539,7 +2579,9 @@ class _RequestCentreRow extends StatelessWidget {
           : AppColors.surfaceContainerLowest,
       borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
       child: InkWell(
-        key: ValueKey('material-request-row-${request.id}'),
+        key: ValueKey(
+          'material-request-row-${request.isCompany ? request.identity : request.id}',
+        ),
         onTap: () => onOpen(request),
         borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
         child: Container(
@@ -2583,7 +2625,9 @@ class _RequestCentreRow extends StatelessWidget {
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    request.projectName,
+                    request.isCompany
+                        ? (request.title ?? request.contextName)
+                        : request.contextName,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: AppTypography.titleSmall.copyWith(
@@ -2593,7 +2637,7 @@ class _RequestCentreRow extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${request.projectReference} · ${request.scopeName} · ${YorksV1MaterialRequestStrings.itemsCount(request.displayItemCount).active(language)}',
+                    '${request.contextReferenceFor(language)} · ${request.scopeLabel} · ${YorksV1MaterialRequestStrings.itemsCount(request.displayItemCount).active(language)}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTypography.bodySmall.copyWith(
@@ -2679,16 +2723,14 @@ class _RequestActionSummary extends StatelessWidget {
     required this.compact,
   });
 
-  final YorksV1MaterialRequest request;
+  final YorksV1MaterialRegisterEntry request;
   final AppLanguage language;
   final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    final owner = yorksV1MaterialRequestOwnerRoleCopy(
-      request.currentActionOwnerRole,
-    ).active(language);
-    final next = yorksV1MaterialRequestNextActionCopy(request).active(language);
+    final owner = request.ownerCopy.active(language);
+    final next = request.nextActionCopy.active(language);
     final date = request.scheduledDate;
     final age = request.currentActionAgeHours;
     return Column(
@@ -2796,32 +2838,28 @@ class _RequestOperationalFact extends StatelessWidget {
 class _CentreStatePill extends StatelessWidget {
   const _CentreStatePill({required this.request, required this.language});
 
-  final YorksV1MaterialRequest request;
+  final YorksV1MaterialRegisterEntry request;
   final AppLanguage language;
 
   @override
   Widget build(BuildContext context) {
     final (background, foreground) = switch (request.state) {
-      YorksV1MaterialRequestState.cancelled => (
-        AppColors.errorContainer,
-        AppColors.onErrorContainer,
-      ),
-      YorksV1MaterialRequestState.awaitingRequestApproval ||
-      YorksV1MaterialRequestState.changesRequested ||
-      YorksV1MaterialRequestState.awaitingApproval => (
+      'cancelled' ||
+      'rejected' => (AppColors.errorContainer, AppColors.onErrorContainer),
+      'awaiting_request_approval' ||
+      'changes_requested' ||
+      'awaiting_approval' ||
+      'awaiting_company_approval' ||
+      'submitted_pending_approval' ||
+      'returned_for_changes' => (
         AppColors.warningContainer,
         AppColors.onWarningContainer,
       ),
-      YorksV1MaterialRequestState.approvedForArrangement ||
-      YorksV1MaterialRequestState.arranging => (
-        AppColors.purpleContainer,
-        AppColors.onTertiaryContainer,
-      ),
-      YorksV1MaterialRequestState.received ||
-      YorksV1MaterialRequestState.closed => (
-        AppColors.successContainer,
-        AppColors.onSuccessContainer,
-      ),
+      'approved_for_arrangement' || 'arranging' || 'approved_for_procurement' =>
+        (AppColors.purpleContainer, AppColors.onTertiaryContainer),
+      'received' ||
+      'closed' ||
+      'fulfilled' => (AppColors.successContainer, AppColors.onSuccessContainer),
       _ => (AppColors.blueContainer, AppColors.onPrimaryContainer),
     };
     return Container(
@@ -2834,8 +2872,8 @@ class _CentreStatePill extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
       ),
       child: Text(
-        yorksV1MaterialRequestStateCopy(request.state).active(language),
-        maxLines: 1,
+        request.stateCopy.active(language),
+        maxLines: 2,
         overflow: TextOverflow.ellipsis,
         style: AppTypography.labelLarge.copyWith(color: foreground),
       ),
@@ -2924,6 +2962,7 @@ class _Pagination extends StatelessWidget {
 
 class _FilterForm extends StatelessWidget {
   const _FilterForm({
+    this.includeCompany = false,
     required this.language,
     required this.status,
     required this.project,
@@ -2943,6 +2982,7 @@ class _FilterForm extends StatelessWidget {
     this.fixedProjectId,
   });
 
+  final bool includeCompany;
   final AppLanguage language;
   final String status;
   final String project;
@@ -2950,7 +2990,7 @@ class _FilterForm extends StatelessWidget {
   final String requester;
   final _MaterialRequestCentreDateRange dateRange;
   final bool attentionOnly;
-  final List<YorksV1MaterialRequest> requests;
+  final List<YorksV1MaterialRegisterEntry> requests;
   final String? fixedProjectId;
   final ValueChanged<String> onStatusChanged;
   final ValueChanged<String> onProjectChanged;
@@ -2963,11 +3003,13 @@ class _FilterForm extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final projects = <String, YorksV1MaterialRequest>{
-      for (final request in requests) request.projectId: request,
+    final projects = <String, YorksV1MaterialRegisterEntry>{
+      for (final request in requests)
+        if (request.projectId != null) request.projectId!: request,
     };
-    final scopes = <String, YorksV1MaterialRequest>{
-      for (final request in requests) request.scopeId: request,
+    final scopes = <String, YorksV1MaterialRegisterEntry>{
+      for (final request in requests)
+        if (request.scopeId != null) request.scopeId!: request,
     };
     final requesters =
         requests
@@ -2977,7 +3019,11 @@ class _FilterForm extends StatelessWidget {
             .toSet()
             .toList()
           ..sort();
-    final states = YorksV1MaterialRequestState.values;
+    final states = <String>{
+      ...YorksV1MaterialRequestState.values.map((state) => state.wireValue),
+      if (includeCompany) ...yorksV1CompanyRegisterStates,
+      if (status != '__all__') status,
+    };
     final fields = <Widget>[
       _FilterDropdown<String>(
         label: YorksV1MaterialRequestStrings.requestStatus,
@@ -2991,8 +3037,8 @@ class _FilterForm extends StatelessWidget {
           ),
           for (final state in states)
             _FilterEntry(
-              state.wireValue,
-              yorksV1MaterialRequestStateCopy(state).active(language),
+              state,
+              yorksV1MaterialRegisterStateCopy(state).active(language),
             ),
         ],
       ),
@@ -3010,7 +3056,7 @@ class _FilterForm extends StatelessWidget {
             for (final entry in projects.entries)
               _FilterEntry(
                 entry.key,
-                '${entry.value.projectReference} · ${entry.value.projectName}',
+                '${entry.value.contextReference} · ${entry.value.contextName}',
               ),
           ],
         ),
@@ -3025,7 +3071,7 @@ class _FilterForm extends StatelessWidget {
             YorksV1MaterialRequestStrings.allBuildings.active(language),
           ),
           for (final entry in scopes.entries)
-            _FilterEntry(entry.key, entry.value.scopeName),
+            _FilterEntry(entry.key, entry.value.scopeLabel),
         ],
       ),
       _FilterDropdown<String>(

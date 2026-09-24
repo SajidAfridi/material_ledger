@@ -125,7 +125,12 @@ class _ProjectMaterialRequestsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // The phone register keeps a focused card editor while the responsive
     // centre below provides the project-aware desktop/tablet operational view.
-    if (YorksMobileUi.isActive(context)) {
+    final unifiedRegisterEnabled =
+        projectId == null &&
+        ref.watch(yorksV1FeatureFlagsProvider).companyMaterialRequests &&
+        ref.watch(yorksV1MaterialRequestRepositoryProvider)
+            is YorksV1UnifiedMaterialRequestRegisterRepository;
+    if (YorksMobileUi.isActive(context) && !unifiedRegisterEnabled) {
       return _YorksMobileMaterialRequestsPage(
         projectId: projectId,
         embedded: embedded,
@@ -233,6 +238,15 @@ class _ProjectMaterialRequestsScreen extends ConsumerWidget {
           canCreateCompany: false,
           fixedProjectId: projectId,
           summaryPageLoader: phase2Repository.listRequestSummaries,
+          registerPageLoader: unifiedRegisterEnabled
+              ? (repository as YorksV1UnifiedMaterialRequestRegisterRepository)
+                    .listMaterialRegister
+              : null,
+          onOpenCompany: (id) async {
+            await context.push(
+              '${RoutePaths.yorksV1CompanyMaterialRequests}/$id',
+            );
+          },
           operationsDashboardLoader: operationsRepository == null
               ? null
               : (projectId) => operationsRepository.getOperationsDashboard(
@@ -249,7 +263,9 @@ class _ProjectMaterialRequestsScreen extends ConsumerWidget {
                 )
               : null,
           onCreateCompany: companyRequestsEnabled
-              ? () => context.push(RoutePaths.yorksV1CompanyMaterialRequests)
+              ? () => context.push(
+                  '${RoutePaths.yorksV1CompanyMaterialRequests}/new',
+                )
               : null,
           onOpen: (request) => context.push(_materialRequestOpenPath(request)),
           onRefresh: () {},

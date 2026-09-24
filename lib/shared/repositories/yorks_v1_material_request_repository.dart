@@ -6,6 +6,7 @@ import '../models/yorks_v1_domain_error.dart';
 import '../models/analytics_event.dart';
 import '../models/yorks_v1_feature_flags.dart';
 import '../models/yorks_v1_material_request.dart';
+import '../models/yorks_v1_material_register.dart';
 import '../models/yorks_v1_material_request_document.dart';
 import '../sync/connectivity_service.dart';
 import '../services/analytics_service.dart';
@@ -217,12 +218,19 @@ abstract interface class YorksV1MaterialRequestOperationsRepository {
   });
 }
 
+abstract interface class YorksV1UnifiedMaterialRequestRegisterRepository {
+  Future<YorksV1MaterialRegisterPage> listMaterialRegister(
+    YorksV1MaterialRegisterQuery query,
+  );
+}
+
 /// Server-backed normalized MR repository. The only local persistence lives in
 /// a creator-owned recoverable draft controller; submitted state never falls
 /// back to the legacy collection/outbox authority.
 class YorksV1SupabaseMaterialRequestRepository
     implements
         YorksV1MaterialRequestRepository,
+        YorksV1UnifiedMaterialRequestRegisterRepository,
         YorksV1MaterialRequestDraftSaveRecoveryRepository,
         YorksV1MaterialRequestSubmissionRecoveryRepository,
         YorksV1MaterialRequestPhase2Repository,
@@ -373,6 +381,30 @@ class YorksV1SupabaseMaterialRequestRepository
     return _list(
       response,
     ).map(YorksV1MaterialRequest.fromRpcJson).toList(growable: false);
+  }
+
+  @override
+  Future<YorksV1MaterialRegisterPage> listMaterialRegister(
+    YorksV1MaterialRegisterQuery query,
+  ) async {
+    if (!_featureFlags.companyMaterialRequests ||
+        query.filters.projectId != null) {
+      return YorksV1MaterialRegisterPage.project(
+        await listRequestSummaries(query.filters),
+      );
+    }
+    final response = await _invoke(
+      functionName: 'v1_list_unified_material_request_summaries',
+      parameters: query.toRpcParameters(),
+    );
+    if (response is! Map) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return YorksV1MaterialRegisterPage.fromRpcJson(
+      Map<String, dynamic>.from(response),
+    );
   }
 
   @override
