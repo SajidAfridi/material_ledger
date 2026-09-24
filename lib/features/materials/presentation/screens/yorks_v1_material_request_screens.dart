@@ -15,6 +15,7 @@ import '../../../../app/router.dart';
 import '../../../../core/zoom/yorks_workspace_zoom.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../core/widgets/widgets.dart';
+import '../../../../core/widgets/yorks_panel_toggle_icon.dart';
 import '../../../../shared/controllers/yorks_v1_material_request_draft_controller.dart';
 import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/app_strings.dart';
@@ -2849,7 +2850,9 @@ class _MaterialRequestKeyboardShortcuts extends StatelessWidget {
         const SingleActivator(LogicalKeyboardKey.enter, meta: true): onSubmit!,
       },
     },
-    child: child,
+    // Keep shortcuts attached to the composer when a responsive editor or
+    // panel is rebuilt and its previously focused field is removed.
+    child: FocusScope(autofocus: true, child: child),
   );
 }
 
@@ -2998,6 +3001,20 @@ class _DraftForm extends ConsumerWidget {
       yorksV1MaterialRequestInspectorExpandedProvider,
     );
 
+    Future<void> toggleInspector() async {
+      // A width change may replace the grid with a tablet editor. Commit its
+      // local input buffer before changing the widget layout.
+      final focused = FocusManager.instance.primaryFocus;
+      if (focused?.context?.findAncestorStateOfType<EditableTextState>() !=
+          null) {
+        focused?.unfocus();
+      }
+      await Future<void>.delayed(Duration.zero);
+      if (!context.mounted) return;
+      ref.read(yorksV1MaterialRequestInspectorExpandedProvider.notifier).state =
+          !ref.read(yorksV1MaterialRequestInspectorExpandedProvider);
+    }
+
     if (YorksMobileUi.isActive(context)) {
       return _MaterialRequestDraftExitGuard(
         state: state,
@@ -3104,6 +3121,7 @@ class _DraftForm extends ConsumerWidget {
                   : () => _save(context, ref, controller, draft);
               final requestNumber = _previewRequestNumber(selectedProject);
               final form = _R35RequestCard(
+                key: const ValueKey('mr-request-information-card'),
                 title: YorksV1MaterialRequestStrings.requestInformation.primary,
                 description: YorksV1MaterialRequestStrings
                     .requestInformationDescription
@@ -3117,6 +3135,7 @@ class _DraftForm extends ConsumerWidget {
                 ),
               );
               final items = _R35RequestCard(
+                key: const ValueKey('mr-material-items-card'),
                 sectionNumber: 2,
                 title: YorksV1MaterialRequestStrings.materialItems.primary,
                 description: YorksV1MaterialRequestStrings
@@ -3304,14 +3323,7 @@ class _DraftForm extends ConsumerWidget {
                                 YorksV1MaterialRequestDraftSyncStatus
                                     .submitting,
                             inspectorExpanded: inspectorExpanded,
-                            onToggleInspector: () =>
-                                ref
-                                        .read(
-                                          yorksV1MaterialRequestInspectorExpandedProvider
-                                              .notifier,
-                                        )
-                                        .state =
-                                    !inspectorExpanded,
+                            onToggleInspector: toggleInspector,
                           ),
                           const SizedBox(height: AppSpacing.lg),
                         ],
@@ -3319,7 +3331,21 @@ class _DraftForm extends ConsumerWidget {
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Expanded(child: form),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    form,
+                                    const SizedBox(height: AppSpacing.xxxl),
+                                    items,
+                                    for (final notice in notices) ...[
+                                      const SizedBox(height: AppSpacing.lg),
+                                      notice,
+                                    ],
+                                  ],
+                                ),
+                              ),
                               if (inspectorExpanded) ...[
                                 const SizedBox(width: AppSpacing.lg),
                                 SizedBox(
@@ -3366,39 +3392,42 @@ class _DraftForm extends ConsumerWidget {
                               ],
                             ],
                           ),
-                        if (desktop) ...[
-                          const SizedBox(height: AppSpacing.xxxl),
+                        if (!desktop) ...[
+                          form,
+                          const SizedBox(height: AppSpacing.lg),
+                          if (compactRoute)
+                            Align(
+                              alignment: AlignmentDirectional.centerStart,
+                              child: _R35RequestAction(
+                                key: const ValueKey(
+                                  'mr-request-context-toggle',
+                                ),
+                                label:
+                                    (inspectorExpanded
+                                            ? YorksV1MaterialRequestStrings
+                                                  .hideRequestContext
+                                            : YorksV1MaterialRequestStrings
+                                                  .showRequestContext)
+                                        .primary,
+                                leading: YorksPanelToggleIcon(
+                                  expanded: inspectorExpanded,
+                                  atEnd: true,
+                                ),
+                                expanded: inspectorExpanded,
+                                tooltip:
+                                    (inspectorExpanded
+                                            ? YorksV1ShellStrings.collapsePanel
+                                            : YorksV1ShellStrings.expandPanel)
+                                        .active(language),
+                                onPressed: toggleInspector,
+                              ),
+                            ),
+                          const SizedBox(height: AppSpacing.lg),
                           items,
                           for (final notice in notices) ...[
                             const SizedBox(height: AppSpacing.lg),
                             notice,
                           ],
-                        ],
-                        if (!desktop) ...[
-                          form,
-                          const SizedBox(height: AppSpacing.lg),
-                          Align(
-                            alignment: AlignmentDirectional.centerStart,
-                            child: _R35RequestAction(
-                              key: const ValueKey('mr-request-context-toggle'),
-                              label:
-                                  (inspectorExpanded
-                                          ? YorksV1MaterialRequestStrings
-                                                .hideRequestContext
-                                          : YorksV1MaterialRequestStrings
-                                                .showRequestContext)
-                                      .primary,
-                              icon: Icons.view_sidebar_outlined,
-                              onPressed: () =>
-                                  ref
-                                          .read(
-                                            yorksV1MaterialRequestInspectorExpandedProvider
-                                                .notifier,
-                                          )
-                                          .state =
-                                      !inspectorExpanded,
-                            ),
-                          ),
                           if (inspectorExpanded) ...[
                             const SizedBox(height: AppSpacing.lg),
                             _R35RequestReview(
@@ -3425,12 +3454,6 @@ class _DraftForm extends ConsumerWidget {
                                 canSave: save != null,
                                 onSave: save,
                               ),
-                          ],
-                          const SizedBox(height: AppSpacing.lg),
-                          items,
-                          for (final notice in notices) ...[
-                            const SizedBox(height: AppSpacing.lg),
-                            notice,
                           ],
                         ],
                       ],
@@ -6315,7 +6338,16 @@ class _R35RequestHero extends StatelessWidget {
                           ? YorksV1MaterialRequestStrings.hideRequestContext
                           : YorksV1MaterialRequestStrings.showRequestContext)
                       .primary,
-              icon: Icons.view_sidebar_outlined,
+              leading: YorksPanelToggleIcon(
+                expanded: inspectorExpanded,
+                atEnd: true,
+              ),
+              expanded: inspectorExpanded,
+              tooltip:
+                  (inspectorExpanded
+                          ? YorksV1ShellStrings.collapsePanel
+                          : YorksV1ShellStrings.expandPanel)
+                      .active(language),
               onPressed: onToggleInspector,
             ),
             _R35RequestAction(
@@ -6779,6 +6811,7 @@ class _IndustrialFactRow extends StatelessWidget {
 
 class _R35RequestCard extends StatelessWidget {
   const _R35RequestCard({
+    super.key,
     required this.title,
     required this.child,
     this.sectionNumber,
@@ -7105,6 +7138,7 @@ class _R35RequestAction extends StatelessWidget {
     this.leading,
     this.primary = false,
     this.tooltip,
+    this.expanded,
   });
 
   final String label;
@@ -7113,6 +7147,7 @@ class _R35RequestAction extends StatelessWidget {
   final VoidCallback? onPressed;
   final bool primary;
   final String? tooltip;
+  final bool? expanded;
 
   @override
   Widget build(BuildContext context) {
@@ -7141,15 +7176,27 @@ class _R35RequestAction extends StatelessWidget {
                       : Icon(icon, size: 18)),
               label: Text(label),
               style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.inkSecondary,
-                side: const BorderSide(color: AppColors.line),
+                foregroundColor: expanded == true
+                    ? AppColors.blue
+                    : AppColors.inkSecondary,
+                backgroundColor: expanded == true
+                    ? AppColors.blueContainer
+                    : null,
+                side: BorderSide(
+                  color: expanded == true
+                      ? AppColors.blueContainerStrong
+                      : AppColors.line,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(AppSpacing.radiusMd + 2),
                 ),
               ),
             ),
     );
-    return tooltip == null ? child : Tooltip(message: tooltip!, child: child);
+    final action = expanded == null
+        ? child
+        : Semantics(expanded: expanded, child: child);
+    return tooltip == null ? action : Tooltip(message: tooltip!, child: action);
   }
 }
 
@@ -14342,14 +14389,27 @@ class _RequestRecordHeader extends StatelessWidget {
           icon: const Icon(Icons.refresh_rounded),
         ),
       ];
-      final requestInformationAction = _RecordActionButton(
-        key: const ValueKey('material-request-information-action'),
-        label: YorksV1MaterialRequestStrings.requestInformation.active(
-          language,
+      final requestInformationAction = Tooltip(
+        message:
+            (requestInformationActive
+                    ? YorksV1ShellStrings.collapsePanel
+                    : YorksV1ShellStrings.expandPanel)
+                .active(language),
+        child: Semantics(
+          expanded: requestInformationActive,
+          child: _RecordActionButton(
+            key: const ValueKey('material-request-information-action'),
+            label: YorksV1MaterialRequestStrings.requestInformation.active(
+              language,
+            ),
+            leading: YorksPanelToggleIcon(
+              expanded: requestInformationActive,
+              atEnd: true,
+            ),
+            onPressed: onRequestInformation,
+            selected: requestInformationActive,
+          ),
         ),
-        icon: Icons.view_sidebar_outlined,
-        onPressed: onRequestInformation,
-        selected: requestInformationActive,
       );
       final supportingActions = Wrap(
         key: const ValueKey('material-request-supporting-actions'),

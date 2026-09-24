@@ -10,6 +10,7 @@ import 'package:material_ledger/app/router.dart';
 import 'package:material_ledger/app/yorks_v1_workspace_shell.dart';
 import 'package:material_ledger/core/constants/constants.dart';
 import 'package:material_ledger/core/theme/app_theme.dart';
+import 'package:material_ledger/core/widgets/yorks_panel_toggle_icon.dart';
 import 'package:material_ledger/features/materials/presentation/screens/yorks_v1_material_request_screens.dart';
 import 'package:material_ledger/shared/models/app_language.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_request.dart';
@@ -118,6 +119,7 @@ void main() {
   });
 
   for (final viewport in const [
+    (size: Size(2048, 1210), layout: 'desktop', name: '2048'),
     (size: Size(1440, 900), layout: 'desktop', name: '1440'),
     (size: Size(1024, 768), layout: 'tablet', name: '1024'),
     (size: Size(820, 1180), layout: 'tablet', name: '820'),
@@ -184,20 +186,63 @@ void main() {
           'goldens/r35/mr_composer_${viewport.name}_planning_fields.png',
         ),
       );
+      final toggle = find.byKey(const ValueKey('mr-request-context-toggle'));
+      final toggleIcon = find.descendant(
+        of: toggle,
+        matching: find.byType(YorksPanelToggleIcon),
+      );
+      expect(tester.widget<YorksPanelToggleIcon>(toggleIcon).expanded, isFalse);
+      final items = find.byKey(const ValueKey('mr-material-items-card'));
+      final form = find.byKey(const ValueKey('mr-request-information-card'));
+      final previousGap =
+          tester.getRect(items).top - tester.getRect(form).bottom;
+      await tester.enterText(find.byKey(ValueKey('$lineId-size')), '12x12');
+      await tester.ensureVisible(toggle);
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(tester.widget<YorksPanelToggleIcon>(toggleIcon).expanded, isTrue);
+      expect(controller.currentDraft.lines.single.size, '12x12');
       if (viewport.layout == 'desktop') {
-        final table = find.byKey(const ValueKey('mr-lines-desktop-table'));
-        final tableWidth = tester.getSize(table).width;
-        await tester.tap(
-          find.byKey(const ValueKey('mr-request-context-toggle')),
-        );
-        await tester.pumpAndSettle();
         expect(
           find.byKey(const ValueKey('mr-request-context-panel')),
           findsOneWidget,
         );
-        expect(tester.getSize(table).width, tableWidth);
-        expect(tester.takeException(), isNull);
+        expect(
+          tester.getRect(items).top - tester.getRect(form).bottom,
+          closeTo(AppSpacing.xxxl, 0.1),
+        );
+        expect(
+          tester.getRect(items).right,
+          lessThan(
+            tester
+                .getRect(find.byKey(const ValueKey('mr-request-context-panel')))
+                .left,
+          ),
+        );
+        await expectLater(
+          find.byType(MaterialApp),
+          matchesGoldenFile(
+            'goldens/r35/mr_composer_${viewport.name}_context_open.png',
+          ),
+        );
+      } else {
+        // Inline context follows the editor; its height cannot displace items.
+        expect(
+          tester.getRect(items).top - tester.getRect(form).bottom,
+          lessThan(110),
+        );
       }
+      await tester.ensureVisible(toggle);
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(tester.widget<YorksPanelToggleIcon>(toggleIcon).expanded, isFalse);
+      expect(controller.currentDraft.lines.single.size, '12x12');
+      expect(controller.currentDraft.lines.single.model, 'P-100');
+      expect(
+        tester.getRect(items).top - tester.getRect(form).bottom,
+        closeTo(previousGap, 0.1),
+      );
+      expect(tester.takeException(), isNull);
     });
   }
 
@@ -327,7 +372,7 @@ void main() {
       expect(find.text('Delivery note (optional)'), findsNothing);
 
       await tester.tap(find.byKey(const ValueKey('mr-request-context-toggle')));
-      await tester.pump();
+      await tester.pumpAndSettle();
 
       expect(
         find.byKey(const ValueKey('mr-request-context-panel')),
@@ -342,16 +387,8 @@ void main() {
       await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
       await tester.pumpAndSettle();
 
-      final description = find.byKey(
-        const ValueKey('mr-material-description-autocomplete'),
-      );
-      expect(
-        find.descendant(
-          of: description,
-          matching: find.byIcon(Icons.search_rounded),
-        ),
-        findsNothing,
-      );
+      expect(find.byTooltip('Add Similar Row'), findsOneWidget);
+      expect(find.byTooltip('Add custom row here'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

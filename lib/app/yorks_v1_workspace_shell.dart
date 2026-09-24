@@ -8,6 +8,7 @@ import '../core/fullscreen/yorks_workspace_fullscreen.dart';
 import '../core/zoom/yorks_workspace_zoom.dart';
 import '../core/widgets/brand_logo.dart';
 import '../core/widgets/yorks_mobile_ui.dart';
+import '../core/widgets/yorks_panel_toggle_icon.dart';
 import '../shared/models/app_language.dart';
 import '../shared/models/app_strings.dart';
 import '../shared/models/yorks_v1_permission_management.dart';
@@ -313,14 +314,24 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
                                 ) ||
                                 (current?.path != null &&
                                     location != current!.path),
-                            onToggleSidebar: () =>
-                                ref
-                                        .read(
-                                          yorksV1SidebarExpandedProvider
-                                              .notifier,
-                                        )
-                                        .state =
-                                    !sidebarExpanded,
+                            onToggleSidebar: () async {
+                              final focused =
+                                  FocusManager.instance.primaryFocus;
+                              if (focused?.context
+                                      ?.findAncestorStateOfType<
+                                        EditableTextState
+                                      >() !=
+                                  null) {
+                                focused?.unfocus();
+                              }
+                              await Future<void>.delayed(Duration.zero);
+                              if (!context.mounted) return;
+                              ref
+                                  .read(yorksV1SidebarExpandedProvider.notifier)
+                                  .state = !ref.read(
+                                yorksV1SidebarExpandedProvider,
+                              );
+                            },
                             onBack: () => yorksNavigateBack(
                               context,
                               ref,
@@ -1407,15 +1418,26 @@ class _YorksWorkspaceTopBar extends ConsumerWidget {
         ),
         child: Row(
           children: [
-            IconButton(
-              key: const ValueKey('yorks-workspace-sidebar-toggle'),
-              tooltip:
-                  (sidebarExpanded
-                          ? YorksV1ShellStrings.collapsePanel
-                          : YorksV1ShellStrings.expandPanel)
-                      .active(language),
-              onPressed: onToggleSidebar,
-              icon: const Icon(Icons.view_sidebar_outlined),
+            Semantics(
+              expanded: sidebarExpanded,
+              child: IconButton(
+                key: const ValueKey('yorks-workspace-sidebar-toggle'),
+                tooltip:
+                    (sidebarExpanded
+                            ? YorksV1ShellStrings.collapsePanel
+                            : YorksV1ShellStrings.expandPanel)
+                        .active(language),
+                onPressed: onToggleSidebar,
+                style: IconButton.styleFrom(
+                  foregroundColor: sidebarExpanded
+                      ? AppColors.blue
+                      : AppColors.muted,
+                  backgroundColor: sidebarExpanded
+                      ? AppColors.blueContainer
+                      : null,
+                ),
+                icon: YorksPanelToggleIcon(expanded: sidebarExpanded),
+              ),
             ),
             const SizedBox(width: AppSpacing.xxs),
             IconButton(
