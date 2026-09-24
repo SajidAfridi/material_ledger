@@ -67,7 +67,23 @@ YorksV1WorkspaceSearchRepository _repository(_Company? company) =>
       boq: _Boq(),
       documents: _Documents(),
       logistics: _Logistics(),
-      companyRequests: company,
+      companySearch: company == null
+          ? null
+          : (query) async {
+              final page = await company.listPage(query: query);
+              return [
+                for (final item in page.items)
+                  YorksV1WorkspaceSearchResult(
+                    kind:
+                        YorksV1WorkspaceSearchResultKind.companyMaterialRequest,
+                    title: item.requestNumber,
+                    subtitle: item.purpose,
+                    route: "/yorks/material-requests/company/${item.id}",
+                    entityId: item.id,
+                    searchableText: item.requestNumber,
+                  ),
+              ];
+            },
     );
 
 class _Company implements YorksV1CompanyMaterialRequestPagedRepository {

@@ -990,11 +990,13 @@ class _ApprovalDetail extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
-              _CompanyLifecycleProgress(
-                state: request.state,
-                language: language,
-              ),
-              const SizedBox(height: 12),
+              if (request.state != 'cancelled') ...[
+                _CompanyLifecycleProgress(
+                  state: request.state,
+                  language: language,
+                ),
+                const SizedBox(height: 12),
+              ],
               YorksV1CompanyRequestEvidence(
                 requestId: request.id,
                 recordVersion: request.recordVersion,

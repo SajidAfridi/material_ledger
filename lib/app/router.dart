@@ -592,8 +592,9 @@ bool? _isAllowedForRole(
 bool? _isYorksV1RouteAllowedForRole(
   Uri uri,
   YorksV1Role? role,
-  YorksV1HybridPermissionResolver? permissionResolver,
-) {
+  YorksV1HybridPermissionResolver? permissionResolver, {
+  bool companyMaterialRequestsEnabled = false,
+}) {
   final path = uri.path;
   // Engineering calculators deliberately live outside the `/yorks/` prefix,
   // so evaluate their exact role boundary before the generic V1-path fast
@@ -725,6 +726,13 @@ bool? _isYorksV1RouteAllowedForRole(
       return true;
     }
     final projectId = uri.queryParameters['project_id']?.trim();
+    // The combined home is a read-only, server-filtered register. Project
+    // capability denies still apply to every scoped route and command.
+    if (companyMaterialRequestsEnabled &&
+        path == RoutePaths.yorksV1MaterialRequests &&
+        (projectId == null || projectId.isEmpty)) {
+      return true;
+    }
     final decision = _hybridRouteAllows(
       permissionResolver,
       YorksV1CapabilityKeys.materialRequestsView,
@@ -1124,6 +1132,7 @@ GoRouter createAppRouter({
         state.uri,
         yorksV1Role,
         yorksV1PermissionResolver,
+        companyMaterialRequestsEnabled: yorksV1CompanyMaterialRequestsEnabled,
       );
       if (yorksV1RouteAllowed == false) {
         return _yorksV1ProjectFallbackPath();

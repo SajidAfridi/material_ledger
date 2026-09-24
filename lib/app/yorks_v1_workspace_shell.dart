@@ -33,7 +33,7 @@ import '../shared/widgets/notification_bell.dart';
 import '../shared/widgets/yorks_sign_out_action.dart';
 import 'router.dart';
 import 'yorks_navigation_history.dart';
-import 'yorks_v1_workspace_search.dart';
+import 'yorks_v1_workspace_search_launcher.dart';
 import 'yorks_v1_workspace_status_label.dart';
 
 /// Desktop-only shell preference. It lives above individual route widgets so
@@ -65,6 +65,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     });
     final isAccountant = role == YorksV1Role.accountant;
     final featureFlags = ref.watch(yorksV1FeatureFlagsProvider);
+    final companyRequestsEnabled = featureFlags.companyMaterialRequests;
     final accountsEnabled = featureFlags.accounts;
     final workforceEnabled = featureFlags.workforce;
     final analyticsEnabled = featureFlags.analytics;
@@ -101,6 +102,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
       teamChatEnabled: teamChatEnabled,
       chatUnread: chatUnread,
       permissionState: permissionState,
+      companyRequestsEnabled: companyRequestsEnabled,
       accountsEnabled: accountsEnabled,
       workforceEnabled: workforceEnabled,
       analyticsEnabled: analyticsEnabled,
@@ -246,6 +248,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
                               teamChatEnabled: teamChatEnabled,
                               chatUnread: chatUnread,
                               permissionState: permissionState,
+                              companyRequestsEnabled: companyRequestsEnabled,
                               accountsEnabled: accountsEnabled,
                               workforceEnabled: workforceEnabled,
                               analyticsEnabled: analyticsEnabled,
@@ -392,6 +395,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     bool teamChatEnabled = true,
     int chatUnread = 0,
     YorksV1CurrentPermissionSnapshotState? permissionState,
+    bool companyRequestsEnabled = false,
     bool accountsEnabled = false,
     bool workforceEnabled = false,
     bool analyticsEnabled = false,
@@ -401,6 +405,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
       teamChatEnabled: teamChatEnabled,
       chatUnread: chatUnread,
       permissionState: permissionState,
+      companyRequestsEnabled: companyRequestsEnabled,
       accountsEnabled: accountsEnabled,
       workforceEnabled: workforceEnabled,
       analyticsEnabled: analyticsEnabled,
@@ -521,6 +526,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     bool teamChatEnabled = true,
     int chatUnread = 0,
     YorksV1CurrentPermissionSnapshotState? permissionState,
+    bool companyRequestsEnabled = false,
     bool accountsEnabled = false,
     bool workforceEnabled = false,
     bool analyticsEnabled = false,
@@ -709,7 +715,10 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
         return allows(YorksV1CapabilityKeys.projectsView, role != null);
       }
       if (path == RoutePaths.yorksV1MaterialRequests) {
-        return allows(YorksV1CapabilityKeys.materialRequestsView, role != null);
+        return (companyRequestsEnabled &&
+                role != null &&
+                role != YorksV1Role.accountant) ||
+            allows(YorksV1CapabilityKeys.materialRequestsView, role != null);
       }
       if (path == RoutePaths.yorksV1TeamChat) {
         return allows(YorksV1CapabilityKeys.chatView, role != null);
@@ -1145,6 +1154,7 @@ class YorksV1MobileMoreScreen extends ConsumerWidget {
     final role = ref.watch(yorksV1CurrentRoleProvider);
     final user = ref.watch(currentUserProvider);
     final featureFlags = ref.watch(yorksV1FeatureFlagsProvider);
+    final companyRequestsEnabled = featureFlags.companyMaterialRequests;
     final accountsEnabled = featureFlags.accounts;
     final workforceEnabled = featureFlags.workforce;
     final analyticsEnabled = featureFlags.analytics;
@@ -1168,6 +1178,7 @@ class YorksV1MobileMoreScreen extends ConsumerWidget {
       teamChatEnabled: teamChatEnabled,
       chatUnread: chatUnread,
       permissionState: permissionState,
+      companyRequestsEnabled: companyRequestsEnabled,
       accountsEnabled: accountsEnabled,
       workforceEnabled: workforceEnabled,
       analyticsEnabled: analyticsEnabled,
@@ -1179,6 +1190,7 @@ class YorksV1MobileMoreScreen extends ConsumerWidget {
           teamChatEnabled: teamChatEnabled,
           chatUnread: chatUnread,
           permissionState: permissionState,
+          companyRequestsEnabled: companyRequestsEnabled,
           accountsEnabled: accountsEnabled,
           workforceEnabled: workforceEnabled,
           analyticsEnabled: analyticsEnabled,

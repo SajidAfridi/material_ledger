@@ -1,4 +1,9 @@
 import 'dart:async';
+
+import 'yorks_v1_workspace_search_launcher.dart'
+    show YorksV1SearchNavigationTarget;
+export 'yorks_v1_workspace_search_launcher.dart'
+    show YorksV1SearchNavigationTarget;
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -14,18 +19,6 @@ import '../shared/models/yorks_v1_shell_strings.dart';
 import '../shared/models/yorks_v1_workspace_search.dart';
 import '../shared/models/yorks_v1_company_material_request_strings.dart';
 import '../shared/providers/yorks_v1_workspace_search_provider.dart';
-
-class YorksV1SearchNavigationTarget {
-  const YorksV1SearchNavigationTarget({
-    required this.label,
-    required this.icon,
-    required this.path,
-  });
-
-  final TranslatableString label;
-  final IconData icon;
-  final String path;
-}
 
 Future<void> showYorksV1WorkspaceSearch(
   BuildContext context, {
