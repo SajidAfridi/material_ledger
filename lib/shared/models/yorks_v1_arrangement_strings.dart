@@ -405,6 +405,12 @@ abstract final class YorksV1ArrangementStrings {
     ur: 'سپلائر کی تفصیلات شامل کریں (اختیاری)',
     hi: 'आपूर्तिकर्ता विवरण जोड़ें (वैकल्पिक)',
   );
+  static const optionalAvailabilityDetails = TranslatableString(
+    en: 'Availability details (optional)',
+    ar: 'تفاصيل التوفر (اختياري)',
+    ur: 'دستیابی کی تفصیلات (اختیاری)',
+    hi: 'उपलब्धता विवरण (वैकल्पिक)',
+  );
   static const externalReadiness = TranslatableString(
     en: 'External source readiness',
     ar: 'جاهزية المصدر الخارجي',
