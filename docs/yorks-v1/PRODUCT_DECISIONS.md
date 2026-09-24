@@ -1683,3 +1683,33 @@ The following product-owner decisions are frozen on 7 September 2026:
   values or arrangement decisions; and
 - authorization, optimistic versioning, idempotency, request-root locking and
   append-only audit are server enforced. UI visibility is not authority.
+
+
+## 27. Company material recipient identity — 25 September 2026
+
+The product owner requires every Company Material Request beneficiary to have
+an active Yorks login. The previously proposed worker-without-login supervisor
+attestation path is not approved and must not be introduced. Existing protected
+beneficiary/receiver authorization and the distinction between beneficiary
+confirmation and receiver-witnessed handover remain enforced; a login alone is
+not a Company capability or a substitute for the assigned responsible unit.
+
+
+### 28. Company request integration and corrections — 25 September 2026
+
+Product-owner instruction: Company requests belong in the main Material Requests
+register, clearly typed, with shared search, notifications, audit and analytics.
+Beneficiaries must have active Yorks logins (§27). The requester may select one
+independent, actively authorized Company approver from Project Engineer, senior
+engineering roles or Admin. Existing dated category/unit policy remains mandatory;
+selection does not grant authority. No requester, beneficiary, receiver or
+Procurement self-approval is introduced. Multiple sequential approvers are not
+implied by a picker of eligible people.
+
+Admin oversight includes submitted Company requests. Private unsubmitted drafts,
+including cancelled drafts, remain private. Before any dispatch or withdrawal,
+the requester or Procurement may correct submitted demand; correction releases
+reservations, supersedes the current supply plan, preserves line IDs and sends
+it for fresh independent approval. Cancellation requires a reason and is allowed
+for the requester or assigned independent approver before dispatch. After dispatch,
+use the existing quantity-controlled remainder withdrawal/return path.

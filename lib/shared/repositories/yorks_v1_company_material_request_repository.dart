@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/yorks_v1_company_material_request.dart';
+import '../models/analytics_event.dart';
+import '../services/analytics_service.dart';
 import '../models/yorks_v1_domain_error.dart';
 import '../models/yorks_v1_feature_flags.dart';
 import '../models/yorks_v1_material_request.dart';
@@ -11,6 +13,7 @@ import 'yorks_v1_material_request_repository.dart';
 
 abstract interface class YorksV1CompanyMaterialRequestRepository {
   Future<List<YorksV1CompanyMaterialRequestDraftOption>> listDraftOptions();
+  Future<Map<String, dynamic>> getEvidence(String requestId);
   Future<List<YorksV1MaterialRequestInventorySuggestion>> searchMaterials({
     required String categoryId,
     required String responsibleUnitId,
@@ -21,6 +24,7 @@ abstract interface class YorksV1CompanyMaterialRequestRepository {
     required String responsibleUnitId,
     required String beneficiaryAuthUserId,
     required String authorizedReceiverAuthUserId,
+    String? selectedApproverAuthUserId,
   });
   Future<YorksV1CompanyMaterialRequest> saveDraft(
     YorksV1CompanyMaterialRequestDraft draft,
@@ -98,11 +102,18 @@ abstract interface class YorksV1CompanyMaterialRequestRepository {
     required String? reason,
     required String idempotencyKey,
   });
+  Future<YorksV1CompanyMaterialRequest> cancel({
+    required String requestId,
+    required int expectedVersion,
+    required String reason,
+    required String idempotencyKey,
+  });
   Future<YorksV1CompanyMaterialRequest> reviseAndResubmit({
     required String requestId,
     required int expectedVersion,
     required String purpose,
     required String deliveryCollectionPoint,
+    String? reason,
     required List<Map<String, Object?>> lines,
     required String idempotencyKey,
   });
@@ -126,15 +137,25 @@ class YorksV1SupabaseCompanyMaterialRequestRepository
     required ConnectivityService connectivity,
     YorksV1MaterialRequestRpcClient? rpcClient,
     Duration timeout = const Duration(seconds: 20),
+    AnalyticsService analytics = const NoopAnalyticsService(),
   }) : _featureFlags = featureFlags,
        _connectivity = connectivity,
        _rpcClient = rpcClient,
-       _timeout = timeout;
+       _timeout = timeout,
+       _analytics = analytics;
 
   final YorksV1FeatureFlags _featureFlags;
   final ConnectivityService _connectivity;
   final YorksV1MaterialRequestRpcClient? _rpcClient;
   final Duration _timeout;
+  final AnalyticsService _analytics;
+
+  @override
+  Future<Map<String, dynamic>> getEvidence(String requestId) async => _map(
+    await _invoke('v1_company_material_request_evidence', {
+      'p_request_id': requestId,
+    }),
+  );
 
   @override
   Future<YorksV1CompanyMaterialRequestPage> listPage({
@@ -224,13 +245,15 @@ class YorksV1SupabaseCompanyMaterialRequestRepository
     required String responsibleUnitId,
     required String beneficiaryAuthUserId,
     required String authorizedReceiverAuthUserId,
+    String? selectedApproverAuthUserId,
   }) async {
     final response =
-        await _invoke('v1_company_material_request_approval_preflight', {
+        await _invoke('v1_company_material_request_approval_choices', {
           'p_category_id': categoryId,
           'p_responsible_unit_id': responsibleUnitId,
           'p_beneficiary_auth_user_id': beneficiaryAuthUserId,
           'p_authorized_receiver_auth_user_id': authorizedReceiverAuthUserId,
+          'p_selected_approver_auth_user_id': selectedApproverAuthUserId,
         });
     return YorksV1CompanyMaterialRequestApprovalPreflight.fromRpcJson(
       _map(response),
@@ -485,11 +508,29 @@ class YorksV1SupabaseCompanyMaterialRequestRepository
   );
 
   @override
+  Future<YorksV1CompanyMaterialRequest> cancel({
+    required String requestId,
+    required int expectedVersion,
+    required String reason,
+    required String idempotencyKey,
+  }) async => YorksV1CompanyMaterialRequest.fromRpcJson(
+    _map(
+      await _invoke('v1_cancel_company_material_request', {
+        'p_request_id': requestId,
+        'p_expected_version': expectedVersion,
+        'p_reason': reason,
+        'p_idempotency_key': idempotencyKey,
+      }),
+    ),
+  );
+
+  @override
   Future<YorksV1CompanyMaterialRequest> reviseAndResubmit({
     required String requestId,
     required int expectedVersion,
     required String purpose,
     required String deliveryCollectionPoint,
+    String? reason,
     required List<Map<String, Object?>> lines,
     required String idempotencyKey,
   }) async => _requestFromResponse(
@@ -499,6 +540,7 @@ class YorksV1SupabaseCompanyMaterialRequestRepository
         'expected_version': expectedVersion,
         'purpose': purpose,
         'delivery_collection_point': deliveryCollectionPoint,
+        'reason': ?reason,
         'lines': lines,
       },
       'p_idempotency_key': idempotencyKey,
@@ -506,6 +548,90 @@ class YorksV1SupabaseCompanyMaterialRequestRepository
   );
 
   Future<Object?> _invoke(
+    String functionName,
+    Map<String, Object?> parameters,
+  ) async {
+    // Only fixed command names and categorical outcomes cross the analytics seam.
+    // RPC parameters, identities, query text and returned record content never do.
+    final action = functionName.replaceFirst('v1_', '');
+    final command = const {
+      'save_company_material_request_draft',
+      'submit_company_material_request',
+      'save_and_submit_company_material_request',
+      'decide_company_material_request',
+      'save_company_material_supply_plan',
+      'dispatch_company_materials',
+      'confirm_company_material_receipt',
+      'confirm_company_material_handover',
+      'close_company_material_request',
+      'withdraw_company_material_request_remainder',
+      'submit_company_material_return',
+      'decide_company_material_return',
+      'revise_and_resubmit_company_material_request',
+      'cancel_company_material_request',
+    }.contains(action);
+    final properties = <AnalyticsProperty, Object?>{
+      AnalyticsProperty.workflow: 'company_material_request',
+      AnalyticsProperty.actionType: action,
+    };
+    final operation = _analytics.beginOperation(action, properties: properties);
+    final watch = Stopwatch()..start();
+    try {
+      final result = await _invokeRaw(functionName, parameters);
+      if (command &&
+          (result is! Map ||
+              result['id'] is! String ||
+              result['state'] is! String)) {
+        throw const YorksV1DomainException(
+          YorksV1DomainErrorCode.unexpectedResponse,
+        );
+      }
+      operation.complete(resultCount: result is List ? result.length : null);
+      if (command) {
+        _analytics.capture(
+          AnalyticsEvent.companyRequestActionConfirmed,
+          properties: {...properties, AnalyticsProperty.outcome: 'confirmed'},
+        );
+      }
+      if (action == 'search_company_material_request_candidates' &&
+          result is List) {
+        _analytics.recordMaterialSearch(
+          queryLength: (parameters['p_query'] as String).length,
+          resultCount: result.length,
+          duration: watch.elapsed,
+          context: AnalyticsSearchContext.companyMaterialRequest,
+        );
+      }
+      return result;
+    } catch (error) {
+      final unknown =
+          command &&
+          error is YorksV1DomainException &&
+          (error.code == YorksV1DomainErrorCode.backendUnavailable ||
+              error.code == YorksV1DomainErrorCode.unexpectedResponse);
+      operation.fail(
+        error,
+        properties: {
+          AnalyticsProperty.outcome: unknown ? 'unknown' : 'rejected',
+        },
+      );
+      if (command) {
+        _analytics.capture(
+          unknown
+              ? AnalyticsEvent.companyRequestActionUnconfirmed
+              : AnalyticsEvent.companyRequestActionFailed,
+          properties: {
+            ...properties,
+            AnalyticsProperty.outcome: unknown ? 'unknown' : 'rejected',
+            AnalyticsProperty.errorCategory: analyticsErrorCategory(error),
+          },
+        );
+      }
+      rethrow;
+    }
+  }
+
+  Future<Object?> _invokeRaw(
     String functionName,
     Map<String, Object?> parameters,
   ) async {

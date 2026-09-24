@@ -8,6 +8,8 @@ import '../models/yorks_v1_project_portfolio.dart';
 import '../models/yorks_v1_role.dart';
 import '../models/yorks_v1_workspace_search.dart';
 import 'yorks_v1_boq_repository.dart';
+import 'yorks_v1_company_material_request_repository.dart';
+import '../models/yorks_v1_company_material_request.dart';
 import 'yorks_v1_documents_repository.dart';
 import 'yorks_v1_logistics_repository.dart';
 import 'yorks_v1_material_request_repository.dart';
@@ -22,12 +24,14 @@ class YorksV1WorkspaceSearchRepository {
     required YorksV1BoqRepository boq,
     required YorksV1DocumentsRepository documents,
     required YorksV1LogisticsRepository logistics,
+    YorksV1CompanyMaterialRequestPagedRepository? companyRequests,
     Duration cacheTtl = const Duration(minutes: 2),
   }) : _projects = projects,
        _materialRequests = materialRequests,
        _boq = boq,
        _documents = documents,
        _logistics = logistics,
+       _companyRequests = companyRequests,
        _cacheTtl = cacheTtl;
 
   final YorksV1ProjectPortfolioRepository _projects;
@@ -36,6 +40,7 @@ class YorksV1WorkspaceSearchRepository {
   final YorksV1DocumentsRepository _documents;
   final YorksV1LogisticsRepository _logistics;
   final Duration _cacheTtl;
+  final YorksV1CompanyMaterialRequestPagedRepository? _companyRequests;
 
   Future<_SearchIndexSnapshot>? _indexFuture;
   YorksV1Role? _indexedRole;
@@ -49,7 +54,16 @@ class YorksV1WorkspaceSearchRepository {
     if (terms.isEmpty) {
       return const YorksV1WorkspaceSearchResponse(results: []);
     }
+    // Company records are searched server-side for the current query. Never
+    // retain a capped cross-user catalogue in the workspace index.
+    final companyFuture = _companyRequests == null
+        ? null
+        : _capture<YorksV1CompanyMaterialRequestPage?>(
+            () => _companyRequests.listPage(query: query.trim(), limit: 60),
+            null,
+          );
     final snapshot = await _indexFor(role);
+    final company = await companyFuture;
     final results = <YorksV1WorkspaceSearchResult>[];
     for (final result in snapshot.results) {
       final haystack = normalizeYorksWorkspaceSearchText(result.searchableText);
@@ -60,13 +74,39 @@ class YorksV1WorkspaceSearchRepository {
       }
       results.add(result.withScore(_score(result, terms)));
     }
+    for (final item
+        in company?.value?.items ??
+            const <YorksV1CompanyMaterialRequestApprovalInboxItem>[]) {
+      final text =
+          '${item.requestNumber} ${item.purpose} ${item.responsibleUnitName} ${item.requesterDisplayName}';
+      results.add(
+        YorksV1WorkspaceSearchResult(
+          kind: YorksV1WorkspaceSearchResultKind.companyMaterialRequest,
+          title: item.requestNumber.isEmpty ? item.purpose : item.requestNumber,
+          subtitle: '${item.purpose} · ${item.responsibleUnitName}',
+          route: item.state == 'draft'
+              ? '/yorks/material-requests/company/new?draft=${Uri.encodeQueryComponent(item.id)}'
+              : '/yorks/material-requests/company/${Uri.encodeComponent(item.id)}',
+          entityId: item.id,
+          searchableText: text,
+        ).withScore(
+          terms.any(
+                (term) => normalizeYorksWorkspaceSearchText(
+                  item.requestNumber,
+                ).contains(term),
+              )
+              ? 900
+              : 170,
+        ),
+      );
+    }
     results.sort((a, b) {
       final score = b.score.compareTo(a.score);
       return score == 0 ? a.title.compareTo(b.title) : score;
     });
     return YorksV1WorkspaceSearchResponse(
       results: results.take(60).toList(growable: false),
-      isPartial: snapshot.isPartial,
+      isPartial: snapshot.isPartial || (company?.failed ?? false),
     );
   }
 
@@ -397,7 +437,8 @@ class YorksV1WorkspaceSearchRepository {
     }
     score += switch (result.kind) {
       YorksV1WorkspaceSearchResultKind.project => 80,
-      YorksV1WorkspaceSearchResultKind.materialRequest => 70,
+      YorksV1WorkspaceSearchResultKind.materialRequest ||
+      YorksV1WorkspaceSearchResultKind.companyMaterialRequest => 70,
       YorksV1WorkspaceSearchResultKind.document => 60,
       YorksV1WorkspaceSearchResultKind.boqGroup => 50,
       YorksV1WorkspaceSearchResultKind.boqItem => 40,

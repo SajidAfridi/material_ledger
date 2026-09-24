@@ -2,6 +2,36 @@ import 'app_strings.dart';
 
 /// Bilingual-capable copy for the protected company-use request lane.
 abstract final class YorksV1CompanyMaterialRequestStrings {
+  static const editRequest = TranslatableString(
+    en: 'Edit request',
+    ar: 'تعديل الطلب',
+    ur: 'درخواست میں ترمیم',
+    hi: 'अनुरोध संपादित करें',
+  );
+  static const cancelRequest = TranslatableString(
+    en: 'Cancel request',
+    ar: 'إلغاء الطلب',
+    ur: 'درخواست منسوخ کریں',
+    hi: 'अनुरोध रद्द करें',
+  );
+  static const cancelled = TranslatableString(
+    en: 'Cancelled',
+    ar: 'ملغى',
+    ur: 'منسوخ',
+    hi: 'रद्द',
+  );
+  static const changeReason = TranslatableString(
+    en: 'Reason for this change',
+    ar: 'سبب هذا التغيير',
+    ur: 'اس تبدیلی کی وجہ',
+    hi: 'इस बदलाव का कारण',
+  );
+  static const correctionNotice = TranslatableString(
+    en: 'Saving sends the changes for approval again. Any existing stock reservations will be released.',
+    ar: 'يرسل الحفظ التغييرات للموافقة مجدداً ويحرر حجوزات المخزون الحالية.',
+    ur: 'محفوظ کرنے پر تبدیلیاں دوبارہ منظوری کے لیے جائیں گی اور موجودہ اسٹاک ریزرویشن ختم ہو جائیں گی۔',
+    hi: 'सहेजने पर बदलाव फिर अनुमोदन के लिए जाएंगे और मौजूदा स्टॉक आरक्षण मुक्त होंगे।',
+  );
   static const projectUse = TranslatableString(
     en: 'Project use',
     ar: 'استخدام المشروع',
@@ -129,6 +159,36 @@ abstract final class YorksV1CompanyMaterialRequestStrings {
     hi: 'नए अनुरोध के विकल्प लोड नहीं हो सके।',
   );
 
+  static const searchEmpty = TranslatableString(
+    en: 'No matching catalogue item. You can keep your description.',
+    ar: 'لا يوجد صنف مطابق. يمكنك الاحتفاظ بالوصف.',
+    ur: 'کوئی مماثل آئٹم نہیں۔ آپ اپنی تفصیل رکھ سکتے ہیں۔',
+    hi: 'कोई मिलती सामग्री नहीं। अपना विवरण रख सकते हैं।',
+  );
+  static const searchFailed = TranslatableString(
+    en: 'Search unavailable. Keep typing or try again.',
+    ar: 'البحث غير متاح. تابع الكتابة أو حاول مجدداً.',
+    ur: 'تلاش دستیاب نہیں۔ لکھتے رہیں یا دوبارہ کوشش کریں۔',
+    hi: 'खोज उपलब्ध नहीं। लिखते रहें या फिर प्रयास करें।',
+  );
+  static const evidence = TranslatableString(
+    en: 'Activity & issue notes',
+    ar: 'النشاط ومستندات الصرف',
+    ur: 'سرگرمی اور اجرا نوٹس',
+    hi: 'गतिविधि और निर्गमन पत्र',
+  );
+  static const issueNote = TranslatableString(
+    en: 'Company Issue Note',
+    ar: 'مستند صرف الشركة',
+    ur: 'کمپنی اجرا نوٹ',
+    hi: 'कंपनी निर्गमन पत्र',
+  );
+  static const noActivity = TranslatableString(
+    en: 'No recorded activity yet.',
+    ar: 'لا يوجد نشاط مسجل بعد.',
+    ur: 'ابھی کوئی سرگرمی ریکارڈ نہیں ہوئی۔',
+    hi: 'अभी कोई गतिविधि दर्ज नहीं है।',
+  );
   static const title = TranslatableString(
     en: 'Company material request',
     ar: 'طلب مواد للشركة',
@@ -382,10 +442,10 @@ abstract final class YorksV1CompanyMaterialRequestStrings {
     hi: 'कंपनी अनुमोदन निर्णय दर्ज किया गया।',
   );
   static const decisionFailed = TranslatableString(
-    en: 'The decision was not recorded. Refresh and try again.',
-    ar: 'لم يتم تسجيل القرار. حدّث وحاول مرة أخرى.',
-    ur: 'فیصلہ ریکارڈ نہیں ہوا۔ ریفریش کرکے دوبارہ کوشش کریں۔',
-    hi: 'निर्णय दर्ज नहीं हुआ। रीफ़्रेश करके फिर प्रयास करें।',
+    en: 'The decision could not be confirmed. Refresh to check before retrying.',
+    ar: 'تعذر تأكيد القرار. حدّث للتحقق قبل المحاولة مجدداً.',
+    ur: 'فیصلے کی تصدیق نہیں ہو سکی۔ دوبارہ کوشش سے پہلے ریفریش کرکے دیکھیں۔',
+    hi: 'निर्णय की पुष्टि नहीं हो सकी। फिर प्रयास से पहले रीफ़्रेश करके जाँचें।',
   );
   static const decisionHistory = TranslatableString(
     en: 'Decision history',
@@ -861,10 +921,10 @@ abstract final class YorksV1CompanyMaterialRequestStrings {
     hi: 'कंपनी सामग्री कार्रवाई दर्ज की गई।',
   );
   static const actionFailed = TranslatableString(
-    en: 'The action was not recorded. Refresh and try again.',
-    ar: 'لم يتم تسجيل الإجراء. حدّث وحاول مرة أخرى.',
-    ur: 'کارروائی ریکارڈ نہیں ہوئی۔ ریفریش کرکے دوبارہ کوشش کریں۔',
-    hi: 'कार्रवाई दर्ज नहीं हुई। रीफ़्रेश करके फिर प्रयास करें।',
+    en: 'The result could not be confirmed. Refresh to check before retrying.',
+    ar: 'تعذر تأكيد النتيجة. حدّث للتحقق قبل المحاولة مجدداً.',
+    ur: 'نتیجے کی تصدیق نہیں ہو سکی۔ دوبارہ کوشش سے پہلے ریفریش کرکے دیکھیں۔',
+    hi: 'नतीजे की पुष्टि नहीं हो सकी। फिर प्रयास से पहले रीफ़्रेश करके जाँचें।',
   );
   static const warehouseSource = TranslatableString(
     en: 'Warehouse stock',

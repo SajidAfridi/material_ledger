@@ -559,6 +559,84 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  for (final size in [
+    const Size(360, 800),
+    const Size(390, 844),
+    const Size(600, 900),
+    const Size(768, 1024),
+    const Size(1024, 768),
+    const Size(1366, 900),
+    const Size(1920, 1080),
+    const Size(800, 360),
+  ]) {
+    testWidgets('Company register and fulfilment resize safely at $size', (
+      tester,
+    ) async {
+      final repository = _CompanyRequestRepository(
+        request: _CompanyRequestRepository._fulfilmentRequest,
+      );
+      await _pumpApproval(
+        tester,
+        repository: repository,
+        size: size,
+        child: const YorksV1CompanyMaterialRequestApprovalInboxScreen(),
+      );
+      expect(tester.takeException(), isNull);
+      await _pumpApproval(
+        tester,
+        repository: repository,
+        size: size,
+        child: const YorksV1CompanyMaterialRequestApprovalScreen(
+          requestId: 'request',
+        ),
+      );
+      expect(tester.takeException(), isNull);
+    });
+  }
+  testWidgets(
+    'Company Procurement actions have labeled accessible tap targets',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+
+      await _pumpApproval(
+        tester,
+        repository: _CompanyRequestRepository(
+          request: _CompanyRequestRepository._fulfilmentRequest,
+        ),
+        size: const Size(360, 800),
+        child: const YorksV1CompanyMaterialRequestApprovalScreen(
+          requestId: 'request',
+        ),
+      );
+      await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
+      await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
+      semantics.dispose();
+    },
+  );
+
+  testWidgets(
+    'record evidence loads on demand and shows the actual issue quantities',
+    (tester) async {
+      final repository = _CompanyRequestRepository(
+        request: _CompanyRequestRepository._fulfilmentRequest,
+      );
+      await _pumpApproval(
+        tester,
+        repository: repository,
+        size: const Size(360, 800),
+        child: const YorksV1CompanyMaterialRequestApprovalScreen(
+          requestId: 'request',
+        ),
+      );
+      expect(repository.evidenceCalls, 0);
+      await _tapVisible(tester, find.byKey(const ValueKey('company-evidence')));
+      expect(repository.evidenceCalls, 1);
+      expect(find.text('Company materials dispatched'), findsOneWidget);
+      await _tapVisible(tester, find.text('CM-ISS-0001'));
+      expect(find.text('2 pcs'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
   testWidgets('approval inbox stays usable at 360px', (tester) async {
     final repository = _CompanyRequestRepository();
     await _pumpApproval(
@@ -887,6 +965,37 @@ class _CompanyRequestRepository
     return request!;
   }
 
+  int evidenceCalls = 0;
+  @override
+  Future<Map<String, dynamic>> getEvidence(String requestId) async {
+    evidenceCalls++;
+    return {
+      'events': [
+        {
+          'event_type': 'company_material_dispatched',
+          'actor_display_name': 'Procurement user',
+          'actor_exact_role': 'procurement',
+          'occurred_at': '2026-09-25T08:00:00Z',
+        },
+      ],
+      'issue_notes': [
+        {
+          'issue_note_number': 'CM-ISS-0001',
+          'created_at': '2026-09-25T08:00:00Z',
+          'snapshot': {
+            'lines': [
+              {
+                'item_description': 'Safety helmets',
+                'quantity': '2',
+                'unit': 'pcs',
+              },
+            ],
+          },
+        },
+      ],
+    };
+  }
+
   int preflightCalls = 0;
   int submitCalls = 0;
   int saveCalls = 0;
@@ -944,6 +1053,7 @@ class _CompanyRequestRepository
     required String responsibleUnitId,
     required String beneficiaryAuthUserId,
     required String authorizedReceiverAuthUserId,
+    String? selectedApproverAuthUserId,
   }) async {
     preflightCalls++;
     return const YorksV1CompanyMaterialRequestApprovalPreflight(

@@ -115,6 +115,20 @@ abstract final class AnalyticsRouteMapper {
           AnalyticsScreen.materialRequests,
         );
       }
+      if (s.length >= 3 && s[2] == 'company') {
+        return AnalyticsRouteDestination(
+          s.length == 3
+              ? AnalyticsScreen.companyMaterialRequests
+              : s[3] == 'new'
+              ? AnalyticsScreen.companyMaterialRequestDraft
+              : AnalyticsScreen.companyMaterialRequestDetail,
+          entryEvent: s.length == 3
+              ? null
+              : s[3] == 'new'
+              ? AnalyticsEvent.companyRequestStarted
+              : AnalyticsEvent.companyRequestOpened,
+        );
+      }
       if (s.length >= 3 && s[2] == 'draft') {
         return const AnalyticsRouteDestination(
           AnalyticsScreen.materialRequestDraft,

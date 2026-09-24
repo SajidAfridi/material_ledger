@@ -89,9 +89,10 @@ continue to cover approval, reservation, receipt exceptions, handover, returns,
 withdrawal and closure; new SQL tests verify remaining dispatch supply and
 role-safe paging.
 
+Beneficiaries must have active Yorks logins, as approved on 25 September 2026.
 Local automated evidence is not named-persona staging UAT. The retained
 [T06 boundaries](COMPANY_MATERIAL_REQUEST_T06_END_TO_END_HARDENING.md) still apply
-to workers without a login, cross-module Company returns and the complete
+to cross-module Company returns and the complete
 controlled-document set beyond immutable issue evidence. This change does not
 enable Company use in production or authorize deployment.
 

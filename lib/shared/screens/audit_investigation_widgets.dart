@@ -573,6 +573,8 @@ class _AuditDetailsState extends ConsumerState<_AuditDetails> {
     final e = widget.event;
     final path = switch (e.entityType) {
       'material_request' => RoutePaths.yorksV1MaterialRequestPath(e.entityId),
+      'company_material_request' =>
+        '/yorks/material-requests/company/${e.entityId}',
       'material_return' => RoutePaths.yorksV1MaterialReturnPath(e.entityId),
       _ => null,
     };

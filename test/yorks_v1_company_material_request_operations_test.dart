@@ -1,10 +1,137 @@
 import 'package:flutter/material.dart';
+import 'package:material_ledger/features/materials/presentation/screens/yorks_v1_company_material_request_approval_screens.dart';
+import 'package:material_ledger/shared/models/yorks_v1_arrangement.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ledger/features/materials/presentation/screens/yorks_v1_company_material_request_operations.dart';
 import 'package:material_ledger/shared/models/app_language.dart';
 import 'package:material_ledger/shared/models/yorks_v1_company_material_request.dart';
 
 void main() {
+  for (final width in [360.0, 390.0, 600.0, 768.0, 1024.0, 1366.0, 1920.0]) {
+    testWidgets(
+      'Procurement plan validates Save and cancels safely at $width',
+      (tester) async {
+        tester.view.physicalSize = Size(width, 900);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        CompanySupplyPlanChoice? result;
+        var dismissed = false;
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Builder(
+              builder: (context) => Scaffold(
+                body: FilledButton(
+                  onPressed: () async {
+                    result = await showDialog<CompanySupplyPlanChoice>(
+                      context: context,
+                      builder: (_) => const CompanySupplyPlanDialog(
+                        line: YorksV1CompanyMaterialRequestLine(
+                          id: 'l',
+                          displayOrder: 1,
+                          description: 'Workshop helmet with adjustable strap',
+                          quantity: '3',
+                          unit: 'pcs',
+                        ),
+                        outstandingQuantity: '3',
+                        language: AppLanguage.english,
+                        inventory: [
+                          YorksV1InventoryItem(
+                            id: 'stock',
+                            description: 'Workshop helmet',
+                            unit: 'pcs',
+                            onHandQuantity: '8',
+                            reservedQuantity: '0',
+                            availableQuantity: '8',
+                            recordVersion: 1,
+                          ),
+                        ],
+                      ),
+                    );
+                    dismissed = true;
+                  },
+                  child: const Text('Open'),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('company-plan-save')));
+        await tester.pumpAndSettle();
+        expect(
+          dismissed,
+          isFalse,
+          reason: 'Save must require an explicit stock selection',
+        );
+        expect(result, isNull);
+        await tester.tap(find.byKey(const ValueKey('company-plan-cancel')));
+        await tester.pumpAndSettle();
+        expect(dismissed, isTrue);
+        expect(
+          result,
+          isNull,
+          reason: 'Cancel never adds an arrangement choice',
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+  testWidgets(
+    'unavailable arrangement preserves deliberate follow-up on Save',
+    (tester) async {
+      CompanySupplyPlanChoice? result;
+      final date = DateTime.now()
+          .add(const Duration(days: 3))
+          .toIso8601String()
+          .split('T')
+          .first;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: FilledButton(
+                onPressed: () async {
+                  result = await showDialog<CompanySupplyPlanChoice>(
+                    context: context,
+                    builder: (_) => CompanySupplyPlanDialog(
+                      line: const YorksV1CompanyMaterialRequestLine(
+                        id: 'l',
+                        displayOrder: 1,
+                        description: 'Helmet',
+                        quantity: '3',
+                        unit: 'pcs',
+                      ),
+                      outstandingQuantity: '3',
+                      inventory: const [],
+                      language: AppLanguage.english,
+                      initial: CompanySupplyPlanChoice(
+                        decision: 'unavailable',
+                        quantity: '0',
+                        reason: 'Supply delayed',
+                        followUpDate: date,
+                      ),
+                    ),
+                  );
+                },
+                child: const Text('Open'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('company-plan-save')));
+      await tester.pumpAndSettle();
+      expect(result!.followUpDate, date);
+      expect(result!.reason, 'Supply delayed');
+      expect(result!.inventoryItemId, isNull);
+      expect(result!.quantity, '0');
+    },
+  );
+
   test(
     'private draft summaries preserve identity without submission evidence',
     () {

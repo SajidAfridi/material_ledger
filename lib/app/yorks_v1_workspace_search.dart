@@ -12,6 +12,7 @@ import '../shared/models/app_strings.dart';
 import '../shared/models/yorks_v1_role.dart';
 import '../shared/models/yorks_v1_shell_strings.dart';
 import '../shared/models/yorks_v1_workspace_search.dart';
+import '../shared/models/yorks_v1_company_material_request_strings.dart';
 import '../shared/providers/yorks_v1_workspace_search_provider.dart';
 
 class YorksV1SearchNavigationTarget {
@@ -550,6 +551,8 @@ class _SearchBody extends StatelessWidget {
       YorksV1ShellStrings.searchBoqGroup.active(language),
     YorksV1WorkspaceSearchResultKind.boqItem =>
       YorksV1ShellStrings.searchBoqItem.active(language),
+    YorksV1WorkspaceSearchResultKind.companyMaterialRequest =>
+      YorksV1CompanyMaterialRequestStrings.companyUse.active(language),
     YorksV1WorkspaceSearchResultKind.materialRequest =>
       YorksV1ShellStrings.searchMaterialRequest.active(language),
     YorksV1WorkspaceSearchResultKind.materialItem =>

@@ -4,6 +4,19 @@ import 'package:material_ledger/shared/providers/yorks_v1_material_request_provi
 import 'package:material_ledger/shared/sync/connectivity_service.dart';
 
 void main() {
+  test(
+    'Company handoffs refresh the same protected Material Request projections',
+    () {
+      expect(
+        YorksV1MaterialRequestRealtimeNotifier.reasonFromNotification({
+          'entity_type': 'company_material_request',
+          'event_code': 'company_material_request_cancelled',
+        }),
+        YorksV1MaterialRequestRefreshReason.materialRequest,
+      );
+    },
+  );
+
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('Yorks V1 Material Request Realtime refresh', () {

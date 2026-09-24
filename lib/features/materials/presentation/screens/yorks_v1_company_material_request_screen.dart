@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
@@ -128,6 +129,7 @@ class _YorksV1CompanyMaterialRequestScreenState
           deliveryCollectionPoint: request.deliveryCollectionPoint,
           beneficiaryAuthUserId: request.beneficiary.authUserId,
           authorizedReceiverAuthUserId: request.authorizedReceiver.authUserId,
+          selectedApproverAuthUserId: request.selectedApproverAuthUserId,
           timing: request.timing,
           scheduledDate: request.scheduledDate,
           lines: request.lines,
@@ -167,12 +169,16 @@ class _YorksV1CompanyMaterialRequestScreenState
   }
 
   void _update(YorksV1CompanyMaterialRequestDraft next) {
-    final authorizationChanged =
+    final participantsChanged =
         _draft.categoryId != next.categoryId ||
         _draft.responsibleUnitId != next.responsibleUnitId ||
         _draft.beneficiaryAuthUserId != next.beneficiaryAuthUserId ||
         _draft.authorizedReceiverAuthUserId !=
             next.authorizedReceiverAuthUserId;
+    if (participantsChanged) next = next.copyWith(clearApprover: true);
+    final authorizationChanged =
+        participantsChanged ||
+        _draft.selectedApproverAuthUserId != next.selectedApproverAuthUserId;
     setState(() {
       _draft = next;
       _reviewConfirmed = false;
@@ -208,6 +214,7 @@ class _YorksV1CompanyMaterialRequestScreenState
             responsibleUnitId: unit,
             beneficiaryAuthUserId: beneficiary,
             authorizedReceiverAuthUserId: receiver,
+            selectedApproverAuthUserId: _draft.selectedApproverAuthUserId,
           );
       if (!mounted ||
           generation != _routeGeneration ||
@@ -519,6 +526,41 @@ class _YorksV1CompanyMaterialRequestScreenState
     );
   }
 
+  Widget _approverChoice(AppLanguage language) {
+    final choices =
+        _preflight?.eligibleApprovers ??
+        const <YorksV1CompanyMaterialRequestPerson>[];
+    if (choices.isEmpty) return const SizedBox.shrink();
+    final selected =
+        _draft.selectedApproverAuthUserId ?? _preflight?.approver.authUserId;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+      child: DropdownButtonFormField<String>(
+        key: ValueKey('company-approver-$selected'),
+        initialValue: choices.any((p) => p.authUserId == selected)
+            ? selected
+            : null,
+        isExpanded: true,
+        decoration: InputDecoration(
+          labelText: YorksV1CompanyMaterialRequestStrings.approver.active(
+            language,
+          ),
+        ),
+        items: [
+          for (final person in choices)
+            DropdownMenuItem(
+              value: person.authUserId,
+              child: Text(person.displayName),
+            ),
+        ],
+        onChanged: _saving || _routeChecking
+            ? null
+            : (value) =>
+                  _update(_draft.copyWith(selectedApproverAuthUserId: value)),
+      ),
+    );
+  }
+
   Widget _buildMobile(
     List<YorksV1CompanyMaterialRequestDraftOption> options,
     AppLanguage language,
@@ -596,6 +638,7 @@ class _YorksV1CompanyMaterialRequestScreenState
               onChanged: _update,
             ),
             const SizedBox(height: AppSpacing.lg),
+            _approverChoice(language),
             _RequestDetailFields(
               language: language,
               purpose: _purpose,
@@ -831,12 +874,17 @@ class _YorksV1CompanyMaterialRequestScreenState
                                       ),
                                       const SizedBox(width: AppSpacing.lg),
                                       Expanded(
-                                        child: _RequestDetailFields(
-                                          language: language,
-                                          purpose: _purpose,
-                                          collectionPoint: _point,
-                                          draft: _draft,
-                                          onChanged: _update,
+                                        child: Column(
+                                          children: [
+                                            _approverChoice(language),
+                                            _RequestDetailFields(
+                                              language: language,
+                                              purpose: _purpose,
+                                              collectionPoint: _point,
+                                              draft: _draft,
+                                              onChanged: _update,
+                                            ),
+                                          ],
                                         ),
                                       ),
                                     ],
@@ -1106,7 +1154,7 @@ class _DesktopSection extends StatelessWidget {
                     Text(
                       description,
                       style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.muted,
+                        color: AppColors.inkSecondary,
                       ),
                     ),
                   ],
@@ -1354,8 +1402,8 @@ class _RequestDetailFields extends StatelessWidget {
   );
 }
 
-class _CompanyMaterialDescriptionSearch extends ConsumerStatefulWidget {
-  const _CompanyMaterialDescriptionSearch({
+class CompanyMaterialDescriptionSearch extends ConsumerStatefulWidget {
+  const CompanyMaterialDescriptionSearch({
     super.key,
     required this.language,
     required this.line,
@@ -1373,35 +1421,44 @@ class _CompanyMaterialDescriptionSearch extends ConsumerStatefulWidget {
   final ValueChanged<YorksV1CompanyMaterialRequestLine> onChanged;
 
   @override
-  ConsumerState<_CompanyMaterialDescriptionSearch> createState() =>
-      _CompanyMaterialDescriptionSearchState();
+  ConsumerState<CompanyMaterialDescriptionSearch> createState() =>
+      CompanyMaterialDescriptionSearchState();
 }
 
-class _CompanyMaterialDescriptionSearchState
-    extends ConsumerState<_CompanyMaterialDescriptionSearch> {
+class CompanyMaterialDescriptionSearchState
+    extends ConsumerState<CompanyMaterialDescriptionSearch> {
   late final TextEditingController _controller;
   late final FocusNode _focusNode;
   Timer? _debounce;
   int _generation = 0;
   bool _loading = false;
+  bool _searched = false;
+  bool _failed = false;
+  int _highlighted = 0;
   List<YorksV1MaterialRequestInventorySuggestion> _suggestions = const [];
 
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.line.description);
-    _focusNode = FocusNode()..addListener(_onFocusChanged);
+    _focusNode = FocusNode(onKeyEvent: _handleKey)
+      ..addListener(_onFocusChanged);
   }
 
   @override
-  void didUpdateWidget(covariant _CompanyMaterialDescriptionSearch oldWidget) {
+  void didUpdateWidget(covariant CompanyMaterialDescriptionSearch oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!_focusNode.hasFocus && widget.line.description != _controller.text) {
       _controller.text = widget.line.description;
     }
     if (oldWidget.categoryId != widget.categoryId ||
         oldWidget.responsibleUnitId != widget.responsibleUnitId) {
+      _generation++;
+      _debounce?.cancel();
       _suggestions = const [];
+      _loading = false;
+      _searched = false;
+      _failed = false;
     }
   }
 
@@ -1419,9 +1476,47 @@ class _CompanyMaterialDescriptionSearchState
     if (mounted) setState(() {});
   }
 
+  KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event.logicalKey == LogicalKeyboardKey.escape) {
+      _generation++;
+      _debounce?.cancel();
+      setState(() {
+        _suggestions = const [];
+        _loading = false;
+        _searched = false;
+      });
+      return KeyEventResult.handled;
+    }
+    if (_suggestions.isEmpty) return KeyEventResult.ignored;
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown ||
+        event.logicalKey == LogicalKeyboardKey.arrowUp) {
+      setState(
+        () => _highlighted =
+            (_highlighted +
+                    (event.logicalKey == LogicalKeyboardKey.arrowDown ? 1 : -1))
+                .clamp(0, _suggestions.length - 1),
+      );
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.enter) {
+      _select(_suggestions[_highlighted]);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
   void _search(String value) {
     widget.onChanged(widget.line.copyWith(description: value));
     _debounce?.cancel();
+    final generation = ++_generation;
+    setState(() {
+      _suggestions = const [];
+      _searched = false;
+      _failed = false;
+      _loading = false;
+      _highlighted = 0;
+    });
     final query = value.trim();
     final categoryId = widget.categoryId;
     final responsibleUnitId = widget.responsibleUnitId;
@@ -1432,7 +1527,6 @@ class _CompanyMaterialDescriptionSearchState
       });
       return;
     }
-    final generation = ++_generation;
     _debounce = Timer(const Duration(milliseconds: 250), () async {
       if (!mounted) return;
       setState(() => _loading = true);
@@ -1450,18 +1544,23 @@ class _CompanyMaterialDescriptionSearchState
         setState(() {
           _loading = false;
           _suggestions = results;
+          _searched = true;
         });
       } catch (_) {
         if (!mounted || generation != _generation) return;
         setState(() {
           _loading = false;
           _suggestions = const [];
+          _searched = true;
+          _failed = true;
         });
       }
     });
   }
 
   void _select(YorksV1MaterialRequestInventorySuggestion suggestion) {
+    _generation++;
+    _debounce?.cancel();
     _controller.text = suggestion.description;
     widget.onChanged(
       widget.line.copyWith(
@@ -1477,14 +1576,19 @@ class _CompanyMaterialDescriptionSearchState
         unit: suggestion.unit,
       ),
     );
-    setState(() => _suggestions = const []);
+    setState(() {
+      _suggestions = const [];
+      _loading = false;
+      _searched = false;
+    });
     _focusNode.unfocus();
   }
 
   @override
   Widget build(BuildContext context) {
     final showResults =
-        _focusNode.hasFocus && (_loading || _suggestions.isNotEmpty);
+        _focusNode.hasFocus &&
+        (_loading || _searched || _suggestions.isNotEmpty);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1513,6 +1617,19 @@ class _CompanyMaterialDescriptionSearchState
             border: const OutlineInputBorder(),
           ),
         ),
+        if (showResults && _searched && _suggestions.isEmpty)
+          Semantics(
+            liveRegion: true,
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: Text(
+                (_failed
+                        ? YorksV1CompanyMaterialRequestStrings.searchFailed
+                        : YorksV1CompanyMaterialRequestStrings.searchEmpty)
+                    .active(widget.language),
+              ),
+            ),
+          ),
         if (showResults && _suggestions.isNotEmpty)
           ConstrainedBox(
             constraints: const BoxConstraints(maxHeight: 260),
@@ -1533,6 +1650,8 @@ class _CompanyMaterialDescriptionSearchState
                       key: ValueKey(
                         'company-material-suggestion-${suggestion.id}',
                       ),
+                      selected:
+                          _suggestions.indexOf(suggestion) == _highlighted,
                       dense: !widget.compact,
                       minVerticalPadding: 10,
                       title: Text(suggestion.description),
@@ -1676,7 +1795,7 @@ class _DesktopLineHeaders extends StatelessWidget {
     value.toUpperCase(),
     textAlign: align,
     style: AppTypography.labelSmall.copyWith(
-      color: AppColors.muted,
+      color: AppColors.inkSecondary,
       fontWeight: FontWeight.w800,
       letterSpacing: .5,
     ),
@@ -1767,7 +1886,7 @@ class _CompanyLineFields extends StatelessWidget {
   final VoidCallback onInsertSimilar;
   final VoidCallback onInsertBlank;
 
-  Widget _description() => _CompanyMaterialDescriptionSearch(
+  Widget _description() => CompanyMaterialDescriptionSearch(
     key: ValueKey('company-line-description-${line.id}'),
     language: language,
     line: line,
@@ -2270,7 +2389,7 @@ class _ReviewLines extends StatelessWidget {
                       Text(
                         lines[index].brandOrigin!,
                         style: AppTypography.bodySmall.copyWith(
-                          color: AppColors.muted,
+                          color: AppColors.inkSecondary,
                         ),
                       ),
                   ],
@@ -2511,7 +2630,7 @@ class _CompanyRequestPolicyState extends StatelessWidget {
                   ),
                   textAlign: TextAlign.center,
                   style: AppTypography.bodyMedium.copyWith(
-                    color: AppColors.muted,
+                    color: AppColors.inkSecondary,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.lg),

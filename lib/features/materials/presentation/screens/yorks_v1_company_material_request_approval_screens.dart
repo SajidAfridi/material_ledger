@@ -17,8 +17,10 @@ import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/yorks_v1_company_material_request_provider.dart';
 import '../../../../shared/providers/yorks_v1_arrangement_provider.dart';
 import '../../../../shared/providers/yorks_v1_identity_provider.dart';
+import '../../../../shared/providers/yorks_v1_material_request_provider.dart';
 import '../../../../shared/repositories/yorks_v1_company_material_request_repository.dart';
 import '../widgets/yorks_v1_request_use_switch.dart';
+import '../widgets/yorks_v1_company_request_evidence.dart';
 import 'yorks_v1_company_material_request_operations.dart';
 
 class YorksV1CompanyMaterialRequestApprovalInboxScreen
@@ -115,6 +117,14 @@ class _CompanyInboxState
   Widget build(BuildContext context) {
     final language = ref.watch(languageProvider);
     ref.listen(yorksV1AuthUserIdProvider, (_, _) => _select(_view));
+    ref.listen(
+      yorksV1CompanyMaterialRequestRepositoryProvider,
+      (_, _) => _select(_view),
+    );
+    ref.listen(
+      yorksV1MaterialRequestRealtimeRevisionProvider,
+      (_, _) => _select(_view),
+    );
     final options = ref.watch(
       yorksV1CompanyMaterialRequestDraftOptionsProvider,
     );
@@ -588,7 +598,7 @@ class _InboxCard extends StatelessWidget {
                       Text(
                         _stateLabel(item.state, language),
                         style: AppTypography.labelMedium.copyWith(
-                          color: AppColors.muted,
+                          color: AppColors.inkSecondary,
                         ),
                       ),
                     ],
@@ -606,7 +616,7 @@ class _InboxCard extends StatelessWidget {
                   Text(
                     '${item.responsibleUnitName} · ${YorksV1CompanyMaterialRequestStrings.itemCount(item.lineCount).active(language)}',
                     style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.muted,
+                      color: AppColors.inkSecondary,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -791,7 +801,7 @@ class _ApprovalDetail extends StatelessWidget {
               Text(
                 '${request.responsibleUnitName} · ${request.deliveryCollectionPoint}',
                 style: AppTypography.bodyMedium.copyWith(
-                  color: AppColors.muted,
+                  color: AppColors.inkSecondary,
                 ),
               ),
               const SizedBox(height: 16),
@@ -812,7 +822,7 @@ class _ApprovalDetail extends StatelessWidget {
                       Text(
                         '${YorksV1CompanyMaterialRequestStrings.currentOwner.active(language)}: $_owner',
                         style: AppTypography.bodySmall.copyWith(
-                          color: AppColors.muted,
+                          color: AppColors.inkSecondary,
                         ),
                       ),
                       if (request.canDecide) ...[
@@ -922,7 +932,7 @@ class _ApprovalDetail extends StatelessWidget {
                                           .where((v) => v.isNotEmpty)
                                           .join(' · '),
                                       style: AppTypography.bodySmall.copyWith(
-                                        color: AppColors.muted,
+                                        color: AppColors.inkSecondary,
                                       ),
                                     ),
                                 ],
@@ -982,6 +992,12 @@ class _ApprovalDetail extends StatelessWidget {
               const SizedBox(height: 12),
               _CompanyLifecycleProgress(
                 state: request.state,
+                language: language,
+              ),
+              const SizedBox(height: 12),
+              YorksV1CompanyRequestEvidence(
+                requestId: request.id,
+                recordVersion: request.recordVersion,
                 language: language,
               ),
               const SizedBox(height: 12),
@@ -1078,6 +1094,12 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
       );
 
   Future<void> _reviseAndResubmit() async {
+    final formKey = GlobalKey<FormState>();
+    final reason = TextEditingController();
+    final descriptions = {
+      for (final line in widget.request.lines)
+        line.id: TextEditingController(text: line.description),
+    };
     final purpose = TextEditingController(text: widget.request.purpose);
     final delivery = TextEditingController(
       text: widget.request.deliveryCollectionPoint,
@@ -1095,39 +1117,86 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
           ),
         ),
         content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: purpose,
-                decoration: InputDecoration(
-                  labelText: YorksV1CompanyMaterialRequestStrings.purpose
-                      .active(widget.language),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: delivery,
-                decoration: InputDecoration(
-                  labelText: YorksV1CompanyMaterialRequestStrings
-                      .deliveryCollectionPoint
-                      .active(widget.language),
-                ),
-              ),
-              for (final line in widget.request.lines) ...[
-                const SizedBox(height: 12),
-                TextField(
-                  controller: quantities[line.id],
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
+          child: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: purpose,
+                  validator: (v) => v?.trim().isNotEmpty == true
+                      ? null
+                      : YorksV1CompanyMaterialRequestStrings.changeReason
+                            .active(widget.language),
                   decoration: InputDecoration(
-                    labelText:
-                        '${line.description} · ${YorksV1CompanyMaterialRequestStrings.quantity.active(widget.language)}',
+                    labelText: YorksV1CompanyMaterialRequestStrings.purpose
+                        .active(widget.language),
                   ),
                 ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: delivery,
+                  validator: (v) => v?.trim().isNotEmpty == true
+                      ? null
+                      : YorksV1CompanyMaterialRequestStrings
+                            .deliveryCollectionPoint
+                            .active(widget.language),
+                  decoration: InputDecoration(
+                    labelText: YorksV1CompanyMaterialRequestStrings
+                        .deliveryCollectionPoint
+                        .active(widget.language),
+                  ),
+                ),
+                Text(
+                  YorksV1CompanyMaterialRequestStrings.correctionNotice.active(
+                    widget.language,
+                  ),
+                ),
+                TextFormField(
+                  controller: reason,
+                  decoration: InputDecoration(
+                    labelText: YorksV1CompanyMaterialRequestStrings.changeReason
+                        .active(widget.language),
+                  ),
+                  validator: (v) => v?.trim().isNotEmpty == true
+                      ? null
+                      : YorksV1CompanyMaterialRequestStrings.changeReason
+                            .active(widget.language),
+                ),
+                for (final line in widget.request.lines) ...[
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: descriptions[line.id],
+                    decoration: InputDecoration(
+                      labelText: YorksV1CompanyMaterialRequestStrings
+                          .itemDescription
+                          .active(widget.language),
+                    ),
+                    validator: (v) => v?.trim().isNotEmpty == true
+                        ? null
+                        : YorksV1CompanyMaterialRequestStrings.itemDescription
+                              .active(widget.language),
+                  ),
+                  TextFormField(
+                    controller: quantities[line.id],
+                    validator: (v) {
+                      final q = double.tryParse(v?.trim() ?? '');
+                      return q != null && q.isFinite && q > 0
+                          ? null
+                          : YorksV1CompanyMaterialRequestStrings.quantityLimit
+                                .active(widget.language);
+                    },
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: InputDecoration(
+                      labelText:
+                          '${line.description} · ${YorksV1CompanyMaterialRequestStrings.quantity.active(widget.language)}',
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
         actions: [
@@ -1138,7 +1207,10 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
             ),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
+            onPressed: () {
+              if (formKey.currentState!.validate())
+                Navigator.pop(dialogContext, true);
+            },
             child: Text(
               YorksV1CompanyMaterialRequestStrings.reviseAndResubmit.active(
                 widget.language,
@@ -1156,18 +1228,22 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
               requestId: widget.request.id,
               expectedVersion: widget.request.recordVersion,
               purpose: purpose.text.trim(),
+              reason: reason.text.trim(),
               deliveryCollectionPoint: delivery.text.trim(),
               lines: [
                 for (final line in widget.request.lines)
                   {
                     'id': line.id,
-                    'item_description': line.description,
+                    'item_description': descriptions[line.id]!.text.trim(),
                     'brand_origin': line.brandOrigin,
                     'requested_qty': quantities[line.id]!.text.trim(),
                     'unit': line.unit,
                   },
               ],
               idempotencyKey: _commandKey('revise', [
+                reason.text.trim(),
+                for (final line in widget.request.lines)
+                  descriptions[line.id]!.text.trim(),
                 purpose.text.trim(),
                 delivery.text.trim(),
                 for (final line in widget.request.lines)
@@ -1176,11 +1252,80 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
             ),
       );
     }
+    reason.dispose();
+    for (final controller in descriptions.values) {
+      controller.dispose();
+    }
     purpose.dispose();
     delivery.dispose();
     for (final controller in quantities.values) {
       controller.dispose();
     }
+  }
+
+  Future<void> _cancelRequest() async {
+    final reason = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          YorksV1CompanyMaterialRequestStrings.cancelRequest.active(
+            widget.language,
+          ),
+        ),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            controller: reason,
+            autofocus: true,
+            maxLines: 3,
+            maxLength: 2000,
+            decoration: InputDecoration(
+              labelText: YorksV1CompanyMaterialRequestStrings.changeReason
+                  .active(widget.language),
+            ),
+            validator: (v) => v?.trim().isNotEmpty == true
+                ? null
+                : YorksV1CompanyMaterialRequestStrings.changeReason.active(
+                    widget.language,
+                  ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(
+              YorksV1MaterialRequestStrings.back.active(widget.language),
+            ),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState!.validate())
+                Navigator.pop(dialogContext, true);
+            },
+            child: Text(
+              YorksV1CompanyMaterialRequestStrings.cancelRequest.active(
+                widget.language,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    final explanation = reason.text.trim();
+    reason.dispose();
+    if (confirmed != true || !mounted) return;
+    await _run(
+      () => ref
+          .read(yorksV1CompanyMaterialRequestRepositoryProvider)
+          .cancel(
+            requestId: widget.request.id,
+            expectedVersion: widget.request.recordVersion,
+            reason: explanation,
+            idempotencyKey: _commandKey('cancel', explanation),
+          ),
+    );
   }
 
   Future<void> _run(
@@ -1229,9 +1374,9 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
             (line) => (double.tryParse(line.withdrawableQuantity) ?? 0) > 0,
           )
           .toList();
-      final choices = await showDialog<List<_PlanChoice>>(
+      final choices = await showDialog<List<CompanySupplyPlanChoice>>(
         context: context,
-        builder: (_) => CompanyLineReview<_PlanChoice>(
+        builder: (_) => CompanyLineReview<CompanySupplyPlanChoice>(
           title: YorksV1CompanyMaterialRequestStrings.arrangeItems.active(
             widget.language,
           ),
@@ -1248,9 +1393,9 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
                   : choice.decision == 'partial'
                   ? YorksV1CompanyMaterialRequestStrings.partial.active(widget.language)
                   : YorksV1CompanyMaterialRequestStrings.cannotProvideNow.active(widget.language)}',
-          edit: (index, previous) => showDialog<_PlanChoice>(
+          edit: (index, previous) => showDialog<CompanySupplyPlanChoice>(
             context: context,
-            builder: (_) => _PlanDialog(
+            builder: (_) => CompanySupplyPlanDialog(
               line: outstanding[index],
               outstandingQuantity: outstanding[index].withdrawableQuantity,
               inventory: inventory
@@ -1581,7 +1726,20 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
           onPressed: _busy ? null : _reviseAndResubmit,
           icon: const Icon(Icons.edit_note_rounded),
           label: Text(
-            YorksV1CompanyMaterialRequestStrings.reviseAndResubmit.active(
+            YorksV1CompanyMaterialRequestStrings.editRequest.active(
+              widget.language,
+            ),
+          ),
+        ),
+      );
+    }
+    if (widget.request.canCancel) {
+      actions.add(
+        OutlinedButton.icon(
+          onPressed: _busy ? null : _cancelRequest,
+          icon: const Icon(Icons.cancel_outlined),
+          label: Text(
+            YorksV1CompanyMaterialRequestStrings.cancelRequest.active(
               widget.language,
             ),
           ),
@@ -1912,8 +2070,8 @@ class _ReceiptDialogState extends State<_ReceiptDialog> {
   );
 }
 
-class _PlanChoice {
-  const _PlanChoice({
+class CompanySupplyPlanChoice {
+  const CompanySupplyPlanChoice({
     required this.decision,
     required this.quantity,
     this.inventoryItemId,
@@ -1945,8 +2103,9 @@ class _PlanChoice {
   };
 }
 
-class _PlanDialog extends StatefulWidget {
-  const _PlanDialog({
+class CompanySupplyPlanDialog extends StatefulWidget {
+  const CompanySupplyPlanDialog({
+    super.key,
     required this.line,
     required this.outstandingQuantity,
     required this.inventory,
@@ -1955,18 +2114,20 @@ class _PlanDialog extends StatefulWidget {
   });
   final YorksV1CompanyMaterialRequestLine line;
   final String outstandingQuantity;
-  final _PlanChoice? initial;
+  final CompanySupplyPlanChoice? initial;
   final List<YorksV1InventoryItem> inventory;
   final AppLanguage language;
 
   @override
-  State<_PlanDialog> createState() => _PlanDialogState();
+  State<CompanySupplyPlanDialog> createState() =>
+      CompanySupplyPlanDialogState();
 }
 
-class _PlanDialogState extends State<_PlanDialog> {
+class CompanySupplyPlanDialogState extends State<CompanySupplyPlanDialog> {
   late final TextEditingController _quantity = TextEditingController(
     text: widget.outstandingQuantity,
   );
+  final TextEditingController _stockSearch = TextEditingController();
   final TextEditingController _supplier = TextEditingController();
   final TextEditingController _reason = TextEditingController();
   String _decision = 'full';
@@ -1982,7 +2143,7 @@ class _PlanDialogState extends State<_PlanDialog> {
     _inventoryItemId = previous?.inventoryItemId;
     _decision = previous?.decision ?? 'full';
     _source = previous == null
-        ? (widget.inventory.isEmpty ? 'external_supplier' : 'warehouse')
+        ? 'warehouse'
         : previous.inventoryItemId == null
         ? 'external_supplier'
         : 'warehouse';
@@ -1990,10 +2151,28 @@ class _PlanDialogState extends State<_PlanDialog> {
     _supplier.text = previous?.externalSupplier ?? '';
     _reason.text = previous?.reason ?? '';
     _followUp = DateTime.tryParse(previous?.followUpDate ?? '');
+    final selected = widget.inventory
+        .where((item) => item.id == _inventoryItemId)
+        .firstOrNull;
+    if (selected != null) {
+      _stockSearch.text =
+          '${selected.description} · ${selected.availableQuantity} ${selected.unit}';
+    }
+    _stockSearch.addListener(() {
+      final chosen = widget.inventory
+          .where((item) => item.id == _inventoryItemId)
+          .firstOrNull;
+      if (chosen != null &&
+          _stockSearch.text !=
+              '${chosen.description} · ${chosen.availableQuantity} ${chosen.unit}') {
+        setState(() => _inventoryItemId = null);
+      }
+    });
   }
 
   @override
   void dispose() {
+    _stockSearch.dispose();
     _quantity.dispose();
     _supplier.dispose();
     _reason.dispose();
@@ -2008,6 +2187,7 @@ class _PlanDialogState extends State<_PlanDialog> {
         mainAxisSize: MainAxisSize.min,
         children: [
           DropdownButtonFormField<String>(
+            isExpanded: true,
             initialValue: _decision,
             items: [
               DropdownMenuItem(
@@ -2045,6 +2225,9 @@ class _PlanDialogState extends State<_PlanDialog> {
           const SizedBox(height: 12),
           if (_decision != 'unavailable') ...[
             SegmentedButton<String>(
+              direction: MediaQuery.sizeOf(context).width < 600
+                  ? Axis.vertical
+                  : Axis.horizontal,
               segments: [
                 ButtonSegment(
                   value: 'warehouse',
@@ -2069,26 +2252,32 @@ class _PlanDialogState extends State<_PlanDialog> {
             ),
             const SizedBox(height: 12),
             if (_source == 'warehouse')
-              DropdownButtonFormField<String>(
-                initialValue: _inventoryItemId,
-                isExpanded: true,
-                decoration: InputDecoration(
-                  labelText: YorksV1CompanyMaterialRequestStrings
-                      .chooseInventory
-                      .active(widget.language),
+              DropdownMenu<String>(
+                key: const ValueKey('company-plan-stock-search'),
+                controller: _stockSearch,
+                initialSelection: _inventoryItemId,
+                expandedInsets: EdgeInsets.zero,
+                enableFilter: true,
+                enableSearch: true,
+                requestFocusOnTap: true,
+                menuHeight: 260,
+                label: Text(
+                  YorksV1CompanyMaterialRequestStrings.chooseInventory.active(
+                    widget.language,
+                  ),
                 ),
-                items: [
+                dropdownMenuEntries: [
                   for (final item in widget.inventory)
-                    DropdownMenuItem(
+                    DropdownMenuEntry(
                       value: item.id,
-                      child: Text(
-                        '${item.description} (${item.availableQuantity})',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      label:
+                          '${item.description} · ${item.availableQuantity} ${item.unit}',
+                      labelWidget: Text(
+                        '${item.description} · ${item.availableQuantity} ${item.unit}',
                       ),
                     ),
                 ],
-                onChanged: (value) => setState(() => _inventoryItemId = value),
+                onSelected: (value) => setState(() => _inventoryItemId = value),
               )
             else
               TextField(
@@ -2127,7 +2316,9 @@ class _PlanDialogState extends State<_PlanDialog> {
                 final now = DateUtils.dateOnly(DateTime.now());
                 final date = await showDatePicker(
                   context: context,
-                  initialDate: _followUp ?? now,
+                  initialDate: _followUp != null && !_followUp!.isBefore(now)
+                      ? _followUp!
+                      : now,
                   firstDate: now,
                   lastDate: now.add(const Duration(days: 3650)),
                 );
@@ -2156,6 +2347,14 @@ class _PlanDialogState extends State<_PlanDialog> {
     ),
     actions: [
       TextButton(
+        key: const ValueKey('company-plan-cancel'),
+        onPressed: () => Navigator.pop(context),
+        child: Text(
+          YorksV1MaterialRequestStrings.cancel.active(widget.language),
+        ),
+      ),
+      FilledButton(
+        key: const ValueKey('company-plan-save'),
         onPressed: () {
           final quantity = _decision == 'unavailable'
               ? 0.0
@@ -2170,7 +2369,11 @@ class _PlanDialogState extends State<_PlanDialog> {
               (_decision == 'partial' &&
                   (quantity <= 0 || quantity >= maximum)) ||
               (_decision != 'full' && _reason.text.trim().isEmpty) ||
-              (_decision == 'unavailable' && _followUp == null) ||
+              (_decision == 'unavailable' &&
+                  (_followUp == null ||
+                      _followUp!.isBefore(
+                        DateUtils.dateOnly(DateTime.now()),
+                      ))) ||
               (_decision != 'unavailable' &&
                   (_source == 'warehouse'
                       ? _inventoryItemId == null
@@ -2181,7 +2384,7 @@ class _PlanDialogState extends State<_PlanDialog> {
           }
           Navigator.pop(
             context,
-            _PlanChoice(
+            CompanySupplyPlanChoice(
               decision: _decision,
               quantity: _decision == 'unavailable'
                   ? '0'
@@ -2202,24 +2405,7 @@ class _PlanDialogState extends State<_PlanDialog> {
           );
         },
         child: Text(
-          YorksV1MaterialRequestStrings.cancel.active(widget.language),
-        ),
-      ),
-      FilledButton(
-        onPressed: () => Navigator.pop(
-          context,
-          _PlanChoice(
-            decision: _decision,
-            quantity: _decision == 'unavailable' ? '0' : _quantity.text.trim(),
-            inventoryItemId: _source == 'warehouse' ? _inventoryItemId : null,
-            externalSupplier: _source == 'external_supplier'
-                ? _supplier.text.trim()
-                : null,
-            reason: _decision == 'full' ? null : _reason.text.trim(),
-          ),
-        ),
-        child: Text(
-          YorksV1CompanyMaterialRequestStrings.saveSupplyPlan.active(
+          YorksV1CompanyMaterialRequestStrings.reviewItems.active(
             widget.language,
           ),
         ),
@@ -2310,6 +2496,9 @@ String _stateLabel(String state, AppLanguage language) => switch (state) {
     language,
   ),
   'closed' => YorksV1CompanyMaterialRequestStrings.closed.active(language),
+  'cancelled' => YorksV1CompanyMaterialRequestStrings.cancelled.active(
+    language,
+  ),
   _ => YorksV1CompanyMaterialRequestStrings.awaitingApproval.active(language),
 };
 
@@ -2325,7 +2514,7 @@ String _currentOwner(String state, AppLanguage language) => switch (state) {
     YorksV1CompanyMaterialRequestStrings.authorizedReceiver.active(language),
   'awaiting_beneficiary_handover' =>
     YorksV1CompanyMaterialRequestStrings.beneficiary.active(language),
-  'closed' || 'rejected' => _stateLabel(state, language),
+  'closed' || 'rejected' || 'cancelled' => _stateLabel(state, language),
   _ => YorksV1CompanyMaterialRequestStrings.requesterOwner.active(language),
 };
 
@@ -2348,7 +2537,7 @@ String _nextAction(String state, AppLanguage language) => switch (state) {
   'fulfilled' => YorksV1CompanyMaterialRequestStrings.closeRequest.active(
     language,
   ),
-  'closed' || 'rejected' => _stateLabel(state, language),
+  'closed' || 'rejected' || 'cancelled' => _stateLabel(state, language),
   _ => YorksV1CompanyMaterialRequestStrings.awaitResolution.active(language),
 };
 

@@ -452,7 +452,8 @@ class YorksV1MaterialRequestRealtimeNotifier extends StateNotifier<int>
   ) {
     final entityType = notification['entity_type']?.toString().trim();
     return switch (entityType) {
-      'material_request' => YorksV1MaterialRequestRefreshReason.materialRequest,
+      'material_request' || 'company_material_request' =>
+        YorksV1MaterialRequestRefreshReason.materialRequest,
       'procurement_arrangement' =>
         YorksV1MaterialRequestRefreshReason.arrangement,
       'material_dispatch' => YorksV1MaterialRequestRefreshReason.dispatch,

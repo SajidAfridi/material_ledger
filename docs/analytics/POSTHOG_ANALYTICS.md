@@ -382,3 +382,27 @@ restored sessions use `session restored`, not a new password attempt. Browser
 closure, telemetry delivery loss and materialization exceptions must remain
 unresolved measurement cases, not inferred failed logins. No auth flow change
 or live dashboard edit is included in this remediation.
+
+
+## Company Material Request integration — 25 September 2026
+
+Company routes use dedicated register/draft/detail screen names and
+`company request started` / `company request opened` entry events, rather than
+inflating Project MR funnels. Repository operations share `operation completed`
+with `workflow=company_material_request` and fixed RPC-derived operation names.
+Commands emit Company action confirmed, failed or unconfirmed outcomes. A
+transport timeout or malformed response is **unconfirmed**, not evidence that
+the transaction was rejected. Only a response with a server identity/state can
+confirm a command. Attempts are not unique business transactions.
+
+Company catalogue search uses the existing search timing/result-count/query-length
+buckets with Company context. Never send free-text queries, names, request IDs,
+quantities, reasons, payloads or commercial values to analytics. Global search
+and central Audit Trail retain their existing authorization boundaries.
+
+The read-only PostHog query evidence is
+[Company re-audit queries and aggregates](COMPANY_MR_REAUDIT_POSTHOG_2026-09-25.json).
+Its Aug25–Sep24 UTC observations are historical recorded attempts across releases;
+they are not measurements of this candidate. No Company workflow events existed
+in that baseline. Company production usage and latency need a new post-release
+cohort; local tests cannot manufacture that evidence.
