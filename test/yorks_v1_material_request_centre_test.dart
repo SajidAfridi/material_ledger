@@ -89,6 +89,23 @@ void main() {
       );
       await tester.ensureVisible(row);
       await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: row,
+          matching: find.byIcon(Icons.business_center_outlined),
+        ),
+        findsOneWidget,
+      );
+      final projectRow = find.byKey(
+        const ValueKey('material-request-row-server-summary-1'),
+      );
+      expect(
+        find.descendant(
+          of: projectRow,
+          matching: find.byIcon(Icons.folder_open_outlined),
+        ),
+        findsOneWidget,
+      );
       expect(find.textContaining('Company use'), findsWidgets);
       expect(find.textContaining('Company approver'), findsWidgets);
       expect(tester.takeException(), isNull);

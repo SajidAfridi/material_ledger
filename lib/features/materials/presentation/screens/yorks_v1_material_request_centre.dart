@@ -2134,19 +2134,7 @@ class _ExplorerRequestRow extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: AppColors.blueContainer,
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-                ),
-                child: const Icon(
-                  Icons.description_outlined,
-                  color: AppColors.blue,
-                  size: 20,
-                ),
-              ),
+              _RequestKindIcon(request: request, language: language, size: 36),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Column(
@@ -2556,6 +2544,53 @@ class _TabletRequestPreview extends StatelessWidget {
   }
 }
 
+class _RequestKindIcon extends StatelessWidget {
+  const _RequestKindIcon({
+    required this.request,
+    required this.language,
+    required this.size,
+  });
+
+  final YorksV1MaterialRegisterEntry request;
+  final AppLanguage language;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final company = request.isCompany;
+    final label =
+        (company
+                ? YorksV1CompanyMaterialRequestStrings.companyUse
+                : YorksV1CompanyMaterialRequestStrings.projectUse)
+            .active(language);
+    return Tooltip(
+      message: label,
+      child: Semantics(
+        label: label,
+        child: ExcludeSemantics(
+          child: Container(
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              color: company
+                  ? AppColors.purpleContainer
+                  : AppColors.blueContainer,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            ),
+            child: Icon(
+              company
+                  ? Icons.business_center_outlined
+                  : Icons.folder_open_outlined,
+              color: company ? AppColors.purple : AppColors.blue,
+              size: size == 36 ? 20 : 24,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _RequestCentreRow extends StatelessWidget {
   const _RequestCentreRow({
     required this.request,
@@ -2599,17 +2634,10 @@ class _RequestCentreRow extends StatelessWidget {
           child: LayoutBuilder(
             builder: (context, constraints) {
               final compact = constraints.maxWidth < 640;
-              final identity = Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: AppColors.blueContainer,
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-                ),
-                child: const Icon(
-                  Icons.description_outlined,
-                  color: AppColors.blue,
-                ),
+              final identity = _RequestKindIcon(
+                request: request,
+                language: language,
+                size: 44,
               );
               final details = Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
