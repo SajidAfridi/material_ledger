@@ -97,10 +97,14 @@ class YorksV1FeatureFlags {
         'YORKS_R38_9_INVENTORY_SUPPLIERS',
         defaultValue: false,
       ),
-      _companyMaterialRequests = const bool.fromEnvironment(
-        'YORKS_V1_COMPANY_MATERIAL_REQUESTS',
-        defaultValue: false,
-      );
+      _companyMaterialRequests =
+          const bool.fromEnvironment(
+            'YORKS_V1_COMPANY_MATERIAL_REQUESTS',
+            defaultValue: false,
+          ) &&
+          // Company Use is paused in the production frontend until its remaining
+          // experience is accepted. Keep its data and staging implementation.
+          const String.fromEnvironment('R35_ENVIRONMENT') != 'production';
 
   final bool _foundation;
   final bool _projects;
