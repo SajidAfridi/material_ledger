@@ -343,6 +343,15 @@ needs its initial submission and approval; edits before that decision remain
 in the Engineering approval queue. Any legacy amendment already awaiting
 reapproval remains there until an approver decides it. No pending amendment is
 silently promoted by this change.
+The later 25 September arrangement-stage correction extends this default-off
+grant through the first **working, unsaved** Procurement arrangement. The same
+approver controls the grant; Procurement can edit only when expressly granted.
+A Save retains `arranging`, synchronizes unsaved arrangement placeholders to the
+current request lines atomically, and advances both versions so a stale
+arrangement editor must refresh. It does not require another Engineering
+approval. A saved arrangement, reservation, dispatch, prior arrangement
+version, or populated arrangement decision closes the window. No existing
+request is auto-enabled, and no saved Procurement work is silently discarded.
 The server-backed `draft` remains private to its creator and authorized Admin
 support, including discussion. Assigned/global Engineering participants become
 readers and may participate only after explicit submission; mentions identify

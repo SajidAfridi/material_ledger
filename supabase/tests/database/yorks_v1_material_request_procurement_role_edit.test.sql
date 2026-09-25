@@ -145,6 +145,15 @@ set local role authenticated;
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"10000000-0000-4000-8000-000000000004","role":"authenticated","app_metadata":{"role":"admin"}}', true);
 select lives_ok($$select public.v1_set_material_request_post_approval_edit('{"request_id":"ae100000-0000-4000-8000-000000000001","expected_version":6,"enabled":true,"procurement_role_edit_enabled":true}'::jsonb, 'be000000-0000-4000-8000-000000000007'::uuid)$$,'Admin can restore explicit role grant');
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"10000000-0000-4000-8000-000000000003","role":"authenticated","app_metadata":{"role":"procurement"}}', true);
+select lives_ok($$select public.v1_begin_arrangement('{"request_id":"ae100000-0000-4000-8000-000000000001","expected_version":7}'::jsonb, 'be000000-0000-4000-8000-000000000008'::uuid)$$,'Procurement opens its first working arrangement');
+select ok((public.v1_material_request_projection('ae100000-0000-4000-8000-000000000001'::uuid) ->> 'can_edit_post_approval')::boolean,'First Procurement user keeps role-granted access during working arrangement');
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"10000000-0000-4000-8000-000000000002","role":"authenticated","app_metadata":{"role":"procurement"}}', true);
+select ok((public.v1_material_request_projection('ae100000-0000-4000-8000-000000000001'::uuid) ->> 'can_edit_post_approval')::boolean,'Second Procurement user shares the explicit role grant during working arrangement');
+select lives_ok($$select public.v1_update_material_request_for_approval((select payload from post_edit_payload) || '{"expected_version":8,"title":"Role edit during arrangement"}'::jsonb, 'be000000-0000-4000-8000-000000000009'::uuid)$$,'Second Procurement user saves without repeat approval during arrangement');
+select ok((select projection ->> 'state' = 'arranging' and (projection ->> 'record_version')::integer = 9 from (select public.v1_material_request_projection('ae100000-0000-4000-8000-000000000001'::uuid) as projection) saved),'Role-granted Save retains the working arrangement state');
 set local role postgres;
 update public.v1_profiles set is_active = false where auth_user_id = '10000000-0000-4000-8000-000000000002';
 
