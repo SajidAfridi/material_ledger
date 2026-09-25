@@ -5,6 +5,39 @@ import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/yorks_v1_company_material_request_strings.dart';
 import '../../../../shared/models/yorks_v1_material_request_strings.dart';
 
+class CompanySupplyPlanChoice {
+  const CompanySupplyPlanChoice({
+    required this.decision,
+    required this.quantity,
+    this.inventoryItemId,
+    this.externalSupplier,
+    this.reason,
+    this.followUpDate,
+  });
+  final String? followUpDate;
+  final String decision;
+  final String quantity;
+  final String? inventoryItemId;
+  final String? externalSupplier;
+  final String? reason;
+
+  Map<String, Object?> toPayload(String requestLineId) => {
+    'request_line_id': requestLineId,
+    'decision': decision,
+    'source_kind': quantity == '0'
+        ? null
+        : inventoryItemId == null
+        ? 'external_supplier'
+        : 'warehouse',
+    'inventory_item_id': inventoryItemId,
+    'external_supplier': externalSupplier,
+    'arranged_qty': quantity,
+    'expected_available_date': null,
+    'follow_up_date': followUpDate,
+    'reason': reason,
+  };
+}
+
 class CompanyQuantityItem {
   const CompanyQuantityItem({
     required this.id,
