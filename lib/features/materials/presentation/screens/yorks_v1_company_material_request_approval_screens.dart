@@ -1190,7 +1190,7 @@ class _CompanyMaterialItemsCard extends StatelessWidget {
           TableRow(
             children: [
               _cell('${line.displayOrder}'),
-              _cell(line.description, strong: true),
+              _descriptionCell(line),
               _cell(line.size ?? ''),
               _cell(
                 [
@@ -1219,6 +1219,42 @@ class _CompanyMaterialItemsCard extends StatelessWidget {
                 ),
         ),
       );
+
+  Widget _descriptionCell(YorksV1CompanyMaterialRequestLine line) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          line.description,
+          style: AppTypography.bodySmall.copyWith(fontWeight: FontWeight.w700),
+        ),
+        _lineProgress(line),
+      ],
+    ),
+  );
+
+  Widget _lineProgress(YorksV1CompanyMaterialRequestLine line) {
+    if (request.currentSupplyPlan == null && request.decisions.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final facts = [
+      '${YorksV1CompanyMaterialRequestStrings.received.active(language)}: ${line.goodReceivedQuantity}',
+      if ((double.tryParse(line.handedOverQuantity) ?? 0) > 0)
+        '${YorksV1CompanyMaterialRequestStrings.handedOver.active(language)}: ${line.handedOverQuantity}',
+      if ((double.tryParse(line.withdrawnQuantity) ?? 0) > 0)
+        '${YorksV1CompanyMaterialRequestStrings.withdrawn.active(language)}: ${line.withdrawnQuantity}',
+      if ((double.tryParse(line.returnedQuantity) ?? 0) > 0)
+        '${YorksV1CompanyMaterialRequestStrings.returned.active(language)}: ${line.returnedQuantity}',
+    ];
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Text(
+        facts.join(' · '),
+        style: AppTypography.bodySmall.copyWith(color: AppColors.inkSecondary),
+      ),
+    );
+  }
 
   Widget _mobileLine(YorksV1CompanyMaterialRequestLine line) => Padding(
     padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
@@ -1256,14 +1292,10 @@ class _CompanyMaterialItemsCard extends StatelessWidget {
               ),
             ),
           ),
-        if (request.currentSupplyPlan != null || request.decisions.isNotEmpty)
-          Padding(
-            padding: const EdgeInsetsDirectional.only(start: 36, top: 4),
-            child: Text(
-              '${YorksV1CompanyMaterialRequestStrings.received.active(language)}: ${line.goodReceivedQuantity}',
-              style: AppTypography.bodySmall,
-            ),
-          ),
+        Padding(
+          padding: const EdgeInsetsDirectional.only(start: 36),
+          child: _lineProgress(line),
+        ),
         const Divider(),
       ],
     ),
