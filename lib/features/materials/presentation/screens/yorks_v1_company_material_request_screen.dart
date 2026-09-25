@@ -18,6 +18,7 @@ import '../../../../shared/models/yorks_v1_material_request.dart';
 import '../../../../shared/models/yorks_v1_material_request_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/yorks_v1_company_material_request_provider.dart';
+import '../../../../shared/providers/yorks_v1_identity_provider.dart';
 
 export 'yorks_v1_company_material_request_approval_screens.dart';
 
@@ -226,6 +227,11 @@ class _YorksV1CompanyMaterialRequestScreenState
         return;
       }
       setState(() {
+        if (_draft.selectedApproverAuthUserId == null) {
+          _draft = _draft.copyWith(
+            selectedApproverAuthUserId: result.approver.authUserId,
+          );
+        }
         _preflight = result;
         _routeUnavailable = false;
         _routeChecking = false;
@@ -251,6 +257,13 @@ class _YorksV1CompanyMaterialRequestScreenState
 
   bool get _itemsReady =>
       _draft.lines.isNotEmpty && _draft.lines.every((line) => line.isValid);
+
+  bool get _canSubmitAndApprove {
+    final actor = ref.read(yorksV1AuthUserIdProvider);
+    return actor != null &&
+        _preflight?.approver.authUserId == actor &&
+        _current.selectedApproverAuthUserId == actor;
+  }
 
   void _goTo(_CompanyRequestStep step) {
     FocusScope.of(context).unfocus();
@@ -358,6 +371,7 @@ class _YorksV1CompanyMaterialRequestScreenState
 
   Future<bool> _save({
     required bool submit,
+    bool approveImmediately = false,
     required AppLanguage language,
   }) async {
     final draft = _current;
@@ -370,7 +384,9 @@ class _YorksV1CompanyMaterialRequestScreenState
       final repository = ref.read(
         yorksV1CompanyMaterialRequestRepositoryProvider,
       );
-      final result = submit
+      final result = approveImmediately
+          ? await repository.saveSubmitAndApprove(draft)
+          : submit
           ? await repository.saveAndSubmit(draft)
           : await repository.saveDraft(draft);
       if (!mounted) return false;
@@ -380,7 +396,7 @@ class _YorksV1CompanyMaterialRequestScreenState
       });
       if (submit) {
         setState(() => _saving = false);
-        await _showSubmitted(result, language);
+        await _showSubmitted(result, language, approveImmediately);
         if (mounted) {
           ref.invalidate(yorksV1CompanyMaterialRequestApprovalInboxProvider);
           ref.invalidate(yorksV1CompanyMaterialRequestProvider(result.id));
@@ -406,9 +422,14 @@ class _YorksV1CompanyMaterialRequestScreenState
     }
   }
 
-  Future<void> _confirmSubmit(AppLanguage language) async {
+  Future<void> _confirmSubmit(
+    AppLanguage language, {
+    bool approveImmediately = false,
+  }) async {
     final approver = _preflight?.approver;
-    if (approver == null || !_current.canSave) {
+    if (approver == null ||
+        !_current.canSave ||
+        (approveImmediately && !_canSubmitAndApprove)) {
       _show(YorksV1CompanyMaterialRequestStrings.validation.active(language));
       return;
     }
@@ -416,14 +437,19 @@ class _YorksV1CompanyMaterialRequestScreenState
       context: context,
       builder: (context) => AlertDialog(
         title: Text(
-          YorksV1CompanyMaterialRequestStrings.submitConfirmTitle.active(
-            language,
-          ),
+          (approveImmediately
+                  ? YorksV1MaterialRequestStrings.submitAndApprove
+                  : YorksV1CompanyMaterialRequestStrings.submitConfirmTitle)
+              .active(language),
         ),
         content: Text(
-          YorksV1CompanyMaterialRequestStrings.submitConfirmMessage(
-            approver.displayName,
-          ).active(language),
+          (approveImmediately
+                  ? YorksV1CompanyMaterialRequestStrings
+                        .submitAndApproveConfirmMessage
+                  : YorksV1CompanyMaterialRequestStrings.submitConfirmMessage(
+                      approver.displayName,
+                    ))
+              .active(language),
         ),
         actions: [
           TextButton(
@@ -434,20 +460,28 @@ class _YorksV1CompanyMaterialRequestScreenState
             key: const ValueKey('company-material-request-confirm-submit'),
             onPressed: () => Navigator.pop(context, true),
             child: Text(
-              YorksV1CompanyMaterialRequestStrings.submit.active(language),
+              (approveImmediately
+                      ? YorksV1MaterialRequestStrings.submitAndApprove
+                      : YorksV1CompanyMaterialRequestStrings.submit)
+                  .active(language),
             ),
           ),
         ],
       ),
     );
     if (confirmed == true && mounted) {
-      await _save(submit: true, language: language);
+      await _save(
+        submit: true,
+        approveImmediately: approveImmediately,
+        language: language,
+      );
     }
   }
 
   Future<void> _showSubmitted(
     YorksV1CompanyMaterialRequest result,
     AppLanguage language,
+    bool approveImmediately,
   ) => showDialog<void>(
     context: context,
     barrierDismissible: false,
@@ -458,17 +492,25 @@ class _YorksV1CompanyMaterialRequestScreenState
         size: 42,
       ),
       title: Text(
-        YorksV1CompanyMaterialRequestStrings.submitConfirmedTitle.active(
-          language,
-        ),
+        (approveImmediately
+                ? YorksV1CompanyMaterialRequestStrings.submitAndApprovedTitle
+                : YorksV1CompanyMaterialRequestStrings.submitConfirmedTitle)
+            .active(language),
       ),
       content: Text(
-        YorksV1CompanyMaterialRequestStrings.submitConfirmedMessage(
-          result.requestNumber ?? result.id,
-          result.approver?.displayName ??
-              _preflight?.approver.displayName ??
-              YorksV1CompanyMaterialRequestStrings.approver.active(language),
-        ).active(language),
+        (approveImmediately
+                ? YorksV1CompanyMaterialRequestStrings.submitAndApprovedMessage(
+                    result.requestNumber ?? result.id,
+                  )
+                : YorksV1CompanyMaterialRequestStrings.submitConfirmedMessage(
+                    result.requestNumber ?? result.id,
+                    result.approver?.displayName ??
+                        _preflight?.approver.displayName ??
+                        YorksV1CompanyMaterialRequestStrings.approver.active(
+                          language,
+                        ),
+                  ))
+            .active(language),
         textAlign: TextAlign.center,
       ),
       actions: [
@@ -790,33 +832,62 @@ class _YorksV1CompanyMaterialRequestScreenState
         ],
       );
     }
-    return YorksMobileStickyActions(
-      summary: _preflight == null
-          ? YorksV1CompanyMaterialRequestStrings.routeChecking.active(language)
-          : YorksV1CompanyMaterialRequestStrings.approvalHandoff(
-              _preflight!.approver.displayName,
-            ).active(language),
-      children: [
-        OutlinedButton(
-          key: const ValueKey('company-material-request-save-draft'),
-          onPressed: _saving || !_current.canSave || !_hasUnsavedChanges
-              ? null
-              : () => _save(submit: false, language: language),
-          child: Text(
-            YorksV1CompanyMaterialRequestStrings.saveDraft.active(language),
+    return Material(
+      color: AppColors.surfaceContainerLowest,
+      elevation: 8,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 8, 14, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _preflight == null
+                    ? YorksV1CompanyMaterialRequestStrings.routeChecking.active(
+                        language,
+                      )
+                    : YorksV1CompanyMaterialRequestStrings.approvalHandoff(
+                        _preflight!.approver.displayName,
+                      ).active(language),
+                style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: TextButton.icon(
+                  key: const ValueKey('company-material-request-save-draft'),
+                  onPressed: _saving || !_current.canSave || !_hasUnsavedChanges
+                      ? null
+                      : () => _save(submit: false, language: language),
+                  icon: const Icon(Icons.save_outlined),
+                  label: Text(
+                    YorksV1CompanyMaterialRequestStrings.saveDraft.active(
+                      language,
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(
+                width: double.infinity,
+                child: _CompanySubmitActions(
+                  language: language,
+                  expand: true,
+                  enabled: !_saving && _reviewConfirmed && _preflight != null,
+                  saving: _saving,
+                  canApprove: _canSubmitAndApprove,
+                  onPrimary: () => _confirmSubmit(
+                    language,
+                    approveImmediately: _canSubmitAndApprove,
+                  ),
+                  onSubmitOnly: () => _confirmSubmit(language),
+                ),
+              ),
+            ],
           ),
         ),
-        FilledButton(
-          key: const ValueKey('company-material-request-submit'),
-          onPressed: _saving || !_reviewConfirmed || _preflight == null
-              ? null
-              : () => _confirmSubmit(language),
-          child: _SavingLabel(
-            saving: _saving,
-            label: YorksV1CompanyMaterialRequestStrings.submit.active(language),
-          ),
-        ),
-      ],
+      ),
     );
   }
 
@@ -957,10 +1028,15 @@ class _YorksV1CompanyMaterialRequestScreenState
             saving: _saving,
             canSave: _current.canSave,
             canSubmit: _current.canSave && _preflight != null,
+            canSubmitAndApprove: _canSubmitAndApprove,
             hasUnsavedChanges: _hasUnsavedChanges,
             onCancel: () => _requestClose(language),
             onSave: () => _save(submit: false, language: language),
-            onSubmit: () => _confirmSubmit(language),
+            onSubmit: () => _confirmSubmit(
+              language,
+              approveImmediately: _canSubmitAndApprove,
+            ),
+            onSubmitOnly: () => _confirmSubmit(language),
           ),
         ],
       ),
@@ -1024,19 +1100,23 @@ class _DesktopActionBar extends StatelessWidget {
     required this.saving,
     required this.canSave,
     required this.canSubmit,
+    required this.canSubmitAndApprove,
     required this.hasUnsavedChanges,
     required this.onCancel,
     required this.onSave,
     required this.onSubmit,
+    required this.onSubmitOnly,
   });
   final AppLanguage language;
   final bool saving;
   final bool canSave;
   final bool canSubmit;
+  final bool canSubmitAndApprove;
   final bool hasUnsavedChanges;
   final VoidCallback onCancel;
   final VoidCallback onSave;
   final VoidCallback onSubmit;
+  final VoidCallback onSubmitOnly;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -1096,22 +1176,83 @@ class _DesktopActionBar extends StatelessWidget {
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
-            FilledButton.icon(
-              key: const ValueKey('company-material-request-submit'),
-              onPressed: saving || !canSubmit ? null : onSubmit,
-              icon: const Icon(Icons.send_rounded),
-              label: _SavingLabel(
-                saving: saving,
-                label: YorksV1CompanyMaterialRequestStrings.submit.active(
-                  language,
-                ),
-              ),
+            _CompanySubmitActions(
+              language: language,
+              enabled: !saving && canSubmit,
+              saving: saving,
+              canApprove: canSubmitAndApprove,
+              onPrimary: onSubmit,
+              onSubmitOnly: onSubmitOnly,
             ),
           ],
         ),
       ),
     ),
   );
+}
+
+class _CompanySubmitActions extends StatelessWidget {
+  const _CompanySubmitActions({
+    required this.language,
+    this.expand = false,
+    required this.enabled,
+    required this.saving,
+    required this.canApprove,
+    required this.onPrimary,
+    required this.onSubmitOnly,
+  });
+
+  final AppLanguage language;
+  final bool expand;
+  final bool enabled;
+  final bool saving;
+  final bool canApprove;
+  final VoidCallback onPrimary;
+  final VoidCallback onSubmitOnly;
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = FilledButton.icon(
+      key: const ValueKey('company-material-request-submit'),
+      onPressed: enabled ? onPrimary : null,
+      icon: Icon(canApprove ? Icons.verified_outlined : Icons.send_rounded),
+      label: _SavingLabel(
+        saving: saving,
+        label:
+            (canApprove
+                    ? YorksV1MaterialRequestStrings.submitAndApprove
+                    : YorksV1CompanyMaterialRequestStrings.submit)
+                .active(language),
+      ),
+    );
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (expand) Expanded(child: primary) else primary,
+        if (canApprove) ...[
+          const SizedBox(width: 4),
+          PopupMenuButton<String>(
+            key: const ValueKey('company-material-request-submit-options'),
+            tooltip: YorksV1CompanyMaterialRequestStrings.submit.active(
+              language,
+            ),
+            enabled: enabled,
+            icon: const Icon(Icons.arrow_drop_down_rounded),
+            onSelected: (_) => onSubmitOnly(),
+            itemBuilder: (_) => [
+              PopupMenuItem(
+                key: const ValueKey('company-material-request-submit-only'),
+                value: 'submit_only',
+                child: Text(
+                  YorksV1CompanyMaterialRequestStrings.submit.active(language),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
 }
 
 class _DesktopSection extends StatelessWidget {

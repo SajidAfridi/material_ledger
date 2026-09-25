@@ -567,6 +567,18 @@ abstract final class YorksV1CompanyMaterialRequestStrings {
     ur: 'آئٹم کی تفصیل',
     hi: 'आइटम विवरण',
   );
+  static const sizeIfAny = TranslatableString(
+    en: 'Size (if any)',
+    ar: 'المقاس (إن وجد)',
+    ur: 'سائز (اگر ہو)',
+    hi: 'आकार (यदि हो)',
+  );
+  static const modelTag = TranslatableString(
+    en: 'Model / tag',
+    ar: 'الطراز / الرمز',
+    ur: 'ماڈل / ٹیگ',
+    hi: 'मॉडल / टैग',
+  );
   static const brandOrigin = TranslatableString(
     en: 'Brand / origin',
     ar: 'العلامة / المنشأ',
@@ -754,10 +766,10 @@ abstract final class YorksV1CompanyMaterialRequestStrings {
     hi: 'समीक्षा करें और जमा करें',
   );
   static const reviewDescription = TranslatableString(
-    en: 'Confirm the recipient, handover details, materials and independent approver.',
-    ar: 'أكد المستفيد وتفاصيل التسليم والمواد والمعتمد المستقل.',
-    ur: 'وصول کنندہ، حوالگی کی تفصیل، مٹیریل اور آزاد منظور کنندہ کی تصدیق کریں۔',
-    hi: 'प्राप्तकर्ता, सौंपने का विवरण, सामग्री और स्वतंत्र अनुमोदक की पुष्टि करें।',
+    en: 'Confirm the recipient, handover details, materials and approver.',
+    ar: 'أكد المستفيد وتفاصيل التسليم والمواد والمعتمد.',
+    ur: 'وصول کنندہ، حوالگی کی تفصیل، مٹیریل اور منظور کنندہ کی تصدیق کریں۔',
+    hi: 'प्राप्तकर्ता, सौंपने का विवरण, सामग्री और अनुमोदक की पुष्टि करें।',
   );
   static const reviewConfirmation = TranslatableString(
     en: 'I reviewed the company-use context, recipient and requested quantities.',
@@ -766,17 +778,36 @@ abstract final class YorksV1CompanyMaterialRequestStrings {
     hi: 'मैंने कंपनी उपयोग का संदर्भ, प्राप्तकर्ता और मांगी गई मात्राएँ जाँच ली हैं।',
   );
   static const approvalHandoffTitle = TranslatableString(
-    en: 'Independent approval',
-    ar: 'موافقة مستقلة',
-    ur: 'آزاد منظوری',
-    hi: 'स्वतंत्र अनुमोदन',
+    en: 'Approval route',
+    ar: 'مسار الموافقة',
+    ur: 'منظوری کا راستہ',
+    hi: 'अनुमोदन मार्ग',
   );
   static TranslatableString approvalHandoff(String name) => TranslatableString(
-    en: 'Submitting sends this request to $name. You cannot approve your own request.',
-    ar: 'سيؤدي الإرسال إلى توجيه هذا الطلب إلى $name. لا يمكنك اعتماد طلبك بنفسك.',
-    ur: 'جمع کرانے پر یہ درخواست $name کو بھیجی جائے گی۔ آپ اپنی درخواست خود منظور نہیں کر سکتے۔',
-    hi: 'सबमिट करने पर यह अनुरोध $name को भेजा जाएगा। आप अपना अनुरोध स्वयं स्वीकृत नहीं कर सकते।',
+    en: 'Approval is assigned to $name.',
+    ar: 'تم تعيين الموافقة إلى $name.',
+    ur: 'منظوری $name کو تفویض کی گئی ہے۔',
+    hi: 'अनुमोदन $name को सौंपा गया है।',
   );
+  static const submitAndApproveConfirmMessage = TranslatableString(
+    en: 'This request will be submitted and approved for Procurement in one step. Check the recipient and quantities before continuing.',
+    ar: 'سيتم إرسال هذا الطلب واعتماده للمشتريات في خطوة واحدة. تحقق من المستفيد والكميات قبل المتابعة.',
+    ur: 'یہ درخواست ایک ہی مرحلے میں جمع اور پروکیورمنٹ کے لیے منظور ہو گی۔ آگے بڑھنے سے پہلے وصول کنندہ اور مقداریں چیک کریں۔',
+    hi: 'यह अनुरोध एक ही चरण में जमा और खरीद के लिए स्वीकृत होगा। आगे बढ़ने से पहले प्राप्तकर्ता और मात्राएँ जाँचें।',
+  );
+  static const submitAndApprovedTitle = TranslatableString(
+    en: 'Company request approved',
+    ar: 'تم اعتماد طلب الشركة',
+    ur: 'کمپنی درخواست منظور ہو گئی',
+    hi: 'कंपनी अनुरोध स्वीकृत',
+  );
+  static TranslatableString submitAndApprovedMessage(String requestNumber) =>
+      TranslatableString(
+        en: '$requestNumber is approved and ready for Procurement to arrange.',
+        ar: 'تم اعتماد $requestNumber وهو جاهز لترتيب المشتريات.',
+        ur: '$requestNumber منظور ہو گیا ہے اور پروکیورمنٹ انتظام کر سکتی ہے۔',
+        hi: '$requestNumber स्वीकृत है और खरीद व्यवस्था के लिए तैयार है।',
+      );
   static const submitConfirmTitle = TranslatableString(
     en: 'Submit this company request?',
     ar: 'إرسال طلب الشركة هذا؟',

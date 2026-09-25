@@ -214,6 +214,43 @@ void main() {
     );
 
     test(
+      'approver fast path uses one audited command and categorical analytics',
+      () async {
+        final analytics = _CompanyAnalytics();
+        final rpc = _RecordingRpc();
+        final repository = YorksV1SupabaseCompanyMaterialRequestRepository(
+          featureFlags: _enabledFlags,
+          connectivity: const _Connectivity(true),
+          rpcClient: rpc,
+          analytics: analytics,
+        );
+        final result = await repository.saveSubmitAndApprove(
+          _draft.copyWith(selectedApproverAuthUserId: _approverId),
+        );
+        expect(result.state, 'approved_for_procurement');
+        expect(rpc.calls, hasLength(1));
+        expect(
+          rpc.calls.single.functionName,
+          'v1_save_submit_and_approve_company_material_request',
+        );
+        expect(
+          rpc.calls.single.parameters['p_idempotency_key'],
+          _idempotencyKey,
+        );
+        expect(
+          (rpc.calls.single.parameters['p_payload']
+              as Map<String, dynamic>)['selected_approver_auth_user_id'],
+          _approverId,
+        );
+        expect(
+          analytics.events.single,
+          AnalyticsEvent.companyRequestActionConfirmed,
+        );
+        expect(analytics.properties.toString(), isNot(contains(_approverId)));
+      },
+    );
+
+    test(
       'lists assigned approvals and sends one exact decision command',
       () async {
         final rpc = _RecordingRpc();
@@ -386,6 +423,11 @@ final class _RecordingRpc implements YorksV1MaterialRequestRpcClient {
         },
       ],
       'v1_save_and_submit_company_material_request' => _requestJson,
+      'v1_save_submit_and_approve_company_material_request' => {
+        ..._requestJson,
+        'record_version': 3,
+        'state': 'approved_for_procurement',
+      },
       'v1_list_company_material_request_work_inbox' => [_inboxJson],
       'v1_company_material_request_projection' => {
         ..._requestJson,

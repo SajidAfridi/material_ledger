@@ -37,6 +37,9 @@ abstract interface class YorksV1CompanyMaterialRequestRepository {
   Future<YorksV1CompanyMaterialRequest> saveAndSubmit(
     YorksV1CompanyMaterialRequestDraft draft,
   );
+  Future<YorksV1CompanyMaterialRequest> saveSubmitAndApprove(
+    YorksV1CompanyMaterialRequestDraft draft,
+  );
   Future<List<YorksV1CompanyMaterialRequestApprovalInboxItem>>
   listApprovalInbox();
   Future<List<YorksV1CompanyMaterialRequestApprovalInboxItem>> listRegister(
@@ -289,6 +292,16 @@ class YorksV1SupabaseCompanyMaterialRequestRepository
     YorksV1CompanyMaterialRequestDraft draft,
   ) async => _requestFromResponse(
     await _invoke('v1_save_and_submit_company_material_request', {
+      'p_payload': draft.toSavePayload(),
+      'p_idempotency_key': draft.submissionIdempotencyKey,
+    }),
+  );
+
+  @override
+  Future<YorksV1CompanyMaterialRequest> saveSubmitAndApprove(
+    YorksV1CompanyMaterialRequestDraft draft,
+  ) async => _requestFromResponse(
+    await _invoke('v1_save_submit_and_approve_company_material_request', {
       'p_payload': draft.toSavePayload(),
       'p_idempotency_key': draft.submissionIdempotencyKey,
     }),
@@ -558,6 +571,7 @@ class YorksV1SupabaseCompanyMaterialRequestRepository
       'save_company_material_request_draft',
       'submit_company_material_request',
       'save_and_submit_company_material_request',
+      'save_submit_and_approve_company_material_request',
       'decide_company_material_request',
       'save_company_material_supply_plan',
       'dispatch_company_materials',

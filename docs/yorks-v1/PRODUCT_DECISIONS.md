@@ -1713,3 +1713,21 @@ reservations, supersedes the current supply plan, preserves line IDs and sends
 it for fresh independent approval. Cancellation requires a reason and is allowed
 for the requester or assigned independent approver before dispatch. After dispatch,
 use the existing quantity-controlled remainder withdrawal/return path.
+
+### 29. Company request approver fast path — 25 September 2026
+
+The product owner's later direction supersedes only the Company requester
+self-approval exclusion in §28. A requester whose exact server-controlled role
+can approve and who also holds an active, dated `approver` grant for the chosen
+Company category and responsible unit may submit and approve in one trusted
+transaction. The creation screen offers **Submit and Approve** as the primary
+action for that person, with **Submit for approval** still available. Site
+Engineers, Procurement, Accountants, inactive actors and ungranted users cannot
+use the fast path. A requester who is also the beneficiary or authorized
+receiver cannot approve the same request. The chosen approver, decision, event,
+notification, version and idempotency checks remain server authoritative.
+
+The Company request detail uses the same lifecycle hierarchy and responsive
+action placement as Project MR while retaining Company-specific recipient,
+handover and return rules. This does not change Project MR authority or release
+any Company feature to production before its separate acceptance.

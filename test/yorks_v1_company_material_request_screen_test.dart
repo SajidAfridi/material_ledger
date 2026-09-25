@@ -93,6 +93,34 @@ void main() {
     expect(tester.takeException(), isNull);
   });
   testWidgets(
+    'authorized Company approver submits and approves in one action',
+    (tester) async {
+      final repository = _CompanyRequestRepository();
+      await _pumpComposer(
+        tester,
+        repository: repository,
+        actorId: _CompanyRequestRepository._approver.authUserId,
+        size: const Size(1366, 900),
+      );
+      await _completeDetails(tester);
+      await _completeFirstLine(tester);
+      expect(find.text('Submit and Approve'), findsOneWidget);
+      await _tapVisible(
+        tester,
+        find.byKey(const ValueKey('company-material-request-submit')),
+      );
+      expect(find.textContaining('approved for Procurement'), findsOneWidget);
+      await tester.tap(
+        find.byKey(const ValueKey('company-material-request-confirm-submit')),
+      );
+      await tester.pumpAndSettle();
+      expect(repository.fastPathCalls, 1);
+      expect(repository.submitCalls, 0);
+      expect(find.text('Company request approved'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
     'saved company draft reopens with its protected details and lines',
     (tester) async {
       final draft = _CompanyRequestRepository()._result(
@@ -245,6 +273,33 @@ void main() {
       size: const Size(360, 800),
       textScale: 2,
       child: const YorksV1CompanyMaterialRequestApprovalInboxScreen(),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Company request information opens in a stable side panel', (
+    tester,
+  ) async {
+    final repository = _CompanyRequestRepository();
+    await _pumpApproval(
+      tester,
+      repository: repository,
+      size: const Size(1366, 900),
+      child: const YorksV1CompanyMaterialRequestApprovalScreen(
+        requestId: 'request',
+      ),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('company-request-information-toggle')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Amina Hassan'), findsWidgets);
+    expect(find.text('Request progress'), findsWidgets);
+    await tester.tap(find.byTooltip('Close'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('company-request-primary-actions')),
+      findsOneWidget,
     );
     expect(tester.takeException(), isNull);
   });
@@ -855,6 +910,7 @@ Future<void> _pumpComposer(
   required _CompanyRequestRepository repository,
   required Size size,
   String? draftId,
+  String? actorId,
 }) async {
   SharedPreferences.setMockInitialValues({'selected_language': 'en'});
   final preferences = await SharedPreferences.getInstance();
@@ -865,6 +921,7 @@ Future<void> _pumpComposer(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        yorksV1AuthUserIdProvider.overrideWithValue(actorId),
         sharedPreferencesProvider.overrideWithValue(preferences),
         yorksV1CompanyMaterialRequestRepositoryProvider.overrideWithValue(
           repository,
@@ -1040,6 +1097,7 @@ class _CompanyRequestRepository
 
   final YorksV1CompanyMaterialRequest? request;
   bool offerChoices = false;
+  int fastPathCalls = 0;
   int cancellationCalls = 0;
   String? lastReason;
   String? selectedApprover;
@@ -1208,6 +1266,14 @@ class _CompanyRequestRepository
   ) async {
     submitCalls++;
     return _result(draft, state: 'awaiting_company_approval');
+  }
+
+  @override
+  Future<YorksV1CompanyMaterialRequest> saveSubmitAndApprove(
+    YorksV1CompanyMaterialRequestDraft draft,
+  ) async {
+    fastPathCalls++;
+    return _result(draft, state: 'approved_for_procurement');
   }
 
   @override
