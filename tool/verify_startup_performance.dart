@@ -13,7 +13,11 @@ import 'dart:io';
 // The approved inline delegation switch and ordered record actions add 2.6 kB
 // to the staging baseline. Reserve 5 kB for this UI slice; retain the 2.9 MB
 // compressed transfer ceiling and every route/asset verification gate.
-const _mainDartJsRawBudget = 10270000;
+// The combined Company request register and its distinct request-type icons
+// measure 10,287,901 raw / 2,731,769 gzip bytes with every staging module on.
+// Allow 30 kB raw parse growth for this reviewed slice; retain the transfer
+// ceiling and all other startup checks.
+const _mainDartJsRawBudget = 10300000;
 const _mainDartJsGzipBudget = 2900000;
 const _indexHtmlRawBudget = 40000;
 
