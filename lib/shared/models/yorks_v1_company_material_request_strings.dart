@@ -2,6 +2,18 @@ import 'app_strings.dart';
 
 /// Bilingual-capable copy for the protected company-use request lane.
 abstract final class YorksV1CompanyMaterialRequestStrings {
+  static const unsavedArrangement = TranslatableString(
+    en: 'You have unsaved arrangement changes. Discard them and leave?',
+    ar: 'لديك تغييرات غير محفوظة في الترتيب. هل تريد تجاهلها والمغادرة؟',
+    ur: 'انتظام کی تبدیلیاں محفوظ نہیں ہوئیں۔ انہیں چھوڑ کر باہر نکلیں؟',
+    hi: 'व्यवस्था में बदलाव सहेजे नहीं गए हैं। उन्हें छोड़कर बाहर जाएँ?',
+  );
+  static const discardChanges = TranslatableString(
+    en: 'Discard changes',
+    ar: 'تجاهل التغييرات',
+    ur: 'تبدیلیاں چھوڑ دیں',
+    hi: 'बदलाव छोड़ें',
+  );
   static const editRequest = TranslatableString(
     en: 'Edit request',
     ar: 'تعديل الطلب',

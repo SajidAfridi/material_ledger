@@ -22,6 +22,7 @@ import '../../../../shared/repositories/yorks_v1_company_material_request_reposi
 import '../widgets/yorks_v1_request_use_switch.dart';
 import '../widgets/yorks_v1_company_request_evidence.dart';
 import 'yorks_v1_company_material_request_operations.dart';
+import 'yorks_v1_company_arrangement_workbench.dart';
 
 class YorksV1CompanyMaterialRequestApprovalInboxScreen
     extends ConsumerStatefulWidget {
@@ -1616,57 +1617,31 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
             (line) => (double.tryParse(line.withdrawableQuantity) ?? 0) > 0,
           )
           .toList();
-      final choices = await showDialog<List<CompanySupplyPlanChoice>>(
+      await showDialog<void>(
         context: context,
-        builder: (_) => CompanyLineReview<CompanySupplyPlanChoice>(
-          title: YorksV1CompanyMaterialRequestStrings.arrangeItems.active(
-            widget.language,
-          ),
-          descriptions: [
-            for (final line in outstanding)
-              '${line.description} · ${line.withdrawableQuantity} ${line.unit}',
-          ],
+        barrierDismissible: false,
+        builder: (_) => YorksV1CompanyArrangementWorkbench(
+          request: widget.request,
+          inventory: inventory,
           language: widget.language,
-          confirmLabel: YorksV1CompanyMaterialRequestStrings.saveSupplyPlan
-              .active(widget.language),
-          summary: (choice) =>
-              '${choice.quantity} · ${choice.decision == 'full'
-                  ? YorksV1CompanyMaterialRequestStrings.full.active(widget.language)
-                  : choice.decision == 'partial'
-                  ? YorksV1CompanyMaterialRequestStrings.partial.active(widget.language)
-                  : YorksV1CompanyMaterialRequestStrings.cannotProvideNow.active(widget.language)}',
-          edit: (index, previous) => showDialog<CompanySupplyPlanChoice>(
-            context: context,
-            builder: (_) => CompanySupplyPlanDialog(
-              line: outstanding[index],
-              outstandingQuantity: outstanding[index].withdrawableQuantity,
-              inventory: inventory
-                  .where(
-                    (item) =>
-                        item.unit.toLowerCase() ==
-                        outstanding[index].unit.toLowerCase(),
-                  )
-                  .toList(),
-              language: widget.language,
-              initial: previous,
-            ),
-          ),
+          onSave: (choices) async {
+            final lines = [
+              for (var i = 0; i < choices.length; i++)
+                choices[i].toPayload(outstanding[i].id),
+            ];
+            await ref
+                .read(yorksV1CompanyMaterialRequestRepositoryProvider)
+                .saveSupplyPlan(
+                  requestId: widget.request.id,
+                  expectedVersion: widget.request.recordVersion,
+                  lines: lines,
+                  idempotencyKey: _commandKey('plan', lines),
+                );
+            ref.invalidate(
+              yorksV1CompanyMaterialRequestProvider(widget.request.id),
+            );
+          },
         ),
-      );
-      if (choices == null || !mounted) return;
-      final lines = [
-        for (var i = 0; i < choices.length; i++)
-          choices[i].toPayload(outstanding[i].id),
-      ];
-      await _run(
-        () => ref
-            .read(yorksV1CompanyMaterialRequestRepositoryProvider)
-            .saveSupplyPlan(
-              requestId: widget.request.id,
-              expectedVersion: widget.request.recordVersion,
-              lines: lines,
-              idempotencyKey: _commandKey('plan', lines),
-            ),
       );
     } catch (_) {
       if (mounted) {
@@ -2307,39 +2282,6 @@ class _ReceiptDialogState extends State<_ReceiptDialog> {
       ),
     ],
   );
-}
-
-class CompanySupplyPlanChoice {
-  const CompanySupplyPlanChoice({
-    required this.decision,
-    required this.quantity,
-    this.inventoryItemId,
-    this.externalSupplier,
-    this.reason,
-    this.followUpDate,
-  });
-  final String? followUpDate;
-  final String decision;
-  final String quantity;
-  final String? inventoryItemId;
-  final String? externalSupplier;
-  final String? reason;
-
-  Map<String, Object?> toPayload(String requestLineId) => {
-    'request_line_id': requestLineId,
-    'decision': decision,
-    'source_kind': quantity == '0'
-        ? null
-        : inventoryItemId == null
-        ? 'external_supplier'
-        : 'warehouse',
-    'inventory_item_id': inventoryItemId,
-    'external_supplier': externalSupplier,
-    'arranged_qty': quantity,
-    'expected_available_date': null,
-    'follow_up_date': followUpDate,
-    'reason': reason,
-  };
 }
 
 class CompanySupplyPlanDialog extends StatefulWidget {
