@@ -992,10 +992,10 @@ abstract final class YorksV1MaterialRequestStrings {
     hi: 'खरीद विभाग को संपादन की अनुमति दें',
   );
   static const editingAccessHelp = TranslatableString(
-    en: 'Off by default. Available only before Procurement starts arrangement. Any saved change returns this request for Engineering approval.',
-    ar: 'معطّل افتراضياً. يتاح فقط قبل بدء ترتيبات المشتريات. أي تعديل محفوظ يعيد الطلب لموافقة الهندسة.',
-    ur: 'پہلے سے بند ہے۔ صرف پروکیورمنٹ کے انتظام شروع کرنے سے پہلے دستیاب ہے۔ محفوظ شدہ تبدیلی دوبارہ انجینئرنگ منظوری کے لیے جائے گی۔',
-    hi: 'डिफ़ॉल्ट रूप से बंद। खरीद व्यवस्था शुरू होने से पहले ही उपलब्ध। सहेजा गया बदलाव फिर इंजीनियरिंग अनुमोदन के लिए जाएगा।',
+    en: 'Off by default. An approver can allow editing until Procurement saves its arrangement. Save keeps the request approved; an open arrangement must be refreshed to use the latest items.',
+    ar: 'معطّل افتراضياً. يمكن للموافق السماح بالتعديل حتى تحفظ المشتريات الترتيب. يبقى الطلب معتمداً بعد الحفظ، ويجب تحديث الترتيب المفتوح لعرض أحدث المواد.',
+    ur: 'پہلے سے بند ہے۔ منظوری دینے والا پروکیورمنٹ کے انتظام محفوظ ہونے تک ترمیم کی اجازت دے سکتا ہے۔ محفوظ کرنے سے درخواست منظور شدہ رہتی ہے؛ کھلے انتظام کو تازہ کریں تاکہ تازہ ترین اشیا نظر آئیں۔',
+    hi: 'डिफ़ॉल्ट रूप से बंद। अनुमोदक खरीद व्यवस्था सहेजे जाने तक संपादन की अनुमति दे सकता है। Save के बाद अनुरोध स्वीकृत रहता है; नई सामग्री देखने के लिए खुली व्यवस्था रीफ़्रेश करें।',
   );
   static const procurementEditor = TranslatableString(
     en: 'Procurement editor',
@@ -1022,10 +1022,10 @@ abstract final class YorksV1MaterialRequestStrings {
     hi: 'अनुमोदन के बाद संपादित · खरीद व्यवस्था से पहले फिर इंजीनियरिंग अनुमोदन आवश्यक है।',
   );
   static const postApprovalSaveWarning = TranslatableString(
-    en: 'Save keeps this request approved. The edit is recorded in Request History, and Procurement can arrange the saved items.',
-    ar: 'يبقى الطلب معتمداً بعد الحفظ. تُسجَّل التعديلات في سجل الطلب، ويمكن للمشتريات ترتيب المواد المحفوظة.',
-    ur: 'محفوظ کرنے کے بعد درخواست منظور شدہ رہے گی۔ ترمیم درخواست کی تاریخ میں درج ہوگی، اور پروکیورمنٹ محفوظ شدہ اشیا کا انتظام کر سکتی ہے۔',
-    hi: 'सहेजने के बाद अनुरोध स्वीकृत रहेगा। संपादन अनुरोध इतिहास में दर्ज होगा और खरीद टीम सहेजी गई सामग्री की व्यवस्था कर सकेगी।',
+    en: 'Save keeps approval and records this edit in Request History. Refresh an open arrangement to use the latest items.',
+    ar: 'يبقى الاعتماد سارياً بعد الحفظ ويُسجَّل التعديل في سجل الطلب. حدّث الترتيب المفتوح لاستخدام أحدث المواد.',
+    ur: 'محفوظ کرنے سے منظوری برقرار رہتی ہے اور ترمیم درخواست کی تاریخ میں درج ہوتی ہے۔ تازہ ترین اشیا کے لیے کھلا انتظام تازہ کریں۔',
+    hi: 'Save के बाद मंज़ूरी बनी रहती है और संपादन अनुरोध इतिहास में दर्ज होता है। नई सामग्री के लिए खुली व्यवस्था रीफ़्रेश करें।',
   );
   static const approveForProcurement = TranslatableString(
     en: 'Approve for Procurement',

@@ -100,7 +100,7 @@ void main() {
   });
 
   testWidgets(
-    'approved request edit shows Save without a second submission on desktop',
+    'arranging request edit shows Save without a second submission on desktop',
     (tester) async {
       await _setViewport(tester, const Size(1366, 768));
       await _pumpDraft(
@@ -122,7 +122,7 @@ void main() {
   );
 
   testWidgets(
-    'approved request edit ends with one Save action on a 360px phone',
+    'arranging request edit ends with one Save action on a 360px phone',
     (tester) async {
       await _setViewport(tester, const Size(360, 800));
       await _pumpDraft(
@@ -3627,7 +3627,7 @@ final _approvedEditableRequest = YorksV1MaterialRequest(
   projectName: 'Al Dhafra Grid Substation HVAC Works',
   scopeId: 'scope-common',
   scopeName: 'Common / All Buildings',
-  state: YorksV1MaterialRequestState.approvedForArrangement,
+  state: YorksV1MaterialRequestState.arranging,
   recordVersion: 4,
   createdAt: DateTime.utc(2026, 9, 24),
   updatedAt: DateTime.utc(2026, 9, 25),

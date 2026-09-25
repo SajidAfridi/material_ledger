@@ -63,6 +63,11 @@ draft
   approval. The original decision is retained with its original version;
   the edit has a separate immutable revision. New requests still require their
   initial approval, and existing pending amendments are not auto-approved.
+  **Later 25 September arrangement-stage correction:** the same off-by-default
+  grant also covers the first working, unsaved arrangement. Save keeps the
+  request in `arranging`, atomically aligns unsaved arrangement lines, and
+  forces a stale arrangement editor to refresh. A saved arrangement or any
+  reservation/downstream activity still closes editing.
 - Saving a complete arrangement for a request with a current approval creates
   approved line quantities from arranged quantities and makes positive lines
   dispatchable. Partial and unavailable decisions remain truthful exceptions.
