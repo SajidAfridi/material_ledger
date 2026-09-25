@@ -592,8 +592,9 @@ bool? _isAllowedForRole(
 bool? _isYorksV1RouteAllowedForRole(
   Uri uri,
   YorksV1Role? role,
-  YorksV1HybridPermissionResolver? permissionResolver,
-) {
+  YorksV1HybridPermissionResolver? permissionResolver, {
+  bool companyMaterialRequestsEnabled = false,
+}) {
   final path = uri.path;
   // Engineering calculators deliberately live outside the `/yorks/` prefix,
   // so evaluate their exact role boundary before the generic V1-path fast
@@ -725,6 +726,13 @@ bool? _isYorksV1RouteAllowedForRole(
       return true;
     }
     final projectId = uri.queryParameters['project_id']?.trim();
+    // The combined home is a read-only, server-filtered register. Project
+    // capability denies still apply to every scoped route and command.
+    if (companyMaterialRequestsEnabled &&
+        path == RoutePaths.yorksV1MaterialRequests &&
+        (projectId == null || projectId.isEmpty)) {
+      return true;
+    }
     final decision = _hybridRouteAllows(
       permissionResolver,
       YorksV1CapabilityKeys.materialRequestsView,
@@ -1075,12 +1083,22 @@ GoRouter createAppRouter({
         return _yorksV1ProjectFallbackPath();
       }
       if (path.startsWith('/yorks/material-requests/draft/')) {
+        final procurementEditRoute =
+            yorksV1Role == YorksV1Role.procurement &&
+            state.uri.queryParameters['entry_mode'] ==
+                YorksV1MaterialRequestDraftEntryMode
+                    .editExistingRequest
+                    .wireValue &&
+            (state.uri.queryParameters['project_id'] ?? '').trim().isNotEmpty;
         final structurallyEligible =
-            yorksV1Role?.canCreateMaterialRequest ?? false;
+            (yorksV1Role?.canCreateMaterialRequest ?? false) ||
+            procurementEditRoute;
         if (!structurallyEligible) return _yorksV1ProjectFallbackPath();
         final capabilityAllowed = _hybridRouteAllows(
           yorksV1PermissionResolver,
-          YorksV1CapabilityKeys.materialRequestsCreate,
+          procurementEditRoute
+              ? YorksV1CapabilityKeys.materialRequestsView
+              : YorksV1CapabilityKeys.materialRequestsCreate,
           legacyAllowed: structurallyEligible,
           projectId: state.uri.queryParameters['project_id'],
           organizationSummary: (state.uri.queryParameters['project_id'] ?? '')
@@ -1114,6 +1132,7 @@ GoRouter createAppRouter({
         state.uri,
         yorksV1Role,
         yorksV1PermissionResolver,
+        companyMaterialRequestsEnabled: yorksV1CompanyMaterialRequestsEnabled,
       );
       if (yorksV1RouteAllowed == false) {
         return _yorksV1ProjectFallbackPath();
@@ -1598,7 +1617,9 @@ GoRouter createAppRouter({
           path: RoutePaths.yorksV1CompanyMaterialRequestNew,
           pageBuilder: (context, state) => _yorksV1Slide(
             state.pageKey,
-            const _DeferredCompanyMaterialRequestScreen(),
+            _DeferredCompanyMaterialRequestScreen(
+              draftId: state.uri.queryParameters['draft'],
+            ),
           ),
         ),
       if (yorksV1CompanyMaterialRequestsEnabled)
@@ -2099,8 +2120,10 @@ class _DeferredCompanyMaterialRequestScreen extends StatefulWidget {
   const _DeferredCompanyMaterialRequestScreen({
     this.requestId,
     this.inbox = false,
+    this.draftId,
   });
 
+  final String? draftId;
   final String? requestId;
   final bool inbox;
 
@@ -2141,7 +2164,9 @@ class _DeferredCompanyMaterialRequestScreenState
               requestId: widget.requestId!,
             );
           }
-          return company_material_request.YorksV1CompanyMaterialRequestScreen();
+          return company_material_request.YorksV1CompanyMaterialRequestScreen(
+            draftId: widget.draftId,
+          );
         }
         if (snapshot.hasError) {
           return Center(

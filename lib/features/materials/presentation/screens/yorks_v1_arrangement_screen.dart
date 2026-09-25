@@ -967,20 +967,29 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
                   ),
           ),
           const SizedBox(height: AppSpacing.lg),
-          Text(
-            YorksV1ArrangementStrings.procurementNote.primary,
-            style: AppTypography.labelLarge.copyWith(
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          TextFormField(
-            controller: _procurementNote,
-            enabled: _canSave && !_busy,
-            minLines: 2,
-            maxLines: 4,
-            decoration: InputDecoration(
-              hintText: YorksV1ArrangementStrings.procurementNoteHint.primary,
+          Material(
+            type: MaterialType.transparency,
+            child: ExpansionTile(
+              key: PageStorageKey('arrangement-note-${_arrangement.id}'),
+              initiallyExpanded: _procurementNote.text.trim().isNotEmpty,
+              maintainState: true,
+              tilePadding: EdgeInsets.zero,
+              title: Text(
+                YorksV1ArrangementStrings.procurementNote.primary,
+                style: AppTypography.labelLarge,
+              ),
+              children: [
+                TextFormField(
+                  controller: _procurementNote,
+                  enabled: _canSave && !_busy,
+                  minLines: 2,
+                  maxLines: 4,
+                  decoration: InputDecoration(
+                    hintText:
+                        YorksV1ArrangementStrings.procurementNoteHint.primary,
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -1174,7 +1183,7 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
   }
 
   Future<void> _save() async {
-    if (!_canSave) return;
+    if (_busy || !_canSave) return;
     final canManageCommercials = ref.read(canManageCommercialsProvider);
     final inputs = [
       for (final line in _lines.values)
@@ -4014,12 +4023,7 @@ class _ArrangementSourceEditor extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _SourcePicker(
-          value: value,
-          enabled: enabled,
-          compact: true,
-          onChanged: onChanged,
-        ),
+        _SourcePicker(value: value, enabled: enabled, onChanged: onChanged),
         const SizedBox(height: AppSpacing.xs),
         _InventoryOrSupplierField(
           line: line,
@@ -4231,73 +4235,63 @@ class _SourcePicker extends StatelessWidget {
     required this.value,
     required this.enabled,
     required this.onChanged,
-    this.compact = false,
   });
 
   final _EditableArrangementLine value;
   final bool enabled;
   final ValueChanged<_EditableArrangementLine> onChanged;
-  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     if (value.decision == YorksV1ArrangementDecision.unavailable) {
-      return SizedBox(
-        width: 150,
-        child: Text(
-          YorksV1ArrangementStrings.noSourceRequired.primary,
-          style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
-        ),
+      return Text(
+        YorksV1ArrangementStrings.noSourceRequired.primary,
+        style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
       );
     }
-    return DropdownButtonFormField<YorksV1ArrangementSource>(
-      initialValue: value.source,
-      isExpanded: true,
-      decoration: InputDecoration(
-        labelText: compact ? null : YorksV1ArrangementStrings.source.primary,
-        contentPadding: compact
-            ? const EdgeInsets.symmetric(
-                horizontal: AppSpacing.sm,
-                vertical: AppSpacing.xs,
-              )
-            : null,
-      ),
-      items: [
+    return Wrap(
+      spacing: AppSpacing.xs,
+      runSpacing: AppSpacing.xs,
+      children: [
         for (final source in YorksV1ArrangementSource.values)
-          DropdownMenuItem(
-            value: source,
-            child: Text(yorksV1ArrangementSourceCopy(source).primary),
+          ChoiceChip(
+            key: ValueKey(
+              'source-${value.arrangementLineId}-${source.wireValue}',
+            ),
+            label: Text(yorksV1ArrangementSourceCopy(source).primary),
+            selected: value.source == source,
+            selectedColor: AppColors.blueContainer,
+            checkmarkColor: AppColors.blue,
+            materialTapTargetSize: MaterialTapTargetSize.padded,
+            onSelected: !enabled
+                ? null
+                : (_) => onChanged(
+                    value.copyWith(
+                      source: source,
+                      inventoryItemId:
+                          source == YorksV1ArrangementSource.warehouse
+                          ? value.inventoryItemId
+                          : null,
+                      externalSupplier:
+                          source == YorksV1ArrangementSource.externalSupplier
+                          ? value.externalSupplier
+                          : null,
+                      externalSourceReady:
+                          source == YorksV1ArrangementSource.externalSupplier
+                          ? null
+                          : false,
+                      externalExpectedDate:
+                          source == YorksV1ArrangementSource.externalSupplier
+                          ? _keep
+                          : null,
+                      externalReference:
+                          source == YorksV1ArrangementSource.externalSupplier
+                          ? _keep
+                          : null,
+                    ),
+                  ),
           ),
       ],
-      onChanged: !enabled
-          ? null
-          : (source) {
-              if (source == null) return;
-              onChanged(
-                value.copyWith(
-                  source: source,
-                  inventoryItemId: source == YorksV1ArrangementSource.warehouse
-                      ? value.inventoryItemId
-                      : null,
-                  externalSupplier:
-                      source == YorksV1ArrangementSource.externalSupplier
-                      ? value.externalSupplier
-                      : null,
-                  externalSourceReady:
-                      source == YorksV1ArrangementSource.externalSupplier
-                      ? null
-                      : false,
-                  externalExpectedDate:
-                      source == YorksV1ArrangementSource.externalSupplier
-                      ? _keep
-                      : null,
-                  externalReference:
-                      source == YorksV1ArrangementSource.externalSupplier
-                      ? _keep
-                      : null,
-                ),
-              );
-            },
     );
   }
 }
@@ -5287,103 +5281,130 @@ class _ExternalSourceReadinessFields extends StatelessWidget {
   final ValueChanged<_EditableArrangementLine> onChanged;
 
   @override
-  Widget build(BuildContext context) => Container(
-    width: double.infinity,
-    padding: const EdgeInsets.all(AppSpacing.sm),
-    decoration: BoxDecoration(
-      color: AppColors.blueContainer.withValues(alpha: .42),
-      border: Border.all(color: AppColors.blue.withValues(alpha: .28)),
-      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-    ),
-    child: Material(
-      type: MaterialType.transparency,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          CheckboxListTile(
-            key: ValueKey('external-ready-${value.arrangementLineId}'),
-            contentPadding: EdgeInsets.zero,
-            dense: true,
-            controlAffinity: ListTileControlAffinity.leading,
-            value: value.externalSourceReady,
-            onChanged: !enabled
-                ? null
-                : (ready) => onChanged(
-                    value.copyWith(externalSourceReady: ready == true),
-                  ),
-            title: Text(
-              YorksV1ArrangementStrings.externalReadyConfirmed.active(language),
-              style: AppTypography.labelLarge.copyWith(
-                fontWeight: FontWeight.w800,
+  Widget build(BuildContext context) {
+    final fields = Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.blueContainer.withValues(alpha: .42),
+        border: Border.all(color: AppColors.blue.withValues(alpha: .28)),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            CheckboxListTile(
+              key: ValueKey('external-ready-${value.arrangementLineId}'),
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              controlAffinity: ListTileControlAffinity.leading,
+              value: value.externalSourceReady,
+              onChanged: !enabled
+                  ? null
+                  : (ready) => onChanged(
+                      value.copyWith(externalSourceReady: ready == true),
+                    ),
+              title: Text(
+                YorksV1ArrangementStrings.externalReadyConfirmed.active(
+                  language,
+                ),
+                style: AppTypography.labelLarge.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              subtitle: Text(
+                (requiredByPolicy
+                        ? YorksV1ArrangementStrings.externalReadinessRequired
+                        : YorksV1ArrangementStrings
+                              .externalReadinessRecommended)
+                    .active(language),
               ),
             ),
-            subtitle: Text(
-              (requiredByPolicy
-                      ? YorksV1ArrangementStrings.externalReadinessRequired
-                      : YorksV1ArrangementStrings.externalReadinessRecommended)
-                  .active(language),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final stackFields = constraints.maxWidth < 540;
-              return Wrap(
-                spacing: AppSpacing.sm,
-                runSpacing: AppSpacing.sm,
-                children: [
-                  SizedBox(
-                    width: stackFields ? constraints.maxWidth : 210,
-                    child: TextFormField(
-                      key: ValueKey(
-                        'external-expected-${value.arrangementLineId}',
-                      ),
-                      initialValue: value.externalExpectedDate,
-                      enabled: enabled,
-                      keyboardType: TextInputType.datetime,
-                      decoration: InputDecoration(
-                        labelText: YorksV1ArrangementStrings
-                            .expectedAvailabilityDate
-                            .active(language),
-                        hintText: YorksV1ArrangementStrings.dateFormatHint
-                            .active(language),
-                        prefixIcon: const Icon(Icons.event_outlined),
-                      ),
-                      onChanged: (text) => onChanged(
-                        value.copyWith(
-                          externalExpectedDate: _trimmedOrNull(text),
+            const SizedBox(height: AppSpacing.xs),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final stackFields = constraints.maxWidth < 540;
+                return Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.sm,
+                  children: [
+                    SizedBox(
+                      width: stackFields ? constraints.maxWidth : 210,
+                      child: TextFormField(
+                        key: ValueKey(
+                          'external-expected-${value.arrangementLineId}',
+                        ),
+                        initialValue: value.externalExpectedDate,
+                        enabled: enabled,
+                        keyboardType: TextInputType.datetime,
+                        decoration: InputDecoration(
+                          labelText: YorksV1ArrangementStrings
+                              .expectedAvailabilityDate
+                              .active(language),
+                          hintText: YorksV1ArrangementStrings.dateFormatHint
+                              .active(language),
+                          prefixIcon: const Icon(Icons.event_outlined),
+                        ),
+                        onChanged: (text) => onChanged(
+                          value.copyWith(
+                            externalExpectedDate: _trimmedOrNull(text),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  SizedBox(
-                    width: stackFields ? constraints.maxWidth : 300,
-                    child: TextFormField(
-                      key: ValueKey(
-                        'external-reference-${value.arrangementLineId}',
-                      ),
-                      initialValue: value.externalReference,
-                      enabled: enabled,
-                      maxLength: 180,
-                      decoration: InputDecoration(
-                        labelText: YorksV1ArrangementStrings.supplierReference
-                            .active(language),
-                        prefixIcon: const Icon(Icons.link_rounded),
-                        counterText: '',
-                      ),
-                      onChanged: (text) => onChanged(
-                        value.copyWith(externalReference: _trimmedOrNull(text)),
+                    SizedBox(
+                      width: stackFields ? constraints.maxWidth : 300,
+                      child: TextFormField(
+                        key: ValueKey(
+                          'external-reference-${value.arrangementLineId}',
+                        ),
+                        initialValue: value.externalReference,
+                        enabled: enabled,
+                        maxLength: 180,
+                        decoration: InputDecoration(
+                          labelText: YorksV1ArrangementStrings.supplierReference
+                              .active(language),
+                          prefixIcon: const Icon(Icons.link_rounded),
+                          counterText: '',
+                        ),
+                        onChanged: (text) => onChanged(
+                          value.copyWith(
+                            externalReference: _trimmedOrNull(text),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ],
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
       ),
-    ),
-  );
+    );
+    if (requiredByPolicy) return fields;
+    return Material(
+      type: MaterialType.transparency,
+      child: ExpansionTile(
+        key: PageStorageKey('external-details-${value.arrangementLineId}'),
+        initiallyExpanded:
+            value.externalSourceReady ||
+            value.externalExpectedDate != null ||
+            value.externalReference != null,
+        maintainState: true,
+        tilePadding: EdgeInsets.zero,
+        title: Text(
+          YorksV1ArrangementStrings.optionalAvailabilityDetails.active(
+            language,
+          ),
+          style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+        ),
+        children: [fields],
+      ),
+    );
+  }
 }
 
 class _ReasonField extends StatelessWidget {

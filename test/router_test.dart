@@ -517,6 +517,66 @@ void main() {
     },
   );
 
+  testWidgets('Company-enabled home does not inherit Project read denial', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final preferences = await SharedPreferences.getInstance();
+    for (final companyEnabled in [false, true]) {
+      final router = createAppRouter(
+        isOnboarded: true,
+        isLoggedIn: true,
+        role: UserRole.engineer,
+        user: AppUser(
+          id: 'company-site-engineer',
+          fullName: 'Site Engineer',
+          email: 'site@yorks.test',
+          role: UserRole.engineer,
+          createdAt: DateTime.utc(2026, 9, 25),
+        ),
+        yorksV1ProjectsEnabled: true,
+        yorksV1RequestsEnabled: true,
+        yorksV1CompanyMaterialRequestsEnabled: companyEnabled,
+        yorksV1Role: YorksV1Role.siteEngineer,
+        yorksV1PermissionResolver:
+            (
+              capabilityKey, {
+              required legacyAllowed,
+              requireWrite = false,
+              organizationSummary = false,
+              projectId,
+            }) => capabilityKey == YorksV1CapabilityKeys.materialRequestsView
+            ? false
+            : legacyAllowed,
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [sharedPreferencesProvider.overrideWithValue(preferences)],
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+      router.go(RoutePaths.yorksV1MaterialRequests);
+      await tester.pumpAndSettle();
+      expect(
+        router.routeInformationProvider.value.uri.path,
+        companyEnabled
+            ? RoutePaths.yorksV1MaterialRequests
+            : RoutePaths.engineerHome,
+      );
+      router.go(
+        '${RoutePaths.yorksV1MaterialRequests}?project_id=denied-project',
+      );
+      await tester.pumpAndSettle();
+      expect(
+        router.routeInformationProvider.value.uri.path,
+        RoutePaths.engineerHome,
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+      router.dispose();
+    }
+  });
+
   testWidgets(
     'eligible V1 actors need independent create and edit capabilities',
     (tester) async {

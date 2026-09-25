@@ -8,6 +8,7 @@ import '../core/fullscreen/yorks_workspace_fullscreen.dart';
 import '../core/zoom/yorks_workspace_zoom.dart';
 import '../core/widgets/brand_logo.dart';
 import '../core/widgets/yorks_mobile_ui.dart';
+import '../core/widgets/yorks_panel_toggle_icon.dart';
 import '../shared/models/app_language.dart';
 import '../shared/models/app_strings.dart';
 import '../shared/models/yorks_v1_permission_management.dart';
@@ -32,7 +33,7 @@ import '../shared/widgets/notification_bell.dart';
 import '../shared/widgets/yorks_sign_out_action.dart';
 import 'router.dart';
 import 'yorks_navigation_history.dart';
-import 'yorks_v1_workspace_search.dart';
+import 'yorks_v1_workspace_search_launcher.dart';
 import 'yorks_v1_workspace_status_label.dart';
 
 /// Desktop-only shell preference. It lives above individual route widgets so
@@ -64,6 +65,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     });
     final isAccountant = role == YorksV1Role.accountant;
     final featureFlags = ref.watch(yorksV1FeatureFlagsProvider);
+    final companyRequestsEnabled = featureFlags.companyMaterialRequests;
     final accountsEnabled = featureFlags.accounts;
     final workforceEnabled = featureFlags.workforce;
     final analyticsEnabled = featureFlags.analytics;
@@ -100,6 +102,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
       teamChatEnabled: teamChatEnabled,
       chatUnread: chatUnread,
       permissionState: permissionState,
+      companyRequestsEnabled: companyRequestsEnabled,
       accountsEnabled: accountsEnabled,
       workforceEnabled: workforceEnabled,
       analyticsEnabled: analyticsEnabled,
@@ -245,6 +248,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
                               teamChatEnabled: teamChatEnabled,
                               chatUnread: chatUnread,
                               permissionState: permissionState,
+                              companyRequestsEnabled: companyRequestsEnabled,
                               accountsEnabled: accountsEnabled,
                               workforceEnabled: workforceEnabled,
                               analyticsEnabled: analyticsEnabled,
@@ -313,14 +317,24 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
                                 ) ||
                                 (current?.path != null &&
                                     location != current!.path),
-                            onToggleSidebar: () =>
-                                ref
-                                        .read(
-                                          yorksV1SidebarExpandedProvider
-                                              .notifier,
-                                        )
-                                        .state =
-                                    !sidebarExpanded,
+                            onToggleSidebar: () async {
+                              final focused =
+                                  FocusManager.instance.primaryFocus;
+                              if (focused?.context
+                                      ?.findAncestorStateOfType<
+                                        EditableTextState
+                                      >() !=
+                                  null) {
+                                focused?.unfocus();
+                              }
+                              await Future<void>.delayed(Duration.zero);
+                              if (!context.mounted) return;
+                              ref
+                                  .read(yorksV1SidebarExpandedProvider.notifier)
+                                  .state = !ref.read(
+                                yorksV1SidebarExpandedProvider,
+                              );
+                            },
                             onBack: () => yorksNavigateBack(
                               context,
                               ref,
@@ -381,6 +395,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     bool teamChatEnabled = true,
     int chatUnread = 0,
     YorksV1CurrentPermissionSnapshotState? permissionState,
+    bool companyRequestsEnabled = false,
     bool accountsEnabled = false,
     bool workforceEnabled = false,
     bool analyticsEnabled = false,
@@ -390,6 +405,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
       teamChatEnabled: teamChatEnabled,
       chatUnread: chatUnread,
       permissionState: permissionState,
+      companyRequestsEnabled: companyRequestsEnabled,
       accountsEnabled: accountsEnabled,
       workforceEnabled: workforceEnabled,
       analyticsEnabled: analyticsEnabled,
@@ -510,6 +526,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     bool teamChatEnabled = true,
     int chatUnread = 0,
     YorksV1CurrentPermissionSnapshotState? permissionState,
+    bool companyRequestsEnabled = false,
     bool accountsEnabled = false,
     bool workforceEnabled = false,
     bool analyticsEnabled = false,
@@ -698,7 +715,10 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
         return allows(YorksV1CapabilityKeys.projectsView, role != null);
       }
       if (path == RoutePaths.yorksV1MaterialRequests) {
-        return allows(YorksV1CapabilityKeys.materialRequestsView, role != null);
+        return (companyRequestsEnabled &&
+                role != null &&
+                role != YorksV1Role.accountant) ||
+            allows(YorksV1CapabilityKeys.materialRequestsView, role != null);
       }
       if (path == RoutePaths.yorksV1TeamChat) {
         return allows(YorksV1CapabilityKeys.chatView, role != null);
@@ -1134,6 +1154,7 @@ class YorksV1MobileMoreScreen extends ConsumerWidget {
     final role = ref.watch(yorksV1CurrentRoleProvider);
     final user = ref.watch(currentUserProvider);
     final featureFlags = ref.watch(yorksV1FeatureFlagsProvider);
+    final companyRequestsEnabled = featureFlags.companyMaterialRequests;
     final accountsEnabled = featureFlags.accounts;
     final workforceEnabled = featureFlags.workforce;
     final analyticsEnabled = featureFlags.analytics;
@@ -1157,6 +1178,7 @@ class YorksV1MobileMoreScreen extends ConsumerWidget {
       teamChatEnabled: teamChatEnabled,
       chatUnread: chatUnread,
       permissionState: permissionState,
+      companyRequestsEnabled: companyRequestsEnabled,
       accountsEnabled: accountsEnabled,
       workforceEnabled: workforceEnabled,
       analyticsEnabled: analyticsEnabled,
@@ -1168,6 +1190,7 @@ class YorksV1MobileMoreScreen extends ConsumerWidget {
           teamChatEnabled: teamChatEnabled,
           chatUnread: chatUnread,
           permissionState: permissionState,
+          companyRequestsEnabled: companyRequestsEnabled,
           accountsEnabled: accountsEnabled,
           workforceEnabled: workforceEnabled,
           analyticsEnabled: analyticsEnabled,
@@ -1407,15 +1430,26 @@ class _YorksWorkspaceTopBar extends ConsumerWidget {
         ),
         child: Row(
           children: [
-            IconButton(
-              key: const ValueKey('yorks-workspace-sidebar-toggle'),
-              tooltip:
-                  (sidebarExpanded
-                          ? YorksV1ShellStrings.collapsePanel
-                          : YorksV1ShellStrings.expandPanel)
-                      .active(language),
-              onPressed: onToggleSidebar,
-              icon: const Icon(Icons.view_sidebar_outlined),
+            Semantics(
+              expanded: sidebarExpanded,
+              child: IconButton(
+                key: const ValueKey('yorks-workspace-sidebar-toggle'),
+                tooltip:
+                    (sidebarExpanded
+                            ? YorksV1ShellStrings.collapsePanel
+                            : YorksV1ShellStrings.expandPanel)
+                        .active(language),
+                onPressed: onToggleSidebar,
+                style: IconButton.styleFrom(
+                  foregroundColor: sidebarExpanded
+                      ? AppColors.blue
+                      : AppColors.muted,
+                  backgroundColor: sidebarExpanded
+                      ? AppColors.blueContainer
+                      : null,
+                ),
+                icon: YorksPanelToggleIcon(expanded: sidebarExpanded),
+              ),
             ),
             const SizedBox(width: AppSpacing.xxs),
             IconButton(

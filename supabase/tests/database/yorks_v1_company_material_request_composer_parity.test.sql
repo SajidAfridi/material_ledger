@@ -1,7 +1,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path=public,extensions;
-select plan(13);
+select plan(14);
 
 select ok(
   has_function_privilege('authenticated',
@@ -132,5 +132,10 @@ select is((select count(*) from public.v1_company_material_request_lines
   where request_id='ca000000-0000-4000-8000-000000000010'),1::bigint,
   'Technical parity preserves the single saved line without replacement loss');
 
+select set_config('request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000002","role":"authenticated","app_metadata":{"role":"site_engineer","app_user_id":"usr-local-site-engineer"}}',true);
+select is(jsonb_array_length(public.v1_search_company_material_request_candidates(
+  'ca000000-0000-4000-8000-000000000001','ca000000-0000-4000-8000-000000000002',
+  'H-700 helmet',18)),1,'Catalogue search matches separate technical terms in either order');
 select * from finish();
 rollback;

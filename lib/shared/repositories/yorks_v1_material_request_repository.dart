@@ -6,6 +6,7 @@ import '../models/yorks_v1_domain_error.dart';
 import '../models/analytics_event.dart';
 import '../models/yorks_v1_feature_flags.dart';
 import '../models/yorks_v1_material_request.dart';
+import '../models/yorks_v1_material_register.dart';
 import '../models/yorks_v1_material_request_document.dart';
 import '../sync/connectivity_service.dart';
 import '../services/analytics_service.dart';
@@ -122,6 +123,23 @@ abstract interface class YorksV1MaterialRequestRepository {
   Future<YorksV1MaterialRequest> close(YorksV1CloseMaterialRequestInput input);
 }
 
+/// Server-authoritative request-level grant, separate from general role
+/// capabilities. The protected RPC rechecks the actor, state and version.
+abstract interface class YorksV1MaterialRequestPostApprovalEditRepository {
+  Future<List<YorksV1MaterialRequestMention>> listProcurementEditors(
+    String requestId,
+  );
+
+  Future<YorksV1MaterialRequest> setPostApprovalEdit({
+    required String requestId,
+    required int expectedVersion,
+    required bool enabled,
+    String? procurementEditorAuthUserId,
+    bool procurementRoleEditEnabled = false,
+    required String idempotencyKey,
+  });
+}
+
 /// Additive Phase 2 collaboration boundary. Keeping it separate preserves
 /// source compatibility for existing test and rollout repositories while the
 /// production Supabase repository exposes the new server-paginated features.
@@ -200,17 +218,25 @@ abstract interface class YorksV1MaterialRequestOperationsRepository {
   });
 }
 
+abstract interface class YorksV1UnifiedMaterialRequestRegisterRepository {
+  Future<YorksV1MaterialRegisterPage> listMaterialRegister(
+    YorksV1MaterialRegisterQuery query,
+  );
+}
+
 /// Server-backed normalized MR repository. The only local persistence lives in
 /// a creator-owned recoverable draft controller; submitted state never falls
 /// back to the legacy collection/outbox authority.
 class YorksV1SupabaseMaterialRequestRepository
     implements
         YorksV1MaterialRequestRepository,
+        YorksV1UnifiedMaterialRequestRegisterRepository,
         YorksV1MaterialRequestDraftSaveRecoveryRepository,
         YorksV1MaterialRequestSubmissionRecoveryRepository,
         YorksV1MaterialRequestPhase2Repository,
         YorksV1MaterialRequestPhase3Repository,
-        YorksV1MaterialRequestOperationsRepository {
+        YorksV1MaterialRequestOperationsRepository,
+        YorksV1MaterialRequestPostApprovalEditRepository {
   const YorksV1SupabaseMaterialRequestRepository({
     required YorksV1FeatureFlags featureFlags,
     required ConnectivityService connectivity,
@@ -228,6 +254,79 @@ class YorksV1SupabaseMaterialRequestRepository
   final YorksV1MaterialRequestRpcClient? _rpcClient;
   final Duration _rpcTimeout;
   final AnalyticsService _analytics;
+
+  @override
+  Future<List<YorksV1MaterialRequestMention>> listProcurementEditors(
+    String requestId,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_list_material_request_procurement_editors',
+      parameters: {'p_request_id': requestId},
+    );
+    return _list(
+      response,
+    ).map(YorksV1MaterialRequestMention.fromRpcJson).toList(growable: false);
+  }
+
+  @override
+  Future<YorksV1MaterialRequest> setPostApprovalEdit({
+    required String requestId,
+    required int expectedVersion,
+    required bool enabled,
+    String? procurementEditorAuthUserId,
+    bool procurementRoleEditEnabled = false,
+    required String idempotencyKey,
+  }) async {
+    final properties = <AnalyticsProperty, Object?>{
+      AnalyticsProperty.actionType: !enabled
+          ? 'disable_editing'
+          : procurementRoleEditEnabled
+          ? 'grant_procurement_role_editing'
+          : procurementEditorAuthUserId == null
+          ? 'approvers_only'
+          : 'grant_procurement_editing',
+    };
+    final operation = _analytics.beginOperation(
+      'material_request_editing_access',
+      properties: const {AnalyticsProperty.workflow: 'material_request'},
+    );
+    try {
+      final response = await _invoke(
+        functionName: 'v1_set_material_request_post_approval_edit',
+        parameters: {
+          'p_payload': {
+            'request_id': requestId,
+            'expected_version': expectedVersion,
+            'enabled': enabled,
+            'procurement_role_edit_enabled':
+                enabled && procurementRoleEditEnabled,
+            'procurement_editor_auth_user_id': enabled
+                ? procurementEditorAuthUserId
+                : null,
+          },
+          'p_idempotency_key': idempotencyKey,
+        },
+      );
+      final request = _single(response);
+      operation.complete();
+      _analytics.capture(
+        AnalyticsEvent.materialRequestEditingAccessChanged,
+        properties: {...properties, AnalyticsProperty.success: true},
+      );
+      return request;
+    } catch (error) {
+      operation.fail(error);
+      _analytics.capture(
+        AnalyticsEvent.materialRequestEditingAccessFailed,
+        properties: {
+          ...properties,
+          AnalyticsProperty.success: false,
+          AnalyticsProperty.errorCategory: analyticsErrorCategory(error),
+        },
+      );
+      rethrow;
+    }
+  }
 
   @override
   Future<YorksV1MaterialRequest?> findSubmissionResult(
@@ -282,6 +381,30 @@ class YorksV1SupabaseMaterialRequestRepository
     return _list(
       response,
     ).map(YorksV1MaterialRequest.fromRpcJson).toList(growable: false);
+  }
+
+  @override
+  Future<YorksV1MaterialRegisterPage> listMaterialRegister(
+    YorksV1MaterialRegisterQuery query,
+  ) async {
+    if (!_featureFlags.companyMaterialRequests ||
+        query.filters.projectId != null) {
+      return YorksV1MaterialRegisterPage.project(
+        await listRequestSummaries(query.filters),
+      );
+    }
+    final response = await _invoke(
+      functionName: 'v1_list_unified_material_request_summaries',
+      parameters: query.toRpcParameters(),
+    );
+    if (response is! Map) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return YorksV1MaterialRegisterPage.fromRpcJson(
+      Map<String, dynamic>.from(response),
+    );
   }
 
   @override

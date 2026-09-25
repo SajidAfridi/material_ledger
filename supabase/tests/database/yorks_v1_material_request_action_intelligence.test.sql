@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(18);
+select plan(19);
 
 select ok(
   not has_function_privilege(
@@ -242,6 +242,16 @@ select ok(
     'required_on_site_overdue', 'actor_can_act', 'exception_codes'
   ],
   'Exception cards receive owner-age, overdue and exception facts'
+);
+
+select ok(
+  (public.v1_list_material_request_summaries(p_limit => 1)
+    -> 'items' -> 0) ?& array[
+      'item_count', 'work_assignment', 'change_summary'
+    ]
+    and (public.v1_list_material_request_summaries(p_limit => 1)
+      ->> 'total_count')::integer > 1,
+  'A single paged row retains decoration while counts cover the full authorized set'
 );
 
 select is(

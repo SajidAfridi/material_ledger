@@ -362,6 +362,102 @@ abstract final class YorksV1AuditStrings {
 
   static String eventLabel(String eventType, AppLanguage language) {
     final known = <String, TranslatableString>{
+      'company_request_draft_created': const TranslatableString(
+        en: 'Company draft saved',
+        ar: 'تم حفظ مسودة الشركة',
+        ur: 'کمپنی مسودہ محفوظ',
+        hi: 'कंपनी ड्राफ्ट सहेजा गया',
+      ),
+      'company_request_submitted': const TranslatableString(
+        en: 'Company request submitted',
+        ar: 'تم إرسال طلب الشركة',
+        ur: 'کمپنی درخواست جمع ہوئی',
+        hi: 'कंपनी अनुरोध जमा हुआ',
+      ),
+      'company_request_approved': const TranslatableString(
+        en: 'Company request approved',
+        ar: 'تمت الموافقة على طلب الشركة',
+        ur: 'کمپنی درخواست منظور',
+        hi: 'कंपनी अनुरोध स्वीकृत',
+      ),
+      'company_request_returned': const TranslatableString(
+        en: 'Company request returned for changes',
+        ar: 'أعيد طلب الشركة للتعديل',
+        ur: 'کمپنی درخواست ترمیم کے لیے واپس',
+        hi: 'कंपनी अनुरोध संशोधन हेतु वापस',
+      ),
+      'company_request_rejected': const TranslatableString(
+        en: 'Company request rejected',
+        ar: 'رُفض طلب الشركة',
+        ur: 'کمپنی درخواست مسترد',
+        hi: 'कंपनी अनुरोध अस्वीकृत',
+      ),
+      'company_request_resubmitted': const TranslatableString(
+        en: 'Company request resubmitted',
+        ar: 'أعيد إرسال طلب الشركة',
+        ur: 'کمپنی درخواست دوبارہ جمع',
+        hi: 'कंपनी अनुरोध फिर जमा',
+      ),
+      'company_supply_plan_saved': const TranslatableString(
+        en: 'Company arrangement saved',
+        ar: 'تم حفظ ترتيب مواد الشركة',
+        ur: 'کمپنی انتظام محفوظ',
+        hi: 'कंपनी व्यवस्था सहेजी गई',
+      ),
+      'company_material_dispatched': const TranslatableString(
+        en: 'Company materials dispatched',
+        ar: 'تم إرسال مواد الشركة',
+        ur: 'کمپنی مواد روانہ',
+        hi: 'कंपनी सामग्री भेजी गई',
+      ),
+      'company_receipt_confirmed': const TranslatableString(
+        en: 'Company receipt reviewed',
+        ar: 'تمت مراجعة استلام الشركة',
+        ur: 'کمپنی وصولی کا جائزہ مکمل',
+        hi: 'कंपनी प्राप्ति की समीक्षा हुई',
+      ),
+      'company_beneficiary_handover_confirmed': const TranslatableString(
+        en: 'Company beneficiary handover confirmed',
+        ar: 'تم تأكيد التسليم للمستفيد',
+        ur: 'کمپنی مستفید کو حوالگی کی تصدیق',
+        hi: 'कंपनी लाभार्थी हस्तांतरण पुष्ट',
+      ),
+      'company_return_submitted': const TranslatableString(
+        en: 'Company return submitted',
+        ar: 'تم إرسال مرتجع الشركة',
+        ur: 'کمپنی واپسی جمع ہوئی',
+        hi: 'कंपनी वापसी जमा हुई',
+      ),
+      'company_return_confirmed': const TranslatableString(
+        en: 'Company return confirmed',
+        ar: 'تم تأكيد مرتجع الشركة',
+        ur: 'کمپنی واپسی کی تصدیق',
+        hi: 'कंपनी वापसी पुष्ट',
+      ),
+      'company_return_rejected': const TranslatableString(
+        en: 'Company return rejected',
+        ar: 'رُفض مرتجع الشركة',
+        ur: 'کمپنی واپسی مسترد',
+        hi: 'कंपनी वापसी अस्वीकृत',
+      ),
+      'company_request_cancelled': const TranslatableString(
+        en: 'Company request cancelled',
+        ar: 'أُلغي طلب الشركة',
+        ur: 'کمپنی درخواست منسوخ',
+        hi: 'कंपनी अनुरोध रद्द',
+      ),
+      'company_request_closed': const TranslatableString(
+        en: 'Company request closed',
+        ar: 'أغلق طلب الشركة',
+        ur: 'کمپنی درخواست بند',
+        hi: 'कंपनी अनुरोध बंद',
+      ),
+      'company_request_remainder_withdrawn': const TranslatableString(
+        en: 'Company remaining need withdrawn',
+        ar: 'سُحبت الحاجة المتبقية للشركة',
+        ur: 'کمپنی باقی ضرورت واپس',
+        hi: 'कंपनी शेष आवश्यकता वापस ली गई',
+      ),
       'project_created': const TranslatableString(
         en: 'Project created',
         ar: 'تم إنشاء المشروع',
@@ -550,6 +646,14 @@ abstract final class YorksV1AuditStrings {
   }
 
   static String entityLabel(String entityType, AppLanguage language) {
+    if (entityType == 'company_material_request') {
+      return const TranslatableString(
+        en: 'Company material request',
+        ar: 'طلب مواد الشركة',
+        ur: 'کمپنی مٹیریل درخواست',
+        hi: 'कंपनी सामग्री अनुरोध',
+      ).active(language);
+    }
     final normalized = entityType.replaceAll('_', ' ');
     if (language != AppLanguage.english) return normalized;
     if (normalized.isEmpty) return '';

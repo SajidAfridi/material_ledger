@@ -319,6 +319,30 @@ Submit requires connectivity and atomically:
 Until approval, the creator and an assigned/global Project Engineer may update
 the current Engineering intent through a version-checked audited command.
 Procurement cannot read or arrange the new request until Engineering approval.
+The 24 September 2026 approved exception allows an eligible approver to turn
+on post-approval editing for that request only, before Procurement starts any
+arrangement. It is off by default. An approver may name one active Procurement
+editor or limit editing to approvers, and may revoke the grant. The server
+enforces the cutoff, actor, capability, named grant and version under lock.
+Retained line IDs, protected commercial relations and all prior decision and
+revision evidence are preserved. No existing request is automatically enabled.
+The approved 25 September refinement adds an explicit, default-off per-request
+Procurement-role grant. The direct switch enables all active Procurement users
+with the required capability, or revokes Procurement editing, without a dialog.
+Named historical grants retain their original scope until explicitly changed.
+The same server lock, version, idempotency and arrangement cutoff rules apply.
+The grant is audited; privacy-safe analytics record confirmed outcomes.
+The 25 September 2026 Save refinement supersedes the earlier reapproval rule:
+an authorized edit to an already approved request is committed with **Save**,
+keeps `approved_for_arrangement`, and needs no second Engineering decision.
+The existing approval remains an immutable historical decision for its original
+version. The saved edit gets its own immutable revision and audit event so the
+latest version is never falsely represented as separately approved. Procurement
+may arrange the saved quantities immediately. A newly created request still
+needs its initial submission and approval; edits before that decision remain
+in the Engineering approval queue. Any legacy amendment already awaiting
+reapproval remains there until an approver decides it. No pending amendment is
+silently promoted by this change.
 The server-backed `draft` remains private to its creator and authorized Admin
 support, including discussion. Assigned/global Engineering participants become
 readers and may participate only after explicit submission; mentions identify
@@ -1668,3 +1692,51 @@ The following product-owner decisions are frozen on 7 September 2026:
   values or arrangement decisions; and
 - authorization, optimistic versioning, idempotency, request-root locking and
   append-only audit are server enforced. UI visibility is not authority.
+
+
+## 27. Company material recipient identity — 25 September 2026
+
+The product owner requires every Company Material Request beneficiary to have
+an active Yorks login. The previously proposed worker-without-login supervisor
+attestation path is not approved and must not be introduced. Existing protected
+beneficiary/receiver authorization and the distinction between beneficiary
+confirmation and receiver-witnessed handover remain enforced; a login alone is
+not a Company capability or a substitute for the assigned responsible unit.
+
+
+### 28. Company request integration and corrections — 25 September 2026
+
+Product-owner instruction: Company requests belong in the main Material Requests
+register, clearly typed, with shared search, notifications, audit and analytics.
+Beneficiaries must have active Yorks logins (§27). The requester may select one
+independent, actively authorized Company approver from Project Engineer, senior
+engineering roles or Admin. Existing dated category/unit policy remains mandatory;
+selection does not grant authority. No requester, beneficiary, receiver or
+Procurement self-approval is introduced. Multiple sequential approvers are not
+implied by a picker of eligible people.
+
+Admin oversight includes submitted Company requests. Private unsubmitted drafts,
+including cancelled drafts, remain private. Before any dispatch or withdrawal,
+the requester or Procurement may correct submitted demand; correction releases
+reservations, supersedes the current supply plan, preserves line IDs and sends
+it for fresh independent approval. Cancellation requires a reason and is allowed
+for the requester or assigned independent approver before dispatch. After dispatch,
+use the existing quantity-controlled remainder withdrawal/return path.
+
+### 29. Company request approver fast path — 25 September 2026
+
+The product owner's later direction supersedes only the Company requester
+self-approval exclusion in §28. A requester whose exact server-controlled role
+can approve and who also holds an active, dated `approver` grant for the chosen
+Company category and responsible unit may submit and approve in one trusted
+transaction. The creation screen offers **Submit and Approve** as the primary
+action for that person, with **Submit for approval** still available. Site
+Engineers, Procurement, Accountants, inactive actors and ungranted users cannot
+use the fast path. A requester who is also the beneficiary or authorized
+receiver cannot approve the same request. The chosen approver, decision, event,
+notification, version and idempotency checks remain server authoritative.
+
+The Company request detail uses the same lifecycle hierarchy and responsive
+action placement as Project MR while retaining Company-specific recipient,
+handover and return rules. This does not change Project MR authority or release
+any Company feature to production before its separate acceptance.

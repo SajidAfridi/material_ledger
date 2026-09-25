@@ -53,8 +53,9 @@ This evidence is local. `YORKS_V1_COMPANY_MATERIAL_REQUESTS` remains off by
 default. No remote migration, flag change, deployment or named-persona UAT is
 part of T06.
 
-The broader lifecycle review still requires a company-approved policy before a
-worker without a login can receive by supervisor attestation. It also requires
+The product owner resolved the identity policy on 25 September 2026: every
+beneficiary must have an active Yorks login. Worker-without-login supervisor
+attestation is not approved. The broader lifecycle review still requires
 release acceptance for cross-module Company return registers and the complete
 controlled-document set beyond the immutable issue note. Those boundaries must
 not be inferred from this signed-in lifecycle candidate.

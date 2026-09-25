@@ -10,6 +10,7 @@ import 'package:material_ledger/app/router.dart';
 import 'package:material_ledger/app/yorks_v1_workspace_shell.dart';
 import 'package:material_ledger/core/constants/constants.dart';
 import 'package:material_ledger/core/theme/app_theme.dart';
+import 'package:material_ledger/core/widgets/yorks_panel_toggle_icon.dart';
 import 'package:material_ledger/features/materials/presentation/screens/yorks_v1_material_request_screens.dart';
 import 'package:material_ledger/shared/models/app_language.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_request.dart';
@@ -98,6 +99,52 @@ void main() {
     _preferences = await SharedPreferences.getInstance();
   });
 
+  testWidgets(
+    'approved request edit shows Save without a second submission on desktop',
+    (tester) async {
+      await _setViewport(tester, const Size(1366, 768));
+      await _pumpDraft(
+        tester,
+        role: YorksV1Role.procurement,
+        serverRequest: _approvedEditableRequest,
+        entryMode: YorksV1MaterialRequestDraftEntryMode.editExistingRequest,
+      );
+      expect(find.text('Edit Material Request'), findsOneWidget);
+      expect(find.text('Save'), findsOneWidget);
+      expect(find.byKey(const ValueKey('mr-request-submit')), findsNothing);
+      expect(find.text('New Material Request'), findsNothing);
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile('goldens/r35/mr_approved_edit_save_desktop.png'),
+      );
+    },
+  );
+
+  testWidgets(
+    'approved request edit ends with one Save action on a 360px phone',
+    (tester) async {
+      await _setViewport(tester, const Size(360, 800));
+      await _pumpDraft(
+        tester,
+        role: YorksV1Role.procurement,
+        serverRequest: _approvedEditableRequest,
+        entryMode: YorksV1MaterialRequestDraftEntryMode.editExistingRequest,
+      );
+      await _continueToMaterials(tester);
+      await _openReview(tester);
+      expect(find.text('Review and save'), findsOneWidget);
+      expect(find.text('Save'), findsOneWidget);
+      expect(find.text('Submit for Approval'), findsNothing);
+      expect(find.byType(CheckboxListTile), findsNothing);
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile('goldens/r35/mr_approved_edit_save_mobile_360.png'),
+      );
+    },
+  );
+
   testWidgets('desktop MR draft keeps compact source and row actions', (
     tester,
   ) async {
@@ -115,6 +162,182 @@ void main() {
       find.byType(MaterialApp),
       matchesGoldenFile('goldens/r35/mr_draft_boq_actions_desktop.png'),
     );
+  });
+
+  for (final viewport in const [
+    (size: Size(2048, 1210), layout: 'desktop', name: '2048'),
+    (size: Size(1440, 900), layout: 'desktop', name: '1440'),
+    (size: Size(1024, 768), layout: 'tablet', name: '1024'),
+    (size: Size(820, 1180), layout: 'tablet', name: '820'),
+  ]) {
+    testWidgets('MR planning fields stay editable on ${viewport.name}', (
+      tester,
+    ) async {
+      await _setViewport(tester, viewport.size);
+      await _pumpDraft(tester);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(YorksV1MaterialRequestDraftScreen)),
+      );
+      final controller = container.read(
+        yorksV1MaterialRequestDraftControllerProvider(
+          const YorksV1MaterialRequestDraftKey(
+            ownerAuthUserId: 'mobile-mr-user',
+            draftId: _draftId,
+          ),
+        ).notifier,
+      );
+      await controller.setScope('scope-common');
+      await controller.addCustomLine();
+      await tester.pumpAndSettle();
+      final lineId = controller.currentDraft.lines.single.id;
+
+      expect(find.byKey(ValueKey('$lineId-size')), findsOneWidget);
+      expect(
+        find.byKey(ValueKey('$lineId-planning-model-tag')),
+        findsOneWidget,
+      );
+      expect(find.byKey(ValueKey('$lineId-brand-origin')), findsOneWidget);
+      expect(
+        find.byKey(ValueKey('$lineId-${viewport.layout}-similar')),
+        findsOneWidget,
+      );
+      await tester.ensureVisible(find.byKey(ValueKey('$lineId-size')));
+      await tester.enterText(find.byKey(ValueKey('$lineId-size')), '10x10');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(
+        find.byKey(ValueKey('$lineId-planning-model-tag')),
+      );
+      await tester.enterText(
+        find.byKey(ValueKey('$lineId-planning-model-tag')),
+        'P-100',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(ValueKey('$lineId-brand-origin')));
+      await tester.enterText(
+        find.byKey(ValueKey('$lineId-brand-origin')),
+        'Yorks',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+      expect(controller.currentDraft.lines.single.size, '10x10');
+      expect(controller.currentDraft.lines.single.model, 'P-100');
+      expect(controller.currentDraft.lines.single.brandOrigin, 'Yorks');
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile(
+          'goldens/r35/mr_composer_${viewport.name}_planning_fields.png',
+        ),
+      );
+      final toggle = find.byKey(const ValueKey('mr-request-context-toggle'));
+      final toggleIcon = find.descendant(
+        of: toggle,
+        matching: find.byType(YorksPanelToggleIcon),
+      );
+      expect(tester.widget<YorksPanelToggleIcon>(toggleIcon).expanded, isFalse);
+      final items = find.byKey(const ValueKey('mr-material-items-card'));
+      final form = find.byKey(const ValueKey('mr-request-information-card'));
+      final previousGap =
+          tester.getRect(items).top - tester.getRect(form).bottom;
+      await tester.enterText(find.byKey(ValueKey('$lineId-size')), '12x12');
+      await tester.ensureVisible(toggle);
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(tester.widget<YorksPanelToggleIcon>(toggleIcon).expanded, isTrue);
+      expect(controller.currentDraft.lines.single.size, '12x12');
+      if (viewport.layout == 'desktop') {
+        expect(
+          find.byKey(const ValueKey('mr-request-context-panel')),
+          findsOneWidget,
+        );
+        expect(
+          tester.getRect(items).top - tester.getRect(form).bottom,
+          closeTo(AppSpacing.xxxl, 0.1),
+        );
+        expect(
+          tester.getRect(items).right,
+          lessThan(
+            tester
+                .getRect(find.byKey(const ValueKey('mr-request-context-panel')))
+                .left,
+          ),
+        );
+        await expectLater(
+          find.byType(MaterialApp),
+          matchesGoldenFile(
+            'goldens/r35/mr_composer_${viewport.name}_context_open.png',
+          ),
+        );
+      } else {
+        // Inline context follows the editor; its height cannot displace items.
+        expect(
+          tester.getRect(items).top - tester.getRect(form).bottom,
+          lessThan(110),
+        );
+      }
+      await tester.ensureVisible(toggle);
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(tester.widget<YorksPanelToggleIcon>(toggleIcon).expanded, isFalse);
+      expect(controller.currentDraft.lines.single.size, '12x12');
+      expect(controller.currentDraft.lines.single.model, 'P-100');
+      expect(
+        tester.getRect(items).top - tester.getRect(form).bottom,
+        closeTo(previousGap, 0.1),
+      );
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('MR composer keeps its focused 360px entry', (tester) async {
+    await _setViewport(tester, const Size(360, 800));
+    await _pumpDraft(tester);
+    expect(find.byKey(const ValueKey('mobile-mr-information')), findsOneWidget);
+    expect(find.byKey(const ValueKey('mobile-mr-project')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/r35/mr_composer_360_entry.png'),
+    );
+  });
+
+  testWidgets('mobile MR draft retains local edits during access outage', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(360, 800));
+    await _pumpDraft(
+      tester,
+      permissionState: const YorksV1CurrentPermissionSnapshotState(
+        error: YorksV1DomainException(
+          YorksV1DomainErrorCode.backendUnavailable,
+        ),
+      ),
+    );
+    expect(
+      find.text('Unable to verify access. Your work is safe.'),
+      findsOneWidget,
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('mobile-mr-delivery-note')),
+      'Keep this material list',
+    );
+    await tester.pumpAndSettle();
+
+    final scope = ProviderScope.containerOf(
+      tester.element(find.byType(YorksV1MaterialRequestDraftScreen)),
+    );
+    final controller = scope.read(
+      yorksV1MaterialRequestDraftControllerProvider(
+        const YorksV1MaterialRequestDraftKey(
+          ownerAuthUserId: 'mobile-mr-user',
+          draftId: _draftId,
+        ),
+      ).notifier,
+    );
+    expect(controller.currentDraft.deliveryNote, 'Keep this material list');
   });
 
   testWidgets(
@@ -195,7 +418,7 @@ void main() {
       expect(find.text('Delivery note (optional)'), findsNothing);
 
       await tester.tap(find.byKey(const ValueKey('mr-request-context-toggle')));
-      await tester.pump();
+      await tester.pumpAndSettle();
 
       expect(
         find.byKey(const ValueKey('mr-request-context-panel')),
@@ -210,16 +433,8 @@ void main() {
       await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
       await tester.pumpAndSettle();
 
-      final description = find.byKey(
-        const ValueKey('mr-material-description-autocomplete'),
-      );
-      expect(
-        find.descendant(
-          of: description,
-          matching: find.byIcon(Icons.search_rounded),
-        ),
-        findsNothing,
-      );
+      expect(find.byTooltip('Add Similar Row'), findsOneWidget);
+      expect(find.byTooltip('Add custom row here'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -643,7 +858,7 @@ void main() {
     },
   );
 
-  testWidgets('tablet uses focused rows and compact validation markers', (
+  testWidgets('tablet keeps planning fields and compact validation markers', (
     tester,
   ) async {
     await _setViewport(tester, const Size(1024, 768));
@@ -665,19 +880,20 @@ void main() {
 
     expect(find.byKey(const ValueKey('mr-project')), findsOneWidget);
     expect(
-      find.byKey(ValueKey('${line.id}-focused-description-error')),
+      find.byKey(ValueKey('${line.id}-tablet-description-error')),
       findsOneWidget,
     );
     expect(
-      find.byKey(ValueKey('${line.id}-focused-quantity-error')),
+      find.byKey(ValueKey('${line.id}-tablet-quantity-error')),
       findsOneWidget,
     );
     expect(
-      find.byKey(ValueKey('${line.id}-focused-unit-error')),
+      find.byKey(ValueKey('${line.id}-tablet-unit-error')),
       findsOneWidget,
     );
     expect(find.text('Item description is required'), findsNothing);
-    expect(find.byKey(ValueKey('${line.id}-focused-delete')), findsOneWidget);
+    expect(find.byKey(ValueKey('${line.id}-size')), findsOneWidget);
+    expect(find.byKey(ValueKey('${line.id}-tablet-delete')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -2510,13 +2726,13 @@ void main() {
   });
 
   testWidgets(
-    'mobile MR lifecycle exposes only the real resolved primary action',
+    'mobile MR keeps Arrange entry while its workbench is unavailable',
     (tester) async {
       await _setViewport(tester, const Size(390, 844));
       await _pumpLifecycle(tester);
 
       expect(find.byKey(const ValueKey('mobile-mr-lifecycle')), findsOneWidget);
-      expect(find.text('Arrange Items'), findsNothing);
+      expect(find.text('Arrange Items'), findsOneWidget);
       expect(find.text('Current owner'), findsOneWidget);
       expect(find.text('Simple'), findsOneWidget);
       expect(find.text('Request discussion'), findsNothing);
@@ -3063,6 +3279,7 @@ Future<_MaterialRequestRepositoryFixture> _pumpDraft(
   String? initialProjectId = _projectId,
   List<YorksV1MaterialRequestProjectOption>? projectOptions,
   YorksV1Role role = YorksV1Role.projectEngineer,
+  YorksV1CurrentPermissionSnapshotState? permissionState,
 }) async {
   final projects = projectOptions ?? _draftProjects.take(1).toList();
   final repository = _MaterialRequestRepositoryFixture(
@@ -3073,6 +3290,10 @@ Future<_MaterialRequestRepositoryFixture> _pumpDraft(
       overrides: [
         yorksV1AuthUserIdProvider.overrideWithValue('mobile-mr-user'),
         yorksV1CurrentRoleProvider.overrideWithValue(role),
+        if (permissionState != null)
+          yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+            (ref) => YorksV1TestPermissionController(permissionState),
+          ),
         yorksV1MaterialRequestRepositoryProvider.overrideWithValue(repository),
         yorksV1RuntimeConfigurationProvider.overrideWith(
           (ref) async => runtimeConfiguration ?? _runtimeConfiguration(),
@@ -3397,6 +3618,35 @@ final _urgentDraftRequest = YorksV1MaterialRequest(
   timing: YorksV1MaterialRequestTiming.urgent,
   title: 'Urgent existing draft',
   lines: const [],
+);
+
+final _approvedEditableRequest = YorksV1MaterialRequest(
+  id: _draftId,
+  projectId: _projectId,
+  projectReference: 'YRA-322',
+  projectName: 'Al Dhafra Grid Substation HVAC Works',
+  scopeId: 'scope-common',
+  scopeName: 'Common / All Buildings',
+  state: YorksV1MaterialRequestState.approvedForArrangement,
+  recordVersion: 4,
+  createdAt: DateTime.utc(2026, 9, 24),
+  updatedAt: DateTime.utc(2026, 9, 25),
+  timing: YorksV1MaterialRequestTiming.normal,
+  title: 'Approved materials',
+  requestNumber: 'YRA-322-MR014',
+  postApprovalEditEnabled: true,
+  procurementRoleEditEnabled: true,
+  canEditPostApproval: true,
+  lines: const [
+    YorksV1MaterialRequestLine(
+      id: 'approved-edit-line',
+      displayOrder: 1,
+      source: YorksV1MaterialRequestLineSource.custom,
+      description: 'Duct fitting',
+      quantity: '3',
+      unit: 'Nos',
+    ),
+  ],
 );
 
 YorksV1RuntimeConfiguration _runtimeConfiguration({

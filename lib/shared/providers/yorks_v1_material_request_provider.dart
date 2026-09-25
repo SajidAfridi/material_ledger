@@ -384,6 +384,7 @@ class YorksV1MaterialRequestRealtimeNotifier extends StateNotifier<int>
   StreamSubscription<AuthState>? _authSubscription;
   StreamSubscription<bool>? _connectivitySubscription;
   Timer? _fallbackTimer;
+  int _fallbackAttempt = 0;
   bool _started = false;
   bool _disposed = false;
   bool _observingLifecycle = false;
@@ -426,17 +427,21 @@ class YorksV1MaterialRequestRealtimeNotifier extends StateNotifier<int>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (!_enabled || _disposed) return;
     if (state == AppLifecycleState.resumed) {
-      if (_leftForeground) {
+      final wasBackgrounded = _leftForeground;
+      _leftForeground = false;
+      if (wasBackgrounded) {
         unawaited(
           _refreshAuthorizedProjections(
             YorksV1MaterialRequestRefreshReason.subscriptionReconnected,
           ),
         );
       }
-      _leftForeground = false;
+      if (_fallbackTimer == null) _ensureFallbackTimer();
       return;
     }
     _leftForeground = true;
+    _fallbackTimer?.cancel();
+    _fallbackTimer = null;
   }
 
   /// Maps an already RLS-filtered notification envelope to a refresh only.
@@ -447,7 +452,8 @@ class YorksV1MaterialRequestRealtimeNotifier extends StateNotifier<int>
   ) {
     final entityType = notification['entity_type']?.toString().trim();
     return switch (entityType) {
-      'material_request' => YorksV1MaterialRequestRefreshReason.materialRequest,
+      'material_request' || 'company_material_request' =>
+        YorksV1MaterialRequestRefreshReason.materialRequest,
       'procurement_arrangement' =>
         YorksV1MaterialRequestRefreshReason.arrangement,
       'material_dispatch' => YorksV1MaterialRequestRefreshReason.dispatch,
@@ -542,7 +548,7 @@ class YorksV1MaterialRequestRealtimeNotifier extends StateNotifier<int>
   Future<void> _refreshAuthorizedProjections(
     YorksV1MaterialRequestRefreshReason _,
   ) async {
-    if (!_enabled || _disposed) return;
+    if (!_enabled || _disposed || _leftForeground) return;
     // This revision contains no server domain data. Every dependant uses it
     // only to issue its normal RLS-protected repository read.
     state += 1;
@@ -550,42 +556,67 @@ class YorksV1MaterialRequestRealtimeNotifier extends StateNotifier<int>
 
   void _onSignalUnavailable(Object? _) {
     if (_disposed) return;
+    _channelIsHealthy = false;
     _ensureFallbackTimer();
     // Deliberately do not synthesize a workflow error or stale transition
     // from a dropped socket. The fallback issues the same authorized read.
   }
 
   void _ensureFallbackTimer() {
-    if (_disposed || _fallbackTimer != null) return;
-    _fallbackTimer = Timer.periodic(
-      _fallbackInterval,
-      (_) => _refreshFromFallback(),
+    if (_disposed ||
+        _leftForeground ||
+        !_connectivity.isOnline ||
+        _fallbackTimer != null ||
+        _channelIsHealthy) {
+      return;
+    }
+    final shift = _fallbackAttempt.clamp(0, 4);
+    final delay = Duration(
+      milliseconds: (_fallbackInterval.inMilliseconds * (1 << shift)).clamp(
+        1,
+        const Duration(minutes: 5).inMilliseconds,
+      ),
     );
+    _fallbackTimer = Timer(delay, () {
+      _fallbackTimer = null;
+      _fallbackAttempt++;
+      _refreshFromFallback();
+    });
   }
+
+  bool _channelIsHealthy = false;
 
   /// A dropped socket should not turn a definitely-offline device into a
   /// repeating authorized-RPC loop. Connectivity is only a transport hint;
   /// every refresh still reads the normal server-authorized projection.
   void _refreshFromFallback() {
-    if (!_connectivity.isOnline) return;
+    if (!_connectivity.isOnline || _leftForeground || _disposed) return;
     unawaited(
       _refreshAuthorizedProjections(
         YorksV1MaterialRequestRefreshReason.subscriptionReconnected,
       ),
     );
+    _ensureFallbackTimer();
   }
 
   /// Once connectivity returns, one refresh closes the stale-data window
   /// without waiting for the next fallback interval. A healthy Realtime
   /// channel already handles its own reconnect and has no fallback timer.
   void _onConnectivityChanged(bool online) {
-    if (!online || _disposed || _fallbackTimer == null) return;
+    if (!online) {
+      _fallbackTimer?.cancel();
+      _fallbackTimer = null;
+      return;
+    }
+    if (_disposed || _channelIsHealthy) return;
     _refreshFromFallback();
   }
 
   void _stopFallbackTimer() {
     _fallbackTimer?.cancel();
     _fallbackTimer = null;
+    _fallbackAttempt = 0;
+    _channelIsHealthy = true;
   }
 
   @override

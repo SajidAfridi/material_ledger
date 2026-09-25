@@ -1,3 +1,8 @@
+import 'dart:async';
+import 'dart:io';
+import 'package:flutter/services.dart';
+import 'package:material_ledger/core/theme/app_theme.dart';
+import 'package:material_ledger/core/widgets/yorks_panel_toggle_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,6 +23,213 @@ import 'package:material_ledger/shared/sync/connectivity_service.dart';
 import 'support/yorks_v1_permission_test_support.dart';
 
 void main() {
+  setUpAll(() async {
+    final font = FontLoader('NexusSans')
+      ..addFont(rootBundle.load('assets/fonts/NotoSans-Regular.ttf'));
+    var directory = File(Platform.resolvedExecutable).parent;
+    while (!directory.path.endsWith('${Platform.pathSeparator}cache') &&
+        directory.path != directory.parent.path) {
+      directory = directory.parent;
+    }
+    final bytes = await File(
+      '${directory.path}/artifacts/material_fonts/MaterialIcons-Regular.otf',
+    ).readAsBytes();
+    final icons = FontLoader('MaterialIcons')
+      ..addFont(Future.value(ByteData.sublistView(bytes)));
+    await Future.wait([font.load(), icons.load()]);
+  });
+
+  testWidgets(
+    'workflow information stays bounded during resize and preserves working input',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final input = TextEditingController(text: 'Unsaved arrangement quantity');
+      addTearDown(input.dispose);
+      final repository = _CountingHistoryRepository();
+      final container = ProviderContainer(
+        overrides: [
+          yorksV1MaterialRequestHistoryRepositoryProvider.overrideWithValue(
+            repository,
+          ),
+          yorksV1MaterialRequestDetailProvider(
+            'request-1',
+          ).overrideWith((ref) async => _historyRequest),
+          yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+            (ref) => YorksV1TestPermissionController(
+              yorksV1TrustedFeaturePermissionState(
+                role: YorksV1Role.projectEngineer,
+              ),
+            ),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: RepaintBoundary(
+            key: const ValueKey('information-test-surface'),
+            child: MaterialApp(
+              debugShowCheckedModeBanner: false,
+              theme: AppTheme.light,
+              home: Scaffold(
+                body: Column(
+                  children: [
+                    TextField(controller: input),
+                    YorksV1RequestInformationToolbar(
+                      request: _historyRequest,
+                      language: AppLanguage.english,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(
+        tester
+            .widget<YorksPanelToggleIcon>(find.byType(YorksPanelToggleIcon))
+            .expanded,
+        isFalse,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('material-request-information-action')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<YorksPanelToggleIcon>(find.byType(YorksPanelToggleIcon))
+            .expanded,
+        isTrue,
+      );
+      expect(repository.calls, 1);
+      for (final width in [1440.0, 820.0, 360.0, 1440.0]) {
+        tester.view.physicalSize = Size(width, 900);
+        await tester.pumpAndSettle();
+        final panel = tester.getRect(
+          find.byKey(const ValueKey('material-request-information-panel')),
+        );
+        expect(panel.right, closeTo(width, 1));
+        expect(panel.height, 900);
+        expect(panel.width, lessThanOrEqualTo(width * .92 + 1));
+        expect(repository.calls, 1);
+        expect(tester.takeException(), isNull);
+        if (width == 1440 || width == 360) {
+          await expectLater(
+            find.byKey(const ValueKey('information-test-surface')),
+            matchesGoldenFile(
+              'goldens/r35/mr_flow_information_${width.toInt()}.png',
+            ),
+          );
+        }
+      }
+      tester.view.physicalSize = const Size(1440, 500);
+      await tester.pumpAndSettle();
+      final scroll = find.byKey(
+        const PageStorageKey('material-request-information-scroll'),
+      );
+      await tester.drag(scroll, const Offset(0, -120));
+      await tester.pumpAndSettle();
+      final scrollable = find
+          .descendant(of: scroll, matching: find.byType(Scrollable))
+          .first;
+      final offset = tester.state<ScrollableState>(scrollable).position.pixels;
+      expect(offset, greaterThan(0));
+      tester.view.physicalSize = const Size(820, 500);
+      await tester.pumpAndSettle();
+      expect(
+        tester.state<ScrollableState>(scrollable).position.pixels,
+        closeTo(offset, 1),
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('material-request-information-panel')),
+        findsNothing,
+      );
+      expect(
+        tester
+            .widget<YorksPanelToggleIcon>(find.byType(YorksPanelToggleIcon))
+            .expanded,
+        isFalse,
+      );
+      expect(input.text, 'Unsaved arrangement quantity');
+      await tester.tap(
+        find.byKey(const ValueKey('material-request-information-action')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tapAt(const Offset(10, 200));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('material-request-information-panel')),
+        findsNothing,
+      );
+      expect(input.text, 'Unsaved arrangement quantity');
+    },
+  );
+
+  testWidgets(
+    'information panel follows RTL and reduced motion on a scaled phone',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: const MediaQueryData(
+              size: Size(360, 800),
+              disableAnimations: true,
+              textScaler: TextScaler.linear(1.5),
+            ),
+            child: child!,
+          ),
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => TextButton(
+                onPressed: () => showYorksV1RequestInformationPanel(
+                  context,
+                  language: AppLanguage.arabic,
+                  builder: (context) => YorksV1RequestInformationSurface(
+                    language: AppLanguage.arabic,
+                    onClose: () => Navigator.of(context).pop(),
+                    children: const [Text('Request context')],
+                  ),
+                ),
+                child: const Text('Open'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+      final panel = tester.getRect(
+        find.byKey(const ValueKey('material-request-information-panel')),
+      );
+      expect(panel.left, 0);
+      expect(panel.width, closeTo(331.2, 1));
+      expect(tester.takeException(), isNull);
+      await tester.tap(
+        find.byKey(const ValueKey('material-request-inspector-close')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('material-request-information-panel')),
+        findsNothing,
+      );
+    },
+  );
+
   group('Material Request history', () {
     test(
       'maps the bounded server response without reconstructing audit data',
@@ -117,6 +329,74 @@ void main() {
     });
 
     testWidgets(
+      'history keeps its geometry through detail refresh and clears on explicit invalidation',
+      (tester) async {
+        final detailRevision = StateProvider((ref) => 0);
+        var detail = Completer<YorksV1MaterialRequest>();
+        final repository = _CountingHistoryRepository();
+        final container = ProviderContainer(
+          overrides: [
+            yorksV1MaterialRequestDetailProvider('request-1').overrideWith((
+              ref,
+            ) {
+              ref.watch(detailRevision);
+              return detail.future;
+            }),
+            yorksV1MaterialRequestHistoryRepositoryProvider.overrideWithValue(
+              repository,
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: const MaterialApp(
+              home: Scaffold(
+                body: YorksV1MaterialRequestHistorySection(
+                  requestId: 'request-1',
+                  language: AppLanguage.english,
+                ),
+              ),
+            ),
+          ),
+        );
+        detail.complete(_historyRequest);
+        await tester.pumpAndSettle();
+        expect(repository.calls, 1);
+        final surface = find.byKey(const ValueKey('material-request-history'));
+        final height = tester.getSize(surface).height;
+        expect(find.text('Submitted for approval'), findsOneWidget);
+        detail = Completer<YorksV1MaterialRequest>();
+        container.read(detailRevision.notifier).state++;
+        await tester.pump();
+        expect(find.text('Submitted for approval'), findsOneWidget);
+        expect(tester.getSize(surface).height, height);
+        expect(repository.calls, 1);
+        detail.complete(_historyRequest);
+        await tester.pumpAndSettle();
+        expect(repository.calls, 2);
+        expect(tester.getSize(surface).height, height);
+        // Explicit permission invalidation does not show previously authorized data.
+        repository.pending = Completer<YorksV1MaterialRequestHistoryPage>();
+        container.invalidate(
+          yorksV1MaterialRequestHistoryPageProvider(
+            const YorksV1MaterialRequestHistoryQuery(requestId: 'request-1'),
+          ),
+        );
+        await tester.pump();
+        await tester.pump();
+        expect(find.text('Submitted for approval'), findsNothing);
+        repository.pending!.completeError(
+          const YorksV1DomainException(YorksV1DomainErrorCode.unauthorized),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Submitted for approval'), findsNothing);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
       'renders only the server-supplied request event in the inspector',
       (tester) async {
         final container = ProviderContainer(
@@ -181,74 +461,64 @@ void main() {
       },
     );
 
-    testWidgets(
-      'opens request history on demand from the compact information sheet',
-      (tester) async {
-        await tester.binding.setSurfaceSize(const Size(1024, 768));
-        addTearDown(() => tester.binding.setSurfaceSize(null));
-        final container = ProviderContainer(
-          overrides: [
-            yorksV1MaterialRequestHistoryRepositoryProvider.overrideWithValue(
-              _FixtureHistoryRepository(),
-            ),
-            yorksV1MaterialRequestDetailProvider(
-              'request-1',
-            ).overrideWith((ref) async => _historyRequest),
-            yorksV1CurrentPermissionSnapshotProvider.overrideWith(
-              (ref) => YorksV1TestPermissionController(
-                yorksV1TrustedFeaturePermissionState(
-                  role: YorksV1Role.projectEngineer,
-                ),
+    testWidgets('opens history immediately in the shared information panel', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(1024, 768));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final container = ProviderContainer(
+        overrides: [
+          yorksV1MaterialRequestHistoryRepositoryProvider.overrideWithValue(
+            _FixtureHistoryRepository(),
+          ),
+          yorksV1MaterialRequestDetailProvider(
+            'request-1',
+          ).overrideWith((ref) async => _historyRequest),
+          yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+            (ref) => YorksV1TestPermissionController(
+              yorksV1TrustedFeaturePermissionState(
+                role: YorksV1Role.projectEngineer,
               ),
             ),
-          ],
-        );
-        addTearDown(container.dispose);
-        await tester.pumpWidget(
-          UncontrolledProviderScope(
-            container: container,
-            child: MaterialApp(
-              home: Scaffold(
-                body: Builder(
-                  builder: (context) => ElevatedButton(
-                    onPressed: () => showYorksV1RequestInformation(
-                      context,
-                      request: _historyRequest,
-                      language: AppLanguage.english,
-                    ),
-                    child: const Text('Open request information'),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            home: Scaffold(
+              body: Builder(
+                builder: (context) => ElevatedButton(
+                  onPressed: () => showYorksV1RequestInformation(
+                    context,
+                    request: _historyRequest,
+                    language: AppLanguage.english,
                   ),
+                  child: const Text('Open request information'),
                 ),
               ),
             ),
           ),
-        );
+        ),
+      );
 
-        await tester.tap(find.text('Open request information'));
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 200));
-        final historyAction = find.byKey(
-          const ValueKey('material-request-history-action'),
-        );
-        expect(historyAction, findsOneWidget);
-        await tester.ensureVisible(historyAction);
-        await tester.pump();
+      await tester.tap(find.text('Open request information'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      await container.read(
+        yorksV1MaterialRequestHistoryPageProvider(
+          const YorksV1MaterialRequestHistoryQuery(requestId: 'request-1'),
+        ).future,
+      );
+      await tester.pump();
 
-        await tester.tap(historyAction);
-        await tester.pump();
-        await container.read(
-          yorksV1MaterialRequestHistoryPageProvider(
-            const YorksV1MaterialRequestHistoryQuery(requestId: 'request-1'),
-          ).future,
-        );
-        await tester.pump();
-
-        expect(find.text('Request history'), findsAtLeastNWidgets(2));
-        expect(find.text('Submitted for approval'), findsOneWidget);
-        expect(find.text('Noor Zaman · Site Engineer'), findsOneWidget);
-        expect(tester.takeException(), isNull);
-      },
-    );
+      expect(find.text('Request history'), findsOneWidget);
+      expect(find.text('Submitted for approval'), findsOneWidget);
+      expect(find.text('Noor Zaman · Site Engineer'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
 
     testWidgets('labels a returned decision from its allowlisted facts', (
       tester,
@@ -273,6 +543,9 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            yorksV1MaterialRequestDetailProvider(
+              'request-1',
+            ).overrideWith((ref) async => _historyRequest),
             yorksV1MaterialRequestHistoryRepositoryProvider.overrideWithValue(
               repository,
             ),
@@ -300,6 +573,9 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            yorksV1MaterialRequestDetailProvider(
+              'request-1',
+            ).overrideWith((ref) async => _historyRequest),
             yorksV1MaterialRequestHistoryRepositoryProvider.overrideWithValue(
               _PagingFailureHistoryRepository(),
             ),
@@ -436,3 +712,15 @@ Map<String, dynamic> _historyFixture() => {
   'next_before_occurred_at': null,
   'next_before_id': null,
 };
+
+class _CountingHistoryRepository extends _FixtureHistoryRepository {
+  int calls = 0;
+  Completer<YorksV1MaterialRequestHistoryPage>? pending;
+  @override
+  Future<YorksV1MaterialRequestHistoryPage> getHistory(
+    YorksV1MaterialRequestHistoryQuery query,
+  ) {
+    calls++;
+    return pending?.future ?? super.getHistory(query);
+  }
+}

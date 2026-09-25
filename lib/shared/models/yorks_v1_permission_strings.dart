@@ -64,6 +64,9 @@ abstract final class YorksV1PermissionStrings {
   }
 
   static const Map<String, String> _english = {
+    'action_checking': 'Checking access… Your work is safe.',
+    'action_unavailable': 'Unable to verify access. Your work is safe.',
+    'action_retry': 'Retry access check',
     'eyebrow': 'ADMINISTRATION',
     'title': 'Scoped Access',
     'subtitle':
@@ -334,6 +337,9 @@ abstract final class YorksV1PermissionStrings {
 
   static const Map<String, Map<String, String>> _localized = {
     'ar': {
+      'action_checking': 'جارٍ التحقق من الصلاحية… عملك محفوظ.',
+      'action_unavailable': 'تعذر التحقق من الصلاحية. عملك محفوظ.',
+      'action_retry': 'إعادة التحقق من الصلاحية',
       'title': 'الصلاحيات المحددة',
       'subtitle':
           'راجع الصلاحية الفعلية ومصدرها ونطاق المشروع قبل حفظ أي تغيير مدقق.',
@@ -511,6 +517,9 @@ abstract final class YorksV1PermissionStrings {
       'role.admin': 'المسؤول',
     },
     'ur': {
+      'action_checking': 'رسائی کی جانچ ہو رہی ہے… آپ کا کام محفوظ ہے۔',
+      'action_unavailable': 'رسائی کی تصدیق نہیں ہو سکی۔ آپ کا کام محفوظ ہے۔',
+      'action_retry': 'رسائی دوبارہ چیک کریں',
       'title': 'مخصوص رسائی',
       'subtitle':
           'محفوظ شدہ تبدیلی سے پہلے مؤثر رسائی، اس کا ذریعہ اور پروجیکٹ دائرہ دیکھیں۔',
@@ -659,6 +668,9 @@ abstract final class YorksV1PermissionStrings {
       'role.admin': 'ایڈمن',
     },
     'hi': {
+      'action_checking': 'पहुँच की जाँच हो रही है… आपका काम सुरक्षित है।',
+      'action_unavailable': 'पहुँच सत्यापित नहीं हो सकी। आपका काम सुरक्षित है।',
+      'action_retry': 'पहुँच फिर जाँचें',
       'title': 'सीमित पहुँच',
       'subtitle':
           'ऑडिट किए गए बदलाव से पहले प्रभावी पहुँच, उसका स्रोत और प्रोजेक्ट दायरा देखें।',

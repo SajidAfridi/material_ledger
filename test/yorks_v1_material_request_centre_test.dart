@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import 'package:material_ledger/core/theme/app_theme.dart';
 import 'package:material_ledger/features/materials/presentation/screens/yorks_v1_material_request_centre.dart';
 import 'package:material_ledger/shared/models/app_language.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_request.dart';
+import 'package:material_ledger/shared/models/yorks_v1_material_register.dart';
 
 void main() {
   setUpAll(() async {
@@ -26,6 +28,112 @@ void main() {
       iconFontLoader.load(),
     ]);
   });
+
+  for (final width in [1440.0, 1024.0, 360.0]) {
+    testWidgets('unified register opens native Company rows at $width px', (
+      tester,
+    ) async {
+      await _setViewport(tester, Size(width, 1000));
+      String? companyOpened;
+      String? projectOpened;
+      var loads = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: Scaffold(
+            body: YorksV1MaterialRequestCentre(
+              requests: const [],
+              language: AppLanguage.english,
+              canCreate: true,
+              canCreateCompany: true,
+              onCreate: () {},
+              onCreateCompany: () {},
+              onOpen: (request) => projectOpened = request.id,
+              onOpenCompany: (id) async {
+                companyOpened = id;
+              },
+              onRefresh: () {},
+              registerPageLoader: (query) async {
+                loads++;
+                return YorksV1MaterialRegisterPage(
+                  items: [
+                    YorksV1MaterialRegisterEntry.company(_companyRegisterRow),
+                    YorksV1MaterialRegisterEntry.project(
+                      _summary(
+                        index: 1,
+                        updatedAt: DateTime.utc(2026, 9, 25),
+                      ).toRegisterProjection(),
+                    ),
+                  ],
+                  totalCount: 2,
+                  limit: 15,
+                  offset: 0,
+                  hasMore: false,
+                  metrics: const YorksV1MaterialRequestSummaryMetrics(
+                    total: 2,
+                    open: 2,
+                    inProgress: 0,
+                    dispatched: 0,
+                    received: 0,
+                    closed: 0,
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final row = find.byKey(
+        const ValueKey('material-request-row-company:company-proof'),
+      );
+      await tester.ensureVisible(row);
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: row,
+          matching: find.byIcon(Icons.business_center_outlined),
+        ),
+        findsOneWidget,
+      );
+      final projectRow = find.byKey(
+        const ValueKey('material-request-row-server-summary-1'),
+      );
+      expect(
+        find.descendant(
+          of: projectRow,
+          matching: find.byIcon(Icons.folder_open_outlined),
+        ),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Company use'), findsWidgets);
+      expect(find.textContaining('Company approver'), findsWidgets);
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile(
+          'goldens/r35/unified_mr_register_${width.toInt()}.png',
+        ),
+      );
+      await tester.tap(row);
+      await tester.pumpAndSettle();
+      final openPreview = find.byKey(
+        const ValueKey('material-request-tablet-open'),
+      );
+      if (companyOpened == null && openPreview.evaluate().isNotEmpty) {
+        await tester.ensureVisible(openPreview);
+        await tester.tap(openPreview);
+        await tester.pumpAndSettle();
+      }
+      expect(companyOpened, 'company-proof');
+      expect(projectOpened, isNull);
+      expect(
+        loads,
+        2,
+        reason: 'Returning from Company workflow refreshes the shared list',
+      );
+    });
+  }
 
   testWidgets('desktop centre groups, searches and opens server requests', (
     tester,
@@ -535,6 +643,142 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('historical insights load only when opened', (tester) async {
+    await _setViewport(tester, const Size(1280, 1000));
+    var insightsLoads = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(
+          body: YorksV1MaterialRequestCentre(
+            requests: const [],
+            language: AppLanguage.english,
+            canCreate: false,
+            onCreate: null,
+            onOpen: (_) {},
+            onRefresh: () {},
+            summaryPageLoader: (query) async =>
+                YorksV1MaterialRequestSummaryPage(
+                  items: [],
+                  totalCount: 0,
+                  limit: 15,
+                  offset: 0,
+                  hasMore: false,
+                  metrics: YorksV1MaterialRequestSummaryMetrics(
+                    total: 0,
+                    open: 0,
+                    inProgress: 0,
+                    dispatched: 0,
+                    received: 0,
+                    closed: 0,
+                  ),
+                ),
+            operationsDashboardLoader: (_) async {
+              insightsLoads++;
+              throw StateError('test dashboard unavailable');
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(insightsLoads, 0);
+    await tester.tap(
+      find.byKey(const ValueKey('material-request-operational-insights')),
+    );
+    await tester.pumpAndSettle();
+    expect(insightsLoads, 1);
+  });
+
+  testWidgets('overlapping register changes keep only the latest page', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(1280, 1000));
+    final first = Completer<YorksV1MaterialRequestSummaryPage>();
+    final searches = <String>[];
+    var active = 0;
+    var peak = 0;
+    Future<YorksV1MaterialRequestSummaryPage> load(
+      YorksV1MaterialRequestSummaryQuery query,
+    ) async {
+      searches.add(query.search ?? '');
+      active++;
+      if (active > peak) peak = active;
+      try {
+        if (searches.length == 1) return await first.future;
+        return YorksV1MaterialRequestSummaryPage(
+          items: [_summary(index: 2, updatedAt: DateTime.utc(2026, 8, 21))],
+          totalCount: 1,
+          limit: 15,
+          offset: 0,
+          hasMore: false,
+          metrics: const YorksV1MaterialRequestSummaryMetrics(
+            total: 1,
+            open: 1,
+            inProgress: 0,
+            dispatched: 0,
+            received: 0,
+            closed: 0,
+          ),
+        );
+      } finally {
+        active--;
+      }
+    }
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(
+          body: YorksV1MaterialRequestCentre(
+            requests: const [],
+            language: AppLanguage.english,
+            canCreate: false,
+            onCreate: null,
+            onOpen: (_) {},
+            onRefresh: () {},
+            summaryPageLoader: load,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.enterText(
+      find.byKey(const ValueKey('material-request-centre-search')),
+      'latest',
+    );
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(searches.length, 1);
+    first.complete(
+      YorksV1MaterialRequestSummaryPage(
+        items: [_summary(index: 1, updatedAt: DateTime.utc(2026, 8, 21))],
+        totalCount: 1,
+        limit: 15,
+        offset: 0,
+        hasMore: false,
+        metrics: const YorksV1MaterialRequestSummaryMetrics(
+          total: 1,
+          open: 1,
+          inProgress: 0,
+          dispatched: 0,
+          received: 0,
+          closed: 0,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(searches, ['', 'latest']);
+    expect(peak, 1);
+    expect(
+      find.byKey(const ValueKey('material-request-row-server-summary-2')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('material-request-row-server-summary-1')),
+      findsNothing,
+    );
+  });
+
   testWidgets('operational insights remain readable at mobile width', (
     tester,
   ) async {
@@ -859,3 +1103,19 @@ Directory _flutterCacheDirectory() {
   }
   throw StateError('Could not locate the Flutter cache from the test runner');
 }
+
+final _companyRegisterRow = <String, dynamic>{
+  'id': 'company-proof',
+  'request_kind': 'company',
+  'state': 'awaiting_company_approval',
+  'category_name': 'Workshop materials',
+  'responsible_unit_name': 'Main workshop',
+  'created_at': '2026-09-25T08:00:00Z',
+  'updated_at': '2026-09-25T08:00:00Z',
+  'request_number': 'CMR-0042',
+  'title': 'Safety equipment',
+  'item_count': 3,
+  'requester_display_name': 'Site Engineer',
+  'current_action_owner_role': 'company_approver',
+  'current_action_code': 'approve',
+};

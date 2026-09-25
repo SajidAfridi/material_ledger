@@ -3,6 +3,28 @@ import 'package:material_ledger/shared/models/analytics_event.dart';
 import 'package:material_ledger/shared/services/analytics_route_mapper.dart';
 
 void main() {
+  test(
+    'Company routes cannot pollute project MR funnels or expose identifiers',
+    () {
+      expect(
+        AnalyticsRouteMapper.destinationFor(
+          Uri.parse('/yorks/material-requests/company'),
+        ).screen,
+        AnalyticsScreen.companyMaterialRequests,
+      );
+      final draft = AnalyticsRouteMapper.destinationFor(
+        Uri.parse('/yorks/material-requests/company/new?draft=private-id'),
+      );
+      expect(draft.screen, AnalyticsScreen.companyMaterialRequestDraft);
+      expect(draft.entryEvent, AnalyticsEvent.companyRequestStarted);
+      final detail = AnalyticsRouteMapper.destinationFor(
+        Uri.parse('/yorks/material-requests/company/private-id'),
+      );
+      expect(detail.screen, AnalyticsScreen.companyMaterialRequestDetail);
+      expect(detail.entryEvent, AnalyticsEvent.companyRequestOpened);
+    },
+  );
+
   test('record routes map to stable screens without retaining identifiers', () {
     const projectId = '3f784ff0-6bca-4cfe-ac06-105f4f7dcad0';
     final cases = <String, AnalyticsScreen>{

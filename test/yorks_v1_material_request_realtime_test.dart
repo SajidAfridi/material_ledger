@@ -4,6 +4,19 @@ import 'package:material_ledger/shared/providers/yorks_v1_material_request_provi
 import 'package:material_ledger/shared/sync/connectivity_service.dart';
 
 void main() {
+  test(
+    'Company handoffs refresh the same protected Material Request projections',
+    () {
+      expect(
+        YorksV1MaterialRequestRealtimeNotifier.reasonFromNotification({
+          'entity_type': 'company_material_request',
+          'event_code': 'company_material_request_cancelled',
+        }),
+        YorksV1MaterialRequestRefreshReason.materialRequest,
+      );
+    },
+  );
+
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('Yorks V1 Material Request Realtime refresh', () {
@@ -148,6 +161,28 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 20));
 
         expect(notifier.state, greaterThan(0));
+      },
+    );
+
+    test(
+      'backgrounding suspends the fallback until foreground return',
+      () async {
+        final notifier = YorksV1MaterialRequestRealtimeNotifier(
+          enabled: true,
+          authUserId: '10000000-0000-4000-8000-000000000001',
+          client: null,
+          signalSubscription: ({required onSignal, required onUnavailable}) =>
+              Future.value(false),
+          fallbackInterval: const Duration(milliseconds: 5),
+        );
+        addTearDown(notifier.dispose);
+        await notifier.start();
+        notifier.didChangeAppLifecycleState(AppLifecycleState.paused);
+        await Future<void>.delayed(const Duration(milliseconds: 25));
+        expect(notifier.state, 0);
+        notifier.didChangeAppLifecycleState(AppLifecycleState.resumed);
+        await Future<void>.delayed(Duration.zero);
+        expect(notifier.state, 1);
       },
     );
 

@@ -2,6 +2,205 @@ import 'app_strings.dart';
 
 /// Bilingual-capable copy for the protected company-use request lane.
 abstract final class YorksV1CompanyMaterialRequestStrings {
+  static const unsavedArrangement = TranslatableString(
+    en: 'You have unsaved arrangement changes. Discard them and leave?',
+    ar: 'لديك تغييرات غير محفوظة في الترتيب. هل تريد تجاهلها والمغادرة؟',
+    ur: 'انتظام کی تبدیلیاں محفوظ نہیں ہوئیں۔ انہیں چھوڑ کر باہر نکلیں؟',
+    hi: 'व्यवस्था में बदलाव सहेजे नहीं गए हैं। उन्हें छोड़कर बाहर जाएँ?',
+  );
+  static const discardChanges = TranslatableString(
+    en: 'Discard changes',
+    ar: 'تجاهل التغييرات',
+    ur: 'تبدیلیاں چھوڑ دیں',
+    hi: 'बदलाव छोड़ें',
+  );
+  static const editRequest = TranslatableString(
+    en: 'Edit request',
+    ar: 'تعديل الطلب',
+    ur: 'درخواست میں ترمیم',
+    hi: 'अनुरोध संपादित करें',
+  );
+  static const cancelRequest = TranslatableString(
+    en: 'Cancel request',
+    ar: 'إلغاء الطلب',
+    ur: 'درخواست منسوخ کریں',
+    hi: 'अनुरोध रद्द करें',
+  );
+  static const cancelled = TranslatableString(
+    en: 'Cancelled',
+    ar: 'ملغى',
+    ur: 'منسوخ',
+    hi: 'रद्द',
+  );
+  static const changeReason = TranslatableString(
+    en: 'Reason for this change',
+    ar: 'سبب هذا التغيير',
+    ur: 'اس تبدیلی کی وجہ',
+    hi: 'इस बदलाव का कारण',
+  );
+  static const correctionNotice = TranslatableString(
+    en: 'Saving sends the changes for approval again. Any existing stock reservations will be released.',
+    ar: 'يرسل الحفظ التغييرات للموافقة مجدداً ويحرر حجوزات المخزون الحالية.',
+    ur: 'محفوظ کرنے پر تبدیلیاں دوبارہ منظوری کے لیے جائیں گی اور موجودہ اسٹاک ریزرویشن ختم ہو جائیں گی۔',
+    hi: 'सहेजने पर बदलाव फिर अनुमोदन के लिए जाएंगे और मौजूदा स्टॉक आरक्षण मुक्त होंगे।',
+  );
+  static const projectUse = TranslatableString(
+    en: 'Project use',
+    ar: 'استخدام المشروع',
+    ur: 'پراجیکٹ استعمال',
+    hi: 'परियोजना उपयोग',
+  );
+  static const searchRequests = TranslatableString(
+    en: 'Search reference, purpose or person',
+    ar: 'ابحث بالمرجع أو الغرض أو الشخص',
+    ur: 'حوالہ، مقصد یا شخص تلاش کریں',
+    hi: 'संदर्भ, उद्देश्य या व्यक्ति खोजें',
+  );
+  static const resumeDraft = TranslatableString(
+    en: 'Continue draft',
+    ar: 'متابعة المسودة',
+    ur: 'ڈرافٹ جاری رکھیں',
+    hi: 'ड्राफ़्ट जारी रखें',
+  );
+  static const flowDetails = TranslatableString(
+    en: 'Request progress',
+    ar: 'تقدم الطلب',
+    ur: 'درخواست کی پیشرفت',
+    hi: 'अनुरोध की प्रगति',
+  );
+  static const reviewQuantities = TranslatableString(
+    en: 'Review items and quantities before confirming.',
+    ar: 'راجع المواد والكميات قبل التأكيد.',
+    ur: 'تصدیق سے پہلے اشیا اور مقدار کا جائزہ لیں۔',
+    hi: 'पुष्टि से पहले सामग्री और मात्रा की समीक्षा करें।',
+  );
+  static const quantityLimit = TranslatableString(
+    en: 'Enter a quantity within the available amount.',
+    ar: 'أدخل كمية ضمن المتاح.',
+    ur: 'دستیاب مقدار کے اندر مقدار درج کریں۔',
+    hi: 'उपलब्ध मात्रा के भीतर मात्रा दर्ज करें।',
+  );
+  static const available = TranslatableString(
+    en: 'Available',
+    ar: 'المتاح',
+    ur: 'دستیاب',
+    hi: 'उपलब्ध',
+  );
+  static const confirmSelection = TranslatableString(
+    en: 'Confirm selected items',
+    ar: 'تأكيد المواد المحددة',
+    ur: 'منتخب اشیا کی تصدیق کریں',
+    hi: 'चयनित सामग्री की पुष्टि करें',
+  );
+  static const arrangeItems = TranslatableString(
+    en: 'Arrange items',
+    ar: 'ترتيب المواد',
+    ur: 'اشیا کا انتظام کریں',
+    hi: 'सामग्री की व्यवस्था करें',
+  );
+  static const reviewItems = TranslatableString(
+    en: 'Review items',
+    ar: 'مراجعة المواد',
+    ur: 'اشیا کا جائزہ',
+    hi: 'सामग्री की समीक्षा करें',
+  );
+  static const editLine = TranslatableString(
+    en: 'Review / edit',
+    ar: 'مراجعة / تعديل',
+    ur: 'جائزہ / ترمیم',
+    hi: 'समीक्षा / संपादन',
+  );
+  static const notReviewed = TranslatableString(
+    en: 'Needs review',
+    ar: 'بحاجة إلى مراجعة',
+    ur: 'جائزہ درکار',
+    hi: 'समीक्षा आवश्यक',
+  );
+  static const followUpDate = TranslatableString(
+    en: 'Follow-up date',
+    ar: 'تاريخ المتابعة',
+    ur: 'فالو اپ کی تاریخ',
+    hi: 'अनुवर्ती तिथि',
+  );
+  static const chooseInventory = TranslatableString(
+    en: 'Choose the matching stock item',
+    ar: 'اختر مادة المخزون المطابقة',
+    ur: 'متعلقہ اسٹاک آئٹم منتخب کریں',
+    hi: 'मिलती हुई स्टॉक सामग्री चुनें',
+  );
+  static const checkLine = TranslatableString(
+    en: 'Check quantity, source and required details.',
+    ar: 'تحقق من الكمية والمصدر والبيانات المطلوبة.',
+    ur: 'مقدار، ماخذ اور ضروری تفصیلات چیک کریں۔',
+    hi: 'मात्रा, स्रोत और आवश्यक विवरण जाँचें।',
+  );
+  static const handoverSelf = TranslatableString(
+    en: 'Confirm that you received these items.',
+    ar: 'أكد استلامك لهذه المواد.',
+    ur: 'تصدیق کریں کہ آپ نے یہ اشیا وصول کی ہیں۔',
+    hi: 'पुष्टि करें कि आपने ये सामग्री प्राप्त की हैं।',
+  );
+  static const handoverWitness = TranslatableString(
+    en: 'Confirm that you handed these items to the named recipient.',
+    ar: 'أكد تسليم هذه المواد إلى المستفيد المحدد.',
+    ur: 'تصدیق کریں کہ آپ نے یہ اشیا نامزد وصول کنندہ کو دی ہیں۔',
+    hi: 'पुष्टि करें कि आपने ये सामग्री नामित प्राप्तकर्ता को सौंपी हैं।',
+  );
+  static const received = TranslatableString(
+    en: 'Received',
+    ar: 'مستلم',
+    ur: 'وصول شدہ',
+    hi: 'प्राप्त',
+  );
+  static const handedOver = TranslatableString(
+    en: 'Handed over',
+    ar: 'تم التسليم',
+    ur: 'حوالے کیا گیا',
+    hi: 'सौंपा गया',
+  );
+  static const returned = TranslatableString(
+    en: 'Returned',
+    ar: 'مرتجع',
+    ur: 'واپس کیا گیا',
+    hi: 'वापस किया गया',
+  );
+  static const requestOptionsFailed = TranslatableString(
+    en: 'New request options could not load.',
+    ar: 'تعذر تحميل خيارات الطلب الجديد.',
+    ur: 'نئی درخواست کے اختیارات لوڈ نہیں ہو سکے۔',
+    hi: 'नए अनुरोध के विकल्प लोड नहीं हो सके।',
+  );
+
+  static const searchEmpty = TranslatableString(
+    en: 'No matching catalogue item. You can keep your description.',
+    ar: 'لا يوجد صنف مطابق. يمكنك الاحتفاظ بالوصف.',
+    ur: 'کوئی مماثل آئٹم نہیں۔ آپ اپنی تفصیل رکھ سکتے ہیں۔',
+    hi: 'कोई मिलती सामग्री नहीं। अपना विवरण रख सकते हैं।',
+  );
+  static const searchFailed = TranslatableString(
+    en: 'Search unavailable. Keep typing or try again.',
+    ar: 'البحث غير متاح. تابع الكتابة أو حاول مجدداً.',
+    ur: 'تلاش دستیاب نہیں۔ لکھتے رہیں یا دوبارہ کوشش کریں۔',
+    hi: 'खोज उपलब्ध नहीं। लिखते रहें या फिर प्रयास करें।',
+  );
+  static const evidence = TranslatableString(
+    en: 'Activity & issue notes',
+    ar: 'النشاط ومستندات الصرف',
+    ur: 'سرگرمی اور اجرا نوٹس',
+    hi: 'गतिविधि और निर्गमन पत्र',
+  );
+  static const issueNote = TranslatableString(
+    en: 'Company Issue Note',
+    ar: 'مستند صرف الشركة',
+    ur: 'کمپنی اجرا نوٹ',
+    hi: 'कंपनी निर्गमन पत्र',
+  );
+  static const noActivity = TranslatableString(
+    en: 'No recorded activity yet.',
+    ar: 'لا يوجد نشاط مسجل بعد.',
+    ur: 'ابھی کوئی سرگرمی ریکارڈ نہیں ہوئی۔',
+    hi: 'अभी कोई गतिविधि दर्ज नहीं है।',
+  );
   static const title = TranslatableString(
     en: 'Company material request',
     ar: 'طلب مواد للشركة',
@@ -255,10 +454,10 @@ abstract final class YorksV1CompanyMaterialRequestStrings {
     hi: 'कंपनी अनुमोदन निर्णय दर्ज किया गया।',
   );
   static const decisionFailed = TranslatableString(
-    en: 'The decision was not recorded. Refresh and try again.',
-    ar: 'لم يتم تسجيل القرار. حدّث وحاول مرة أخرى.',
-    ur: 'فیصلہ ریکارڈ نہیں ہوا۔ ریفریش کرکے دوبارہ کوشش کریں۔',
-    hi: 'निर्णय दर्ज नहीं हुआ। रीफ़्रेश करके फिर प्रयास करें।',
+    en: 'The decision could not be confirmed. Refresh to check before retrying.',
+    ar: 'تعذر تأكيد القرار. حدّث للتحقق قبل المحاولة مجدداً.',
+    ur: 'فیصلے کی تصدیق نہیں ہو سکی۔ دوبارہ کوشش سے پہلے ریفریش کرکے دیکھیں۔',
+    hi: 'निर्णय की पुष्टि नहीं हो सकी। फिर प्रयास से पहले रीफ़्रेश करके जाँचें।',
   );
   static const decisionHistory = TranslatableString(
     en: 'Decision history',
@@ -379,6 +578,18 @@ abstract final class YorksV1CompanyMaterialRequestStrings {
     ar: 'وصف البند',
     ur: 'آئٹم کی تفصیل',
     hi: 'आइटम विवरण',
+  );
+  static const sizeIfAny = TranslatableString(
+    en: 'Size (if any)',
+    ar: 'المقاس (إن وجد)',
+    ur: 'سائز (اگر ہو)',
+    hi: 'आकार (यदि हो)',
+  );
+  static const modelTag = TranslatableString(
+    en: 'Model / tag',
+    ar: 'الطراز / الرمز',
+    ur: 'ماڈل / ٹیگ',
+    hi: 'मॉडल / टैग',
   );
   static const brandOrigin = TranslatableString(
     en: 'Brand / origin',
@@ -567,10 +778,10 @@ abstract final class YorksV1CompanyMaterialRequestStrings {
     hi: 'समीक्षा करें और जमा करें',
   );
   static const reviewDescription = TranslatableString(
-    en: 'Confirm the recipient, handover details, materials and independent approver.',
-    ar: 'أكد المستفيد وتفاصيل التسليم والمواد والمعتمد المستقل.',
-    ur: 'وصول کنندہ، حوالگی کی تفصیل، مٹیریل اور آزاد منظور کنندہ کی تصدیق کریں۔',
-    hi: 'प्राप्तकर्ता, सौंपने का विवरण, सामग्री और स्वतंत्र अनुमोदक की पुष्टि करें।',
+    en: 'Confirm the recipient, handover details, materials and approver.',
+    ar: 'أكد المستفيد وتفاصيل التسليم والمواد والمعتمد.',
+    ur: 'وصول کنندہ، حوالگی کی تفصیل، مٹیریل اور منظور کنندہ کی تصدیق کریں۔',
+    hi: 'प्राप्तकर्ता, सौंपने का विवरण, सामग्री और अनुमोदक की पुष्टि करें।',
   );
   static const reviewConfirmation = TranslatableString(
     en: 'I reviewed the company-use context, recipient and requested quantities.',
@@ -579,17 +790,36 @@ abstract final class YorksV1CompanyMaterialRequestStrings {
     hi: 'मैंने कंपनी उपयोग का संदर्भ, प्राप्तकर्ता और मांगी गई मात्राएँ जाँच ली हैं।',
   );
   static const approvalHandoffTitle = TranslatableString(
-    en: 'Independent approval',
-    ar: 'موافقة مستقلة',
-    ur: 'آزاد منظوری',
-    hi: 'स्वतंत्र अनुमोदन',
+    en: 'Approval route',
+    ar: 'مسار الموافقة',
+    ur: 'منظوری کا راستہ',
+    hi: 'अनुमोदन मार्ग',
   );
   static TranslatableString approvalHandoff(String name) => TranslatableString(
-    en: 'Submitting sends this request to $name. You cannot approve your own request.',
-    ar: 'سيؤدي الإرسال إلى توجيه هذا الطلب إلى $name. لا يمكنك اعتماد طلبك بنفسك.',
-    ur: 'جمع کرانے پر یہ درخواست $name کو بھیجی جائے گی۔ آپ اپنی درخواست خود منظور نہیں کر سکتے۔',
-    hi: 'सबमिट करने पर यह अनुरोध $name को भेजा जाएगा। आप अपना अनुरोध स्वयं स्वीकृत नहीं कर सकते।',
+    en: 'Approval is assigned to $name.',
+    ar: 'تم تعيين الموافقة إلى $name.',
+    ur: 'منظوری $name کو تفویض کی گئی ہے۔',
+    hi: 'अनुमोदन $name को सौंपा गया है।',
   );
+  static const submitAndApproveConfirmMessage = TranslatableString(
+    en: 'This request will be submitted and approved for Procurement in one step. Check the recipient and quantities before continuing.',
+    ar: 'سيتم إرسال هذا الطلب واعتماده للمشتريات في خطوة واحدة. تحقق من المستفيد والكميات قبل المتابعة.',
+    ur: 'یہ درخواست ایک ہی مرحلے میں جمع اور پروکیورمنٹ کے لیے منظور ہو گی۔ آگے بڑھنے سے پہلے وصول کنندہ اور مقداریں چیک کریں۔',
+    hi: 'यह अनुरोध एक ही चरण में जमा और खरीद के लिए स्वीकृत होगा। आगे बढ़ने से पहले प्राप्तकर्ता और मात्राएँ जाँचें।',
+  );
+  static const submitAndApprovedTitle = TranslatableString(
+    en: 'Company request approved',
+    ar: 'تم اعتماد طلب الشركة',
+    ur: 'کمپنی درخواست منظور ہو گئی',
+    hi: 'कंपनी अनुरोध स्वीकृत',
+  );
+  static TranslatableString submitAndApprovedMessage(String requestNumber) =>
+      TranslatableString(
+        en: '$requestNumber is approved and ready for Procurement to arrange.',
+        ar: 'تم اعتماد $requestNumber وهو جاهز لترتيب المشتريات.',
+        ur: '$requestNumber منظور ہو گیا ہے اور پروکیورمنٹ انتظام کر سکتی ہے۔',
+        hi: '$requestNumber स्वीकृत है और खरीद व्यवस्था के लिए तैयार है।',
+      );
   static const submitConfirmTitle = TranslatableString(
     en: 'Submit this company request?',
     ar: 'إرسال طلب الشركة هذا؟',
@@ -734,10 +964,10 @@ abstract final class YorksV1CompanyMaterialRequestStrings {
     hi: 'कंपनी सामग्री कार्रवाई दर्ज की गई।',
   );
   static const actionFailed = TranslatableString(
-    en: 'The action was not recorded. Refresh and try again.',
-    ar: 'لم يتم تسجيل الإجراء. حدّث وحاول مرة أخرى.',
-    ur: 'کارروائی ریکارڈ نہیں ہوئی۔ ریفریش کرکے دوبارہ کوشش کریں۔',
-    hi: 'कार्रवाई दर्ज नहीं हुई। रीफ़्रेश करके फिर प्रयास करें।',
+    en: 'The result could not be confirmed. Refresh to check before retrying.',
+    ar: 'تعذر تأكيد النتيجة. حدّث للتحقق قبل المحاولة مجدداً.',
+    ur: 'نتیجے کی تصدیق نہیں ہو سکی۔ دوبارہ کوشش سے پہلے ریفریش کرکے دیکھیں۔',
+    hi: 'नतीजे की पुष्टि नहीं हो सकी। फिर प्रयास से पहले रीफ़्रेश करके जाँचें।',
   );
   static const warehouseSource = TranslatableString(
     en: 'Warehouse stock',

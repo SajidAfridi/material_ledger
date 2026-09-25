@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:material_ledger/core/zoom/yorks_workspace_zoom.dart';
 import 'package:material_ledger/core/fullscreen/yorks_workspace_fullscreen.dart';
+import 'package:material_ledger/core/widgets/yorks_panel_toggle_icon.dart';
 import 'package:material_ledger/shared/models/yorks_v1_zoom_strings.dart';
 import 'package:material_ledger/shared/models/app_language.dart';
 
@@ -571,6 +572,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    final icon = find.descendant(
+      of: find.byKey(const ValueKey('yorks-workspace-sidebar-toggle')),
+      matching: find.byType(YorksPanelToggleIcon),
+    );
+    expect(tester.widget<YorksPanelToggleIcon>(icon).expanded, isTrue);
+
     expect(
       find.byTooltip(YorksV1ShellStrings.collapsePanel.primary),
       findsOneWidget,
@@ -581,7 +588,8 @@ void main() {
     );
 
     await tester.tap(find.byTooltip(YorksV1ShellStrings.collapsePanel.primary));
-    await tester.pump();
+    await tester.pumpAndSettle();
+    expect(tester.widget<YorksPanelToggleIcon>(icon).expanded, isFalse);
 
     expect(
       find.byTooltip(YorksV1ShellStrings.expandPanel.primary),
@@ -593,7 +601,8 @@ void main() {
     );
 
     await tester.tap(find.byTooltip(YorksV1ShellStrings.expandPanel.primary));
-    await tester.pump();
+    await tester.pumpAndSettle();
+    expect(tester.widget<YorksPanelToggleIcon>(icon).expanded, isTrue);
     expect(
       find.text(YorksV1ShellStrings.browseInventory.primary),
       findsOneWidget,
