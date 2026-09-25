@@ -123,12 +123,12 @@ select lives_ok($$select public.v1_update_material_request_for_approval((select 
 
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"10000000-0000-4000-8000-000000000003","role":"authenticated","app_metadata":{"role":"procurement"}}', true);
-select ok((public.v1_material_request_projection('ae100000-0000-4000-8000-000000000001'::uuid)->>'post_approval_amendment_pending')::boolean,'Other Procurement user can read pending amendment');
+select ok((select projection ->> 'state' = 'approved_for_arrangement' and not (projection ->> 'post_approval_amendment_pending')::boolean from (select public.v1_material_request_projection('ae100000-0000-4000-8000-000000000001'::uuid) as projection) saved),'Role-granted save preserves approval');
 select throws_ok($$select public.v1_decide_material_request('{"request_id":"ae100000-0000-4000-8000-000000000001","expected_version":5,"decision":"approved"}'::jsonb,'be000000-0000-4000-8000-000000000005'::uuid)$$,'42501',null,'Procurement cannot approve its proposal');
 
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"10000000-0000-4000-8000-000000000001","role":"authenticated","app_metadata":{"role":"project_engineer"}}', true);
-select lives_ok($$select public.v1_set_material_request_post_approval_edit('{"request_id":"ae100000-0000-4000-8000-000000000001","expected_version":5,"enabled":true,"procurement_role_edit_enabled":false}'::jsonb, 'be000000-0000-4000-8000-000000000006'::uuid)$$,'Approver revokes role grant during pending amendment');
+select lives_ok($$select public.v1_set_material_request_post_approval_edit('{"request_id":"ae100000-0000-4000-8000-000000000001","expected_version":5,"enabled":true,"procurement_role_edit_enabled":false}'::jsonb, 'be000000-0000-4000-8000-000000000006'::uuid)$$,'Approver revokes role grant after save');
 
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"10000000-0000-4000-8000-000000000003","role":"authenticated","app_metadata":{"role":"procurement"}}', true);

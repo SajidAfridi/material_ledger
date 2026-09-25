@@ -78,6 +78,7 @@ explicit V7-to-V1 conflict resolution.
 | [`MATERIAL_REQUEST_ACTION_INTELLIGENCE.md`](MATERIAL_REQUEST_ACTION_INTELLIGENCE.md) | My Work, Exceptions, required-date/age indicators, trusted line ledger, operational metrics and the explicit SLA boundary |
 | [`MATERIAL_REQUEST_DISCUSSION_SPEC.md`](MATERIAL_REQUEST_DISCUSSION_SPEC.md) | Proposed full-width contextual Material Request discussion, replies, direct attachments, exact-comment notifications, responsive UX and staged release contract |
 | [`MATERIAL_REQUEST_FILE_AND_ACTION_UI.md`](MATERIAL_REQUEST_FILE_AND_ACTION_UI.md) | Shared file markers, grouped Material Request actions and consistent Request Information panel behavior |
+| [`MR_SAVE_EDIT_RELEASE_2026-09-25.md`](MR_SAVE_EDIT_RELEASE_2026-09-25.md) | Authorized Project MR Save flow, preserved approval and edit evidence, staging and rollback gates |
 | [`MATERIAL_REQUEST_WORKSPACE_REDESIGN_PLAN.md`](MATERIAL_REQUEST_WORKSPACE_REDESIGN_PLAN.md) | Approved cleaner MR workspace reference, optional information/audit panel, functionality-preservation map, measured visual handoff and staged acceptance plan |
 | [`MATERIAL_REQUEST_PROCUREMENT_ITEM_CLARIFICATION.md`](MATERIAL_REQUEST_PROCUREMENT_ITEM_CLARIFICATION.md) | Procurement item-name/model clarification, shared smart search, immutable requested evidence, save lock and audit contract |
 | [`ARRANGEMENT_WORKBENCH_SRS.md`](ARRANGEMENT_WORKBENCH_SRS.md) | Proposed non-regressing arrangement workbench: private progress, safe Back/resume, stock/clarification/uncertain-save handling and responsive UI |

@@ -2216,6 +2216,8 @@ class _YorksV1MaterialRequestDraftScreenState
   bool _seededFromBoq = false;
   bool _seededProjectFromRoute = false;
   bool _hydratedFromServer = false;
+  bool _serverHydrationScheduled = false;
+  bool _serverHydrationConflict = false;
   bool _runtimePolicyResolutionScheduled = false;
   bool _runtimePolicyResolved = false;
   bool _entryResolutionScheduled = false;
@@ -2302,21 +2304,34 @@ class _YorksV1MaterialRequestDraftScreenState
     final privateResolutionComplete =
         !needsPrivateResolution || _entryResolutionComplete;
     final shouldHydrateFromServer =
-        _shouldHydrateFromServer(state) &&
-        (widget.entryMode.loadsNormalizedRequest ||
-            (widget.entryMode == YorksV1MaterialRequestDraftEntryMode.legacy &&
-                privateResolutionComplete &&
-                !_resolvedPrivateDraft));
+        widget.entryMode ==
+            YorksV1MaterialRequestDraftEntryMode.editExistingRequest ||
+        (_shouldHydrateFromServer(state) &&
+            (widget.entryMode.loadsNormalizedRequest ||
+                (widget.entryMode ==
+                        YorksV1MaterialRequestDraftEntryMode.legacy &&
+                    privateResolutionComplete &&
+                    !_resolvedPrivateDraft)));
     final serverDraft = shouldHydrateFromServer
         ? ref.watch(yorksV1MaterialRequestDetailProvider(widget.draftId))
         : null;
     if (!_hydratedFromServer &&
+        !_serverHydrationScheduled &&
         serverDraft is AsyncData<YorksV1MaterialRequest>) {
       final request = serverDraft.value;
-      if (request.state.isDraft || request.canEditBeforeApproval) {
-        _hydratedFromServer = true;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) controller.hydrateFromServer(request);
+      if (request.state.isDraft ||
+          request.canEditBeforeApproval ||
+          request.canEditPostApproval) {
+        _serverHydrationScheduled = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          if (!mounted) return;
+          final hydrated = await controller.hydrateFromServer(request);
+          if (mounted) {
+            setState(() {
+              _hydratedFromServer = hydrated;
+              _serverHydrationConflict = !hydrated;
+            });
+          }
         });
       }
     }
@@ -2376,10 +2391,24 @@ class _YorksV1MaterialRequestDraftScreenState
       );
     }
     if (shouldHydrateFromServer) {
+      if (_serverHydrationConflict) {
+        return Scaffold(
+          backgroundColor: AppColors.surface,
+          body: _RequestError(
+            language: language,
+            onRetry: () => context.go(
+              RoutePaths.yorksV1MaterialRequestPath(widget.draftId),
+            ),
+          ),
+        );
+      }
       if (serverDraft is AsyncData<YorksV1MaterialRequest> &&
-          !_hydratedFromServer &&
+          (widget.entryMode ==
+                  YorksV1MaterialRequestDraftEntryMode.editExistingRequest ||
+              !_hydratedFromServer) &&
           !serverDraft.value.state.isDraft &&
-          !serverDraft.value.canEditBeforeApproval) {
+          !serverDraft.value.canEditBeforeApproval &&
+          !serverDraft.value.canEditPostApproval) {
         return Scaffold(
           backgroundColor: AppColors.surface,
           body: _RequestError(
@@ -2992,6 +3021,7 @@ class _DraftForm extends ConsumerWidget {
         : null;
     final postApprovalEditor =
         serverBackedRequest?.valueOrNull?.canEditPostApproval == true;
+    final editingExistingRequest = controller.isEditingBeforeApproval;
     final grantedEditAccess = postApprovalEditor
         ? YorksV1FeatureActionAccess(
             isVisible: true,
@@ -3042,8 +3072,8 @@ class _DraftForm extends ConsumerWidget {
     // Keep the final action available to explain incomplete data. A disabled
     // button leaves engineers guessing which row is blocking submission.
     final canAttemptSubmit =
-        (submitAccess.canWrite ||
-            (postApprovalEditor && permissionState.isTrustedForWrites)) &&
+        !editingExistingRequest &&
+        submitAccess.canWrite &&
         !draft.hasPendingSave &&
         draft.pendingSubmissionApproval == null &&
         state.status != YorksV1MaterialRequestDraftSyncStatus.submitting;
@@ -3095,12 +3125,13 @@ class _DraftForm extends ConsumerWidget {
           canSave: grantedEditAccess.canWrite,
           editAccess: grantedEditAccess,
           postApprovalEditor: postApprovalEditor,
+          editingExistingRequest: editingExistingRequest,
           onRetryAccess: () => ref
               .read(yorksV1CurrentPermissionSnapshotProvider.notifier)
               .retryVerification(),
           canSubmit:
-              (submitAccess.canWrite ||
-                  (postApprovalEditor && permissionState.isTrustedForWrites)) &&
+              !editingExistingRequest &&
+              submitAccess.canWrite &&
               !draft.hasPendingSave &&
               draft.pendingSubmissionApproval == null,
           onRecover: (retry) =>
@@ -3137,9 +3168,9 @@ class _DraftForm extends ConsumerWidget {
                   icon: const Icon(Icons.arrow_back_rounded),
                 ),
                 title: _CopyText(
-                  copy: draft.serverRecordVersion == 0
-                      ? YorksV1MaterialRequestStrings.newRequest
-                      : YorksV1MaterialRequestStrings.editDraft,
+                  copy: editingExistingRequest
+                      ? YorksV1MaterialRequestStrings.editMaterialRequest
+                      : YorksV1MaterialRequestStrings.newRequest,
                   language: language,
                   style: AppTypography.titleLarge.copyWith(
                     fontWeight: FontWeight.w800,
@@ -3154,6 +3185,7 @@ class _DraftForm extends ConsumerWidget {
                 onSave: isBusy || !grantedEditAccess.canWrite
                     ? null
                     : () => _save(context, ref, controller, draft),
+                editingExistingRequest: editingExistingRequest,
                 onSubmit: canAttemptSubmit
                     ? () => _submit(context, ref, controller)
                     : null,
@@ -3183,7 +3215,9 @@ class _DraftForm extends ConsumerWidget {
               final save = isBusy || !grantedEditAccess.canWrite
                   ? null
                   : () => _save(context, ref, controller, draft);
-              final requestNumber = _previewRequestNumber(selectedProject);
+              final requestNumber =
+                  serverBackedRequest?.valueOrNull?.requestNumber ??
+                  _previewRequestNumber(selectedProject);
               final form = _R35RequestCard(
                 key: const ValueKey('mr-request-information-card'),
                 title: YorksV1MaterialRequestStrings.requestInformation.primary,
@@ -3378,6 +3412,7 @@ class _DraftForm extends ConsumerWidget {
                             requesterName: ref.watch(actorNameProvider),
                             projectName: selectedProject?.name,
                             lineCount: draft.lines.length,
+                            editingExistingRequest: editingExistingRequest,
                             onCancel: () => context.pop(),
                             onSave: save,
                             onSubmit: submit,
@@ -3560,7 +3595,9 @@ class _DraftForm extends ConsumerWidget {
     if (!saved) {
       _snack(
         context,
-        wasServerReady && controller.currentDraft.hasPendingSave
+        controller.isEditingBeforeApproval
+            ? YorksV1MaterialRequestStrings.saveFailed.primary
+            : wasServerReady && controller.currentDraft.hasPendingSave
             ? YorksV1MaterialRequestStrings.saveUnconfirmed.primary
             : wasServerReady
             ? YorksV1MaterialRequestStrings.saveFailed.primary
@@ -3568,8 +3605,26 @@ class _DraftForm extends ConsumerWidget {
       );
       return;
     }
-    _snack(context, YorksV1MaterialRequestStrings.saved.primary);
+    final editingExistingRequest = controller.isEditingBeforeApproval;
+    _snack(
+      context,
+      (editingExistingRequest
+              ? YorksV1MaterialRequestStrings.requestSaved
+              : YorksV1MaterialRequestStrings.saved)
+          .primary,
+    );
     ref.invalidate(yorksV1MaterialRequestListProvider);
+    if (editingExistingRequest) {
+      try {
+        await controller.discardLocal(submissionConfirmed: true);
+      } catch (_) {
+        // The server confirmed the edit. A failed local cleanup cannot undo it.
+      }
+      ref.invalidate(yorksV1MaterialRequestDetailProvider(draft.id));
+      if (context.mounted) {
+        context.go(RoutePaths.yorksV1MaterialRequestPath(draft.id));
+      }
+    }
   }
 
   Future<void> _recoverSubmission(
@@ -3828,7 +3883,10 @@ class _MaterialRequestDraftExitGuardState
     final canSaveOnServer = widget.controller.currentDraft.canSubmitLocally;
     try {
       final saved = await widget.controller.saveDraft();
-      if (canSaveOnServer && !saved) return false;
+      if ((widget.controller.isEditingBeforeApproval || canSaveOnServer) &&
+          !saved) {
+        return false;
+      }
       ref.invalidate(yorksV1MaterialRequestListProvider);
       return true;
     } catch (_) {
@@ -4131,6 +4189,7 @@ class _YorksMobileMaterialRequestDraftFlow extends ConsumerStatefulWidget {
     required this.canSave,
     required this.editAccess,
     required this.postApprovalEditor,
+    required this.editingExistingRequest,
     required this.onRetryAccess,
     required this.canSubmit,
     required this.canSubmitAndApprove,
@@ -4150,6 +4209,7 @@ class _YorksMobileMaterialRequestDraftFlow extends ConsumerStatefulWidget {
   final bool canSave;
   final YorksV1FeatureActionAccess editAccess;
   final bool postApprovalEditor;
+  final bool editingExistingRequest;
   final VoidCallback onRetryAccess;
   final bool canSubmit;
   final bool canSubmitAndApprove;
@@ -4715,7 +4775,10 @@ class _YorksMobileMaterialRequestDraftFlowState
               _MobileMrProgress(step: _step, language: _language),
               const SizedBox(height: 20),
               Text(
-                YorksV1MaterialRequestStrings.reviewAndSubmit.active(_language),
+                (widget.editingExistingRequest
+                        ? YorksV1MaterialRequestStrings.reviewAndSave
+                        : YorksV1MaterialRequestStrings.reviewAndSubmit)
+                    .active(_language),
                 style: AppTypography.headlineMedium.copyWith(
                   fontSize: 25,
                   fontWeight: FontWeight.w800,
@@ -4815,56 +4878,69 @@ class _YorksMobileMaterialRequestDraftFlowState
                   const SizedBox(height: 10),
               ],
               const SizedBox(height: 4),
-              Material(
-                color: Colors.transparent,
-                child: CheckboxListTile(
-                  value: _reviewConfirmed,
-                  contentPadding: EdgeInsets.zero,
-                  controlAffinity: ListTileControlAffinity.leading,
-                  onChanged: _busy
-                      ? null
-                      : (value) =>
-                            setState(() => _reviewConfirmed = value ?? false),
-                  title: Text(
-                    YorksV1MaterialRequestStrings.confirmScopeAndLines.active(
-                      _language,
+              if (!widget.editingExistingRequest)
+                Material(
+                  color: Colors.transparent,
+                  child: CheckboxListTile(
+                    value: _reviewConfirmed,
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    onChanged: _busy
+                        ? null
+                        : (value) =>
+                              setState(() => _reviewConfirmed = value ?? false),
+                    title: Text(
+                      YorksV1MaterialRequestStrings.confirmScopeAndLines.active(
+                        _language,
+                      ),
+                      style: AppTypography.bodySmall,
                     ),
-                    style: AppTypography.bodySmall,
                   ),
                 ),
-              ),
             ],
           ),
         ),
         _MobileMrStickyActions(
-          secondaryLabel: YorksV1MaterialRequestStrings.saveDraft.active(
-            _language,
-          ),
-          onSecondary: _busy || !widget.canSave ? null : widget.onSave,
-          primaryLabel: YorksV1MaterialRequestStrings.submitForApproval.active(
-            _language,
-          ),
-          primaryIcon: Icons.send_rounded,
+          primaryAction: widget.editingExistingRequest
+              ? null
+              : _MaterialRequestCreationSubmitAction(
+                  language: _language,
+                  mainButtonKey: const ValueKey('mobile-mr-primary-action'),
+                  menuButtonKey: const ValueKey('mobile-mr-submit-menu'),
+                  expanded: true,
+                  canSubmitAndApprove: widget.canSubmitAndApprove,
+                  submitting:
+                      _busy &&
+                      widget.state.status ==
+                          YorksV1MaterialRequestDraftSyncStatus.submitting,
+                  onSubmitOnly: canAttemptSubmit ? _submit : null,
+                  onSubmitAndApprove: canAttemptApprove
+                      ? () => _submit(approveImmediately: true)
+                      : null,
+                ),
+          onPrimary: widget.editingExistingRequest
+              ? (_busy || !widget.canSave ? null : widget.onSave)
+              : (canAttemptSubmit ? _submit : null),
+          primaryLabel:
+              (widget.editingExistingRequest
+                      ? YorksV1MaterialRequestStrings.saveRequest
+                      : YorksV1MaterialRequestStrings.submitForApproval)
+                  .active(_language),
+          primaryIcon: widget.editingExistingRequest
+              ? Icons.save_outlined
+              : Icons.send_rounded,
+          secondaryLabel: widget.editingExistingRequest
+              ? YorksV1MaterialRequestStrings.back.active(_language)
+              : YorksV1MaterialRequestStrings.saveDraft.active(_language),
+          onSecondary: widget.editingExistingRequest
+              ? () => setState(
+                  () => _step = _MobileMaterialRequestDraftStep.materials,
+                )
+              : (_busy || !widget.canSave ? null : widget.onSave),
           loading:
               _busy &&
               widget.state.status ==
                   YorksV1MaterialRequestDraftSyncStatus.submitting,
-          onPrimary: canAttemptSubmit ? _submit : null,
-          primaryAction: _MaterialRequestCreationSubmitAction(
-            language: _language,
-            mainButtonKey: const ValueKey('mobile-mr-primary-action'),
-            menuButtonKey: const ValueKey('mobile-mr-submit-menu'),
-            expanded: true,
-            canSubmitAndApprove: widget.canSubmitAndApprove,
-            submitting:
-                _busy &&
-                widget.state.status ==
-                    YorksV1MaterialRequestDraftSyncStatus.submitting,
-            onSubmitOnly: canAttemptSubmit ? _submit : null,
-            onSubmitAndApprove: canAttemptApprove
-                ? () => _submit(approveImmediately: true)
-                : null,
-          ),
         ),
       ],
     );
@@ -6234,6 +6310,7 @@ String _materialRequestNextAction(
 class _TabletMrDraftActions extends StatelessWidget {
   const _TabletMrDraftActions({
     required this.language,
+    required this.editingExistingRequest,
     required this.onCancel,
     required this.onSave,
     required this.onSubmit,
@@ -6242,6 +6319,7 @@ class _TabletMrDraftActions extends StatelessWidget {
   });
 
   final AppLanguage language;
+  final bool editingExistingRequest;
   final VoidCallback onCancel;
   final VoidCallback? onSave;
   final VoidCallback? onSubmit;
@@ -6276,21 +6354,27 @@ class _TabletMrDraftActions extends StatelessWidget {
             onPressed: onCancel,
             child: Text(YorksV1MaterialRequestStrings.cancel.primary),
           ),
-          OutlinedButton.icon(
+          FilledButton.icon(
             key: const ValueKey('tablet-mr-save'),
             onPressed: onSave,
             icon: const Icon(Icons.save_outlined),
-            label: Text(YorksV1MaterialRequestStrings.saveDraft.primary),
+            label: Text(
+              (editingExistingRequest
+                      ? YorksV1MaterialRequestStrings.saveRequest
+                      : YorksV1MaterialRequestStrings.saveDraft)
+                  .active(language),
+            ),
           ),
-          _MaterialRequestCreationSubmitAction(
-            language: language,
-            mainButtonKey: const ValueKey('tablet-mr-submit'),
-            menuButtonKey: const ValueKey('tablet-mr-submit-menu'),
-            canSubmitAndApprove: onApprove != null,
-            submitting: submitting,
-            onSubmitOnly: onSubmit,
-            onSubmitAndApprove: onApprove,
-          ),
+          if (!editingExistingRequest)
+            _MaterialRequestCreationSubmitAction(
+              language: language,
+              mainButtonKey: const ValueKey('tablet-mr-submit'),
+              menuButtonKey: const ValueKey('tablet-mr-submit-menu'),
+              canSubmitAndApprove: onApprove != null,
+              submitting: submitting,
+              onSubmitOnly: onSubmit,
+              onSubmitAndApprove: onApprove,
+            ),
         ],
       ),
     ),
@@ -6300,6 +6384,7 @@ class _TabletMrDraftActions extends StatelessWidget {
 class _R35RequestHero extends StatelessWidget {
   const _R35RequestHero({
     required this.language,
+    required this.editingExistingRequest,
     required this.title,
     required this.requesterName,
     required this.projectName,
@@ -6314,6 +6399,7 @@ class _R35RequestHero extends StatelessWidget {
   });
 
   final AppLanguage language;
+  final bool editingExistingRequest;
   final String title;
   final String requesterName;
   final String? projectName;
@@ -6344,7 +6430,10 @@ class _R35RequestHero extends StatelessWidget {
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Text(
-                YorksV1MaterialRequestStrings.newRequest.primary,
+                (editingExistingRequest
+                        ? YorksV1MaterialRequestStrings.editMaterialRequest
+                        : YorksV1MaterialRequestStrings.newRequest)
+                    .active(language),
                 style: AppTypography.headlineMedium.copyWith(
                   color: AppColors.ink,
                   fontWeight: FontWeight.w800,
@@ -6415,7 +6504,11 @@ class _R35RequestHero extends StatelessWidget {
               onPressed: onToggleInspector,
             ),
             _R35RequestAction(
-              label: YorksV1MaterialRequestStrings.saveDraft.primary,
+              label:
+                  (editingExistingRequest
+                          ? YorksV1MaterialRequestStrings.saveRequest
+                          : YorksV1MaterialRequestStrings.saveDraft)
+                      .active(language),
               icon: Icons.save_outlined,
               onPressed: onSave,
             ),
@@ -6423,15 +6516,16 @@ class _R35RequestHero extends StatelessWidget {
               label: YorksV1MaterialRequestStrings.cancel.primary,
               onPressed: onCancel,
             ),
-            _MaterialRequestCreationSubmitAction(
-              language: language,
-              mainButtonKey: const ValueKey('mr-request-submit'),
-              menuButtonKey: const ValueKey('mr-request-submit-menu'),
-              canSubmitAndApprove: onApprove != null,
-              submitting: submitting,
-              onSubmitOnly: onSubmit,
-              onSubmitAndApprove: onApprove,
-            ),
+            if (!editingExistingRequest)
+              _MaterialRequestCreationSubmitAction(
+                language: language,
+                mainButtonKey: const ValueKey('mr-request-submit'),
+                menuButtonKey: const ValueKey('mr-request-submit-menu'),
+                canSubmitAndApprove: onApprove != null,
+                submitting: submitting,
+                onSubmitOnly: onSubmit,
+                onSubmitAndApprove: onApprove,
+              ),
           ],
         ),
       );

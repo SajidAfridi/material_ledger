@@ -871,6 +871,12 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'نئی مواد کی درخواست',
     hi: 'नया सामग्री अनुरोध',
   );
+  static const editMaterialRequest = TranslatableString(
+    en: 'Edit Material Request',
+    ar: 'تحرير طلب المواد',
+    ur: 'مواد کی درخواست میں ترمیم کریں',
+    hi: 'सामग्री अनुरोध संपादित करें',
+  );
   static const newRequestShort = TranslatableString(
     en: 'New request',
     ar: 'طلب جديد',
@@ -1016,10 +1022,10 @@ abstract final class YorksV1MaterialRequestStrings {
     hi: 'अनुमोदन के बाद संपादित · खरीद व्यवस्था से पहले फिर इंजीनियरिंग अनुमोदन आवश्यक है।',
   );
   static const postApprovalSaveWarning = TranslatableString(
-    en: 'Saving this approved request sends the revised version for Engineering approval. Procurement cannot arrange it until approval is confirmed.',
-    ar: 'حفظ هذا الطلب المعتمد يرسل النسخة المعدلة لموافقة الهندسة. لا يمكن للمشتريات ترتيبها حتى تأكيد الموافقة.',
-    ur: 'اس منظور شدہ درخواست کو محفوظ کرنے سے ترمیم شدہ نسخہ انجینئرنگ منظوری کے لیے جائے گا۔ منظوری کی تصدیق تک پروکیورمنٹ انتظام نہیں کر سکتی۔',
-    hi: 'इस स्वीकृत अनुरोध को सहेजने पर संशोधित संस्करण इंजीनियरिंग अनुमोदन के लिए जाएगा। पुष्टि तक खरीद व्यवस्था नहीं कर सकती।',
+    en: 'Save keeps this request approved. The edit is recorded in Request History, and Procurement can arrange the saved items.',
+    ar: 'يبقى الطلب معتمداً بعد الحفظ. تُسجَّل التعديلات في سجل الطلب، ويمكن للمشتريات ترتيب المواد المحفوظة.',
+    ur: 'محفوظ کرنے کے بعد درخواست منظور شدہ رہے گی۔ ترمیم درخواست کی تاریخ میں درج ہوگی، اور پروکیورمنٹ محفوظ شدہ اشیا کا انتظام کر سکتی ہے۔',
+    hi: 'सहेजने के बाद अनुरोध स्वीकृत रहेगा। संपादन अनुरोध इतिहास में दर्ज होगा और खरीद टीम सहेजी गई सामग्री की व्यवस्था कर सकेगी।',
   );
   static const approveForProcurement = TranslatableString(
     en: 'Approve for Procurement',
@@ -1455,6 +1461,12 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'جائزہ لیں اور جمع کرائیں',
     hi: 'समीक्षा करें और जमा करें',
   );
+  static const reviewAndSave = TranslatableString(
+    en: 'Review and save',
+    ar: 'مراجعة وحفظ',
+    ur: 'جائزہ لیں اور محفوظ کریں',
+    hi: 'समीक्षा करें और सहेजें',
+  );
   static const serverConfirmed = TranslatableString(
     en: 'Your request has been submitted for Engineering approval.',
     ar: 'تم إرسال طلبك للموافقة الهندسية.',
@@ -1881,6 +1893,12 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'مسودہ محفوظ کریں',
     hi: 'ड्राफ़्ट सहेजें',
   );
+  static const saveRequest = TranslatableString(
+    en: 'Save',
+    ar: 'حفظ',
+    ur: 'محفوظ کریں',
+    hi: 'सहेजें',
+  );
   static const leaveDraftTitle = TranslatableString(
     en: 'Save this material request?',
     ar: 'هل تريد حفظ طلب المواد هذا؟',
@@ -1988,6 +2006,12 @@ abstract final class YorksV1MaterialRequestStrings {
     ar: 'تم حفظ المسودة',
     ur: 'مسودہ محفوظ ہو گیا',
     hi: 'ड्राफ़्ट सहेजा गया',
+  );
+  static const requestSaved = TranslatableString(
+    en: 'Request saved',
+    ar: 'تم حفظ الطلب',
+    ur: 'درخواست محفوظ ہو گئی',
+    hi: 'अनुरोध सहेजा गया',
   );
   static const savedLocally = TranslatableString(
     en: 'Draft saved on this device. Complete the request to sync it.',

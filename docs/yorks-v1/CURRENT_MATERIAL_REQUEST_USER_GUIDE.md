@@ -21,8 +21,9 @@ evidence of their original releases, not current workflow authority.
    Before Procurement starts arrangement, an approver may open **Editing
    access** beside the workflow action and enable the default-off **Edit
    request** option. They may also choose one named Procurement editor.
-   Saving any change sends a new request version back for Engineering approval;
-   Procurement cannot arrange or approve it while that review is pending.
+   An authorized editor uses **Save**; the approved request stays approved and
+   Procurement may arrange the saved version without another approval. The
+   original decision and every edit remain visible in Request History.
 3. **Procurement arranges every line.** Procurement records Full, Partial or
    Cannot Provide Now and chooses Warehouse or External Supplier. Saving a
    complete arrangement makes its positive quantities ready for controlled
@@ -134,7 +135,7 @@ returns and outstanding need visible without comparing separate screens.
 |---|---|
 | Project Engineer | Create/edit requests, approve Engineering need, confirm receipts and close resolved requests for authorized projects |
 | Site Engineer | Create/edit their request, confirm receipts and close resolved requests; cannot approve unless separately holding Project Engineer authority |
-| Procurement | Arrange approved requests, reserve warehouse quantities, dispatch and confirm physical material returns; a named editor may propose changes before arrangement, subject to Engineering reapproval |
+| Procurement | Arrange approved requests, reserve warehouse quantities, dispatch and confirm physical material returns; when granted, may save request changes before arrangement without a second approval |
 | Admin | Audited administration/override through the same protected commands; does not fabricate missing workflow history |
 | Global Engineering roles | Organization-wide Project Engineer authority as defined in the source-of-truth role matrix |
 | Accountant | No technical MR, arrangement, dispatch, receipt or return mutation authority |

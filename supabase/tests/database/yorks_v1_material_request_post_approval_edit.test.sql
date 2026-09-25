@@ -1,7 +1,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
-select plan(33);
+select plan(37);
 
 select ok(
   has_function_privilege('authenticated',
@@ -208,58 +208,95 @@ select lives_ok($$select public.v1_update_material_request_for_approval(
       'technical_attributes', '{}'::jsonb,
       'requested_qty', '3', 'unit', 'Nos'))),
   'ae200000-0000-4000-8000-000000000007'::uuid)$$,
-  'Named Procurement edit creates a versioned Engineering proposal');
-select ok((select projection ->> 'state' = 'awaiting_request_approval'
-    and (projection ->> 'post_approval_amendment_pending')::boolean
+  'Named Procurement editor saves an approved request');
+select ok((select projection ->> 'state' = 'approved_for_arrangement'
+    and not (projection ->> 'post_approval_amendment_pending')::boolean
     and (projection ->> 'record_version')::integer = 5
     from (select public.v1_material_request_projection(
       'ae100000-0000-4000-8000-000000000001'::uuid) as projection) projected),
-  'Proposal blocks arrangement and remains visible to its named editor');
+  'Save preserves approval and Procurement arrangement access');
 set local role postgres;
 select ok((select unit_cost = 10 from public.v1_material_request_line_commercials
   where request_line_id =
     'ae110000-0000-4000-8000-000000000001'::uuid),
   'The original line cost link survives the amendment');
-select ok((select snapshot_reason = 'post_approval_amendment'
+select ok((select snapshot_reason = 'post_approval_edit'
   from public.v1_material_request_revision_snapshots
   where request_id = 'ae100000-0000-4000-8000-000000000001'::uuid
     and request_record_version = 5),
-  'The revised Engineering proposal has a dedicated immutable snapshot');
+  'The saved approved edit has a dedicated immutable snapshot');
 set local role authenticated;
 select set_config('request.jwt.claims',
   '{"sub":"10000000-0000-4000-8000-000000000003","role":"authenticated","app_metadata":{"role":"procurement","app_user_id":"usr-local-procurement"}}', true);
-select throws_ok($$select public.v1_begin_arrangement(
-  jsonb_build_object('request_id',
-    'ae100000-0000-4000-8000-000000000001', 'expected_version', 5),
+select is((public.v1_update_material_request_for_approval(
+  (select payload from post_edit_payload) || jsonb_build_object(
+    'expected_version', 4, 'title', 'Procurement amendment proposal',
+    'lines', jsonb_build_array(jsonb_build_object(
+      'id', 'ae110000-0000-4000-8000-000000000001',
+      'display_order', 1, 'source_kind', 'custom',
+      'source_boq_group_id', null, 'source_boq_row_id', null,
+      'item_description', 'Revised duct fitting', 'brand_origin', null,
+      'technical_attributes', '{}'::jsonb,
+      'requested_qty', '3', 'unit', 'Nos'))),
+  'ae200000-0000-4000-8000-000000000007'::uuid) ->> 'record_version')::integer,
+  5, 'Retry returns the original saved version without another write');
+select throws_ok($$select public.v1_update_material_request_for_approval(
+  (select payload from post_edit_payload) || '{"expected_version":4}'::jsonb,
   'ae200000-0000-4000-8000-000000000008'::uuid)$$,
-  '22023', 'V1_BEGIN_ARRANGEMENT_STATE_INVALID',
-  'Procurement cannot arrange a pending amendment');
+  '40001', 'V1_MATERIAL_REQUEST_VERSION_CONFLICT',
+  'A competing stale editor cannot overwrite the saved version');
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000002","role":"authenticated","app_metadata":{"role":"site_engineer","app_user_id":"usr-local-site-engineer"}}', true);
+select throws_ok($$select public.v1_update_material_request_for_approval(
+  (select payload from post_edit_payload) || '{"expected_version":5}'::jsonb,
+  'ae200000-0000-4000-8000-000000000013'::uuid)$$,
+  '42501', 'V1_MATERIAL_REQUEST_APPROVAL_EDIT_DENIED',
+  'Site Engineer cannot edit an approved request through a dual assignment');
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000001","role":"authenticated","app_metadata":{"role":"project_engineer","app_user_id":"usr-local-project-engineer"}}', true);
+select lives_ok($$select public.v1_update_material_request_for_approval(
+  (select payload from post_edit_payload) ||
+    '{"expected_version":5,"title":"Engineer saved edit"}'::jsonb,
+  'ae200000-0000-4000-8000-000000000014'::uuid)$$,
+  'Assigned Project Engineer saves without reapproval');
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000004","role":"authenticated","app_metadata":{"role":"admin","app_user_id":"usr-local-admin"}}', true);
+select lives_ok($$select public.v1_update_material_request_for_approval(
+  (select payload from post_edit_payload) ||
+    '{"expected_version":6,"title":"Admin saved edit"}'::jsonb,
+  'ae200000-0000-4000-8000-000000000015'::uuid)$$,
+  'Admin saves through the same authorized command');
 
 set local role authenticated;
 select set_config('request.jwt.claims',
   '{"sub":"10000000-0000-4000-8000-000000000001","role":"authenticated","app_metadata":{"role":"project_engineer","app_user_id":"usr-local-project-engineer"}}', true);
-select lives_ok($$select public.v1_decide_material_request(
+select throws_ok($$select public.v1_decide_material_request(
   jsonb_build_object('request_id',
-    'ae100000-0000-4000-8000-000000000001', 'expected_version', 5,
+    'ae100000-0000-4000-8000-000000000001', 'expected_version', 7,
     'decision', 'approved', 'reason', null),
   'ae200000-0000-4000-8000-000000000009'::uuid)$$,
-  'Project Engineer reapproves the proposed version');
+  '22023', 'V1_MATERIAL_REQUEST_NOT_AWAITING_DECISION',
+  'No second approval decision is available or required');
 set local role postgres;
 select ok((select state = 'approved_for_arrangement'
-    and not post_approval_amendment_pending and record_version = 6
+    and not post_approval_amendment_pending and record_version = 7
     from public.v1_material_requests where id =
       'ae100000-0000-4000-8000-000000000001'::uuid)
-  and (select count(*) = 2 from public.v1_material_request_decisions
+  and (select count(*) = 1 from public.v1_material_request_decisions
     where request_id =
       'ae100000-0000-4000-8000-000000000001'::uuid and decision = 'approved'),
-  'Reapproval preserves both decisions and clears pending state');
+  'The original decision remains the only Engineering approval');
 
 set local role authenticated;
 select set_config('request.jwt.claims',
   '{"sub":"10000000-0000-4000-8000-000000000001","role":"authenticated","app_metadata":{"role":"project_engineer","app_user_id":"usr-local-project-engineer"}}', true);
 select lives_ok($$select public.v1_set_material_request_post_approval_edit(
   jsonb_build_object('request_id',
-    'ae100000-0000-4000-8000-000000000001', 'expected_version', 6,
+    'ae100000-0000-4000-8000-000000000001', 'expected_version', 7,
     'enabled', false, 'procurement_editor_auth_user_id', null),
   'ae200000-0000-4000-8000-000000000010'::uuid)$$,
   'Approver revokes post-approval editing');
@@ -275,7 +312,7 @@ select set_config('request.jwt.claims',
   '{"sub":"10000000-0000-4000-8000-000000000001","role":"authenticated","app_metadata":{"role":"project_engineer","app_user_id":"usr-local-project-engineer"}}', true);
 select lives_ok($$select public.v1_set_material_request_post_approval_edit(
   jsonb_build_object('request_id',
-    'ae100000-0000-4000-8000-000000000001', 'expected_version', 7,
+    'ae100000-0000-4000-8000-000000000001', 'expected_version', 8,
     'enabled', true, 'procurement_editor_auth_user_id',
     '10000000-0000-4000-8000-000000000003'),
   'ae200000-0000-4000-8000-000000000011'::uuid)$$,
@@ -285,9 +322,9 @@ select set_config('request.jwt.claims',
   '{"sub":"10000000-0000-4000-8000-000000000003","role":"authenticated","app_metadata":{"role":"procurement","app_user_id":"usr-local-procurement"}}', true);
 select lives_ok($$select public.v1_begin_arrangement(
   jsonb_build_object('request_id',
-    'ae100000-0000-4000-8000-000000000001', 'expected_version', 8),
+    'ae100000-0000-4000-8000-000000000001', 'expected_version', 9),
   'ae200000-0000-4000-8000-000000000012'::uuid)$$,
-  'Procurement begins arrangement after reapproval');
+  'Procurement begins arrangement without a second approval');
 select ok(not (public.v1_material_request_projection(
   'ae100000-0000-4000-8000-000000000001'::uuid) ->> 'can_edit_post_approval')::boolean,
   'Starting arrangement ends the edit window');

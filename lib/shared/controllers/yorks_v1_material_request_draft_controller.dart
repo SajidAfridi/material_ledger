@@ -1,4 +1,5 @@
 import 'yorks_v1_material_line_editor.dart';
+
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -384,15 +385,32 @@ class YorksV1MaterialRequestDraftController
   /// after local recovery has no copy. This is deliberately one-way and only
   /// applies to an untouched local draft; unsaved local edits must never be
   /// overwritten by a later refresh.
-  Future<void> hydrateFromServer(YorksV1MaterialRequest request) async {
+  Future<bool> hydrateFromServer(YorksV1MaterialRequest request) async {
     final current = state.draft;
     if (request.id != _draftId ||
-        (!request.state.isDraft && !request.canEditBeforeApproval) ||
-        current.serverRecordVersion != 0 ||
-        current.updatedAt.millisecondsSinceEpoch != 0) {
-      return;
+        (!request.state.isDraft &&
+            !request.canEditBeforeApproval &&
+            !request.canEditPostApproval)) {
+      return false;
     }
-    _editingBeforeApproval = request.canEditBeforeApproval;
+    if (current.serverRecordVersion != 0 ||
+        current.updatedAt.millisecondsSinceEpoch != 0) {
+      if (current.serverRecordVersion != request.recordVersion) {
+        state = YorksV1MaterialRequestDraftState(
+          draft: current,
+          status: YorksV1MaterialRequestDraftSyncStatus.conflict,
+          errorCode: YorksV1DomainErrorCode.conflict,
+        );
+        return false;
+      }
+      _editingBeforeApproval =
+          request.canEditBeforeApproval || request.canEditPostApproval;
+      return true;
+    }
+    // The existing-record command also handles a delegated approved edit.
+    // A new draft alone may use the draft save RPC or local-only recovery.
+    _editingBeforeApproval =
+        request.canEditBeforeApproval || request.canEditPostApproval;
     final hydrated = YorksV1MaterialRequestDraft(
       id: current.id,
       ownerAuthUserId: current.ownerAuthUserId,
@@ -414,6 +432,7 @@ class YorksV1MaterialRequestDraftController
       status: YorksV1MaterialRequestDraftSyncStatus.saved,
     );
     await _persist(hydrated);
+    return true;
   }
 
   @override
@@ -691,7 +710,7 @@ class YorksV1MaterialRequestDraftController
       return false;
     }
     final draft = state.draft;
-    if (!draft.canSubmitLocally) {
+    if (!_editingBeforeApproval && !draft.canSubmitLocally) {
       await _persist(draft);
       _acceptedDraft = draft;
       state = YorksV1MaterialRequestDraftState(

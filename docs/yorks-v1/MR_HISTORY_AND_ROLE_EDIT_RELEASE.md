@@ -10,8 +10,7 @@ request for a direct switch granting all Procurement users edit access.
   recipient query, prevents duplicate clicks while saving, and shows confirmed
   state. Existing named grants remain valid until explicitly changed.
 - The explicit role grant defaults false, requires an active exact Procurement
-  role and arrangement capability, and preserves the arrangement cutoff and
-  mandatory Engineering reapproval of amendments.
+  role and arrangement capability, and preserves the arrangement cutoff.
 - The server records grant scope/version/actor in the existing immutable audit
   event. Request History labels that event, and the audit catalogue classifies it.
   PostHog receives only confirmed outcomes or normalized failures, with no record
@@ -26,7 +25,9 @@ ordering and privacy allowlist. Flutter analyze passed. Visual evidence covers
 Staging transactional pgTAP: 33 existing named-grant and 26 role-grant assertions
 passed. Covers two Procurement actors, Site Engineer denial, Project Engineer
 and Admin grants, inactive actor denial, stale competing updates, idempotency,
-reapproval, arrangement cutoff, and one audit event per successful command.
+the prior reapproval rule, arrangement cutoff, and one audit event per
+successful command. This paragraph records the earlier release; the 25
+September Save refinement in `PRODUCT_DECISIONS.md` supersedes reapproval.
 All fixtures were rolled back; staging retained its 17 original requests and
 zero enabled role grants. True simultaneous writer load testing was not run.
 

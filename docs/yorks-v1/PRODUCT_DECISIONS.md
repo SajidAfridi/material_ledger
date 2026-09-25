@@ -322,9 +322,7 @@ Procurement cannot read or arrange the new request until Engineering approval.
 The 24 September 2026 approved exception allows an eligible approver to turn
 on post-approval editing for that request only, before Procurement starts any
 arrangement. It is off by default. An approver may name one active Procurement
-editor or limit editing to approvers, and may revoke the grant. Saving an edit
-creates a new version awaiting Engineering approval; Procurement never approves
-its own proposal and cannot arrange while reapproval is pending. The server
+editor or limit editing to approvers, and may revoke the grant. The server
 enforces the cutoff, actor, capability, named grant and version under lock.
 Retained line IDs, protected commercial relations and all prior decision and
 revision evidence are preserved. No existing request is automatically enabled.
@@ -332,8 +330,19 @@ The approved 25 September refinement adds an explicit, default-off per-request
 Procurement-role grant. The direct switch enables all active Procurement users
 with the required capability, or revokes Procurement editing, without a dialog.
 Named historical grants retain their original scope until explicitly changed.
-The same server lock, version, idempotency, approval and arrangement cutoff rules
-apply. The grant is audited; privacy-safe analytics record confirmed outcomes.
+The same server lock, version, idempotency and arrangement cutoff rules apply.
+The grant is audited; privacy-safe analytics record confirmed outcomes.
+The 25 September 2026 Save refinement supersedes the earlier reapproval rule:
+an authorized edit to an already approved request is committed with **Save**,
+keeps `approved_for_arrangement`, and needs no second Engineering decision.
+The existing approval remains an immutable historical decision for its original
+version. The saved edit gets its own immutable revision and audit event so the
+latest version is never falsely represented as separately approved. Procurement
+may arrange the saved quantities immediately. A newly created request still
+needs its initial submission and approval; edits before that decision remain
+in the Engineering approval queue. Any legacy amendment already awaiting
+reapproval remains there until an approver decides it. No pending amendment is
+silently promoted by this change.
 The server-backed `draft` remains private to its creator and authorized Admin
 support, including discussion. Assigned/global Engineering participants become
 readers and may participate only after explicit submission; mentions identify

@@ -355,6 +355,7 @@ class _HistoryEventTile extends StatelessWidget {
       Icons.manage_accounts_outlined,
     'material_request_submitted' => Icons.outbox_outlined,
     'material_request_updated_for_approval' => Icons.edit_note_outlined,
+    'material_request_saved_after_approval' => Icons.edit_note_outlined,
     'material_request_decided' ||
     'material_request_approved' => Icons.verified_outlined,
     'material_request_returned_for_changes' => Icons.reply_outlined,
@@ -388,6 +389,8 @@ class _HistoryEventTile extends StatelessWidget {
       'material_request_created' =>
         YorksV1MaterialRequestStrings.historyRequestCreated,
       'material_request_updated_for_approval' =>
+        YorksV1MaterialRequestStrings.requestUpdated,
+      'material_request_saved_after_approval' =>
         YorksV1MaterialRequestStrings.requestUpdated,
       'material_request_submitted' =>
         YorksV1MaterialRequestStrings.submittedForApproval,

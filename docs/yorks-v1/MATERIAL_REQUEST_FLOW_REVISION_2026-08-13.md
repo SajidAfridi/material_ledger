@@ -57,7 +57,12 @@ draft
   snapshots remain intact, and retained lines keep their IDs. Procurement
   cannot approve its own edit or begin arrangement until reapproval. Any
   arrangement, reservation or dispatch permanently closes this editing window
-  for that request.
+  for that request. **25 September 2026 superseding refinement:** authorized
+  editors now use **Save**. An already approved request stays approved after a
+  versioned, audited edit and Procurement can arrange it without a second
+  approval. The original decision is retained with its original version;
+  the edit has a separate immutable revision. New requests still require their
+  initial approval, and existing pending amendments are not auto-approved.
 - Saving a complete arrangement for a request with a current approval creates
   approved line quantities from arranged quantities and makes positive lines
   dispatchable. Partial and unavailable decisions remain truthful exceptions.
