@@ -3330,6 +3330,7 @@ class _DraftForm extends ConsumerWidget {
                   _InlineMessage(
                     copy: YorksV1MaterialRequestStrings.postApprovalSaveWarning,
                     language: language,
+                    informational: true,
                   ),
                 YorksV1ActionAvailabilityNotice(
                   access: grantedEditAccess,
@@ -3409,10 +3410,20 @@ class _DraftForm extends ConsumerWidget {
                           _R35RequestHero(
                             language: language,
                             title: requestNumber,
-                            requesterName: ref.watch(actorNameProvider),
+                            requesterName: editingExistingRequest
+                                ? (serverBackedRequest
+                                          ?.valueOrNull
+                                          ?.requesterDisplayName ??
+                                      ref.watch(actorNameProvider))
+                                : ref.watch(actorNameProvider),
                             projectName: selectedProject?.name,
                             lineCount: draft.lines.length,
                             editingExistingRequest: editingExistingRequest,
+                            stage: serverBackedRequest?.valueOrNull == null
+                                ? 1
+                                : _materialRequestStage(
+                                    serverBackedRequest!.valueOrNull!.state,
+                                  ),
                             onCancel: () => context.pop(),
                             onSave: save,
                             onSubmit: submit,
@@ -4326,6 +4337,7 @@ class _YorksMobileMaterialRequestDraftFlowState
                   child: _InlineMessage(
                     copy: YorksV1MaterialRequestStrings.postApprovalSaveWarning,
                     language: language,
+                    informational: true,
                   ),
                 ),
               if (widget.editAccess.isWritePaused)
@@ -4786,9 +4798,11 @@ class _YorksMobileMaterialRequestDraftFlowState
               ),
               const SizedBox(height: 4),
               Text(
-                YorksV1MaterialRequestStrings.reviewDescription.active(
-                  _language,
-                ),
+                (widget.editingExistingRequest
+                        ? YorksV1MaterialRequestStrings
+                              .reviewExistingDescription
+                        : YorksV1MaterialRequestStrings.reviewDescription)
+                    .active(_language),
                 style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
               ),
               const SizedBox(height: 14),
@@ -6385,6 +6399,7 @@ class _R35RequestHero extends StatelessWidget {
   const _R35RequestHero({
     required this.language,
     required this.editingExistingRequest,
+    required this.stage,
     required this.title,
     required this.requesterName,
     required this.projectName,
@@ -6400,6 +6415,7 @@ class _R35RequestHero extends StatelessWidget {
 
   final AppLanguage language;
   final bool editingExistingRequest;
+  final int stage;
   final String title;
   final String requesterName;
   final String? projectName;
@@ -6439,7 +6455,7 @@ class _R35RequestHero extends StatelessWidget {
                   fontWeight: FontWeight.w800,
                 ),
               ),
-              _IndustrialStageChip(stage: 1),
+              _IndustrialStageChip(stage: stage),
             ],
           ),
           const SizedBox(height: AppSpacing.xs),
@@ -17106,18 +17122,47 @@ class _RequestError extends StatelessWidget {
 }
 
 class _InlineMessage extends StatelessWidget {
-  const _InlineMessage({required this.copy, required this.language});
+  const _InlineMessage({
+    required this.copy,
+    required this.language,
+    this.informational = false,
+  });
   final TranslatableString copy;
   final AppLanguage language;
+  final bool informational;
 
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(bottom: AppSpacing.md),
-    child: _CopyText(
-      copy: copy,
-      language: language,
-      style: AppTypography.bodyMedium.copyWith(color: AppColors.error),
-    ),
+    child: informational
+        ? Container(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: AppColors.blueContainer,
+              border: Border.all(color: AppColors.blueContainerStrong),
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.info_outline_rounded, color: AppColors.blue),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: _CopyText(
+                    copy: copy,
+                    language: language,
+                    style: AppTypography.bodyMedium.copyWith(
+                      color: AppColors.onPrimaryContainer,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          )
+        : _CopyText(
+            copy: copy,
+            language: language,
+            style: AppTypography.bodyMedium.copyWith(color: AppColors.error),
+          ),
   );
 }
 

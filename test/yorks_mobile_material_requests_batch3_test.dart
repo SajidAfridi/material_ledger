@@ -99,6 +99,52 @@ void main() {
     _preferences = await SharedPreferences.getInstance();
   });
 
+  testWidgets(
+    'approved request edit shows Save without a second submission on desktop',
+    (tester) async {
+      await _setViewport(tester, const Size(1366, 768));
+      await _pumpDraft(
+        tester,
+        role: YorksV1Role.procurement,
+        serverRequest: _approvedEditableRequest,
+        entryMode: YorksV1MaterialRequestDraftEntryMode.editExistingRequest,
+      );
+      expect(find.text('Edit Material Request'), findsOneWidget);
+      expect(find.text('Save'), findsOneWidget);
+      expect(find.byKey(const ValueKey('mr-request-submit')), findsNothing);
+      expect(find.text('New Material Request'), findsNothing);
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile('goldens/r35/mr_approved_edit_save_desktop.png'),
+      );
+    },
+  );
+
+  testWidgets(
+    'approved request edit ends with one Save action on a 360px phone',
+    (tester) async {
+      await _setViewport(tester, const Size(360, 800));
+      await _pumpDraft(
+        tester,
+        role: YorksV1Role.procurement,
+        serverRequest: _approvedEditableRequest,
+        entryMode: YorksV1MaterialRequestDraftEntryMode.editExistingRequest,
+      );
+      await _continueToMaterials(tester);
+      await _openReview(tester);
+      expect(find.text('Review and save'), findsOneWidget);
+      expect(find.text('Save'), findsOneWidget);
+      expect(find.text('Submit for Approval'), findsNothing);
+      expect(find.byType(CheckboxListTile), findsNothing);
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile('goldens/r35/mr_approved_edit_save_mobile_360.png'),
+      );
+    },
+  );
+
   testWidgets('desktop MR draft keeps compact source and row actions', (
     tester,
   ) async {
@@ -3572,6 +3618,35 @@ final _urgentDraftRequest = YorksV1MaterialRequest(
   timing: YorksV1MaterialRequestTiming.urgent,
   title: 'Urgent existing draft',
   lines: const [],
+);
+
+final _approvedEditableRequest = YorksV1MaterialRequest(
+  id: _draftId,
+  projectId: _projectId,
+  projectReference: 'YRA-322',
+  projectName: 'Al Dhafra Grid Substation HVAC Works',
+  scopeId: 'scope-common',
+  scopeName: 'Common / All Buildings',
+  state: YorksV1MaterialRequestState.approvedForArrangement,
+  recordVersion: 4,
+  createdAt: DateTime.utc(2026, 9, 24),
+  updatedAt: DateTime.utc(2026, 9, 25),
+  timing: YorksV1MaterialRequestTiming.normal,
+  title: 'Approved materials',
+  requestNumber: 'YRA-322-MR014',
+  postApprovalEditEnabled: true,
+  procurementRoleEditEnabled: true,
+  canEditPostApproval: true,
+  lines: const [
+    YorksV1MaterialRequestLine(
+      id: 'approved-edit-line',
+      displayOrder: 1,
+      source: YorksV1MaterialRequestLineSource.custom,
+      description: 'Duct fitting',
+      quantity: '3',
+      unit: 'Nos',
+    ),
+  ],
 );
 
 YorksV1RuntimeConfiguration _runtimeConfiguration({

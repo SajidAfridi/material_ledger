@@ -1587,6 +1587,12 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'درخواست نمبر پروجیکٹ ریفرنس + MR نمبر سے تیار ہوتا ہے۔',
     hi: 'अनुरोध संख्या प्रोजेक्ट संदर्भ + MR संख्या से बनती है।',
   );
+  static const reviewExistingDescription = TranslatableString(
+    en: 'Check the updated details and items before saving this request.',
+    ar: 'تحقق من التفاصيل والمواد المعدلة قبل حفظ هذا الطلب.',
+    ur: 'اس درخواست کو محفوظ کرنے سے پہلے ترمیم شدہ تفصیلات اور اشیا چیک کریں۔',
+    hi: 'इस अनुरोध को सहेजने से पहले बदले गए विवरण और सामग्री जांच लें।',
+  );
   static const assignedOnSubmit = TranslatableString(
     en: 'Assigned on submit',
     ar: 'يُعيّن عند الإرسال',
