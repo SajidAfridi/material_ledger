@@ -5,6 +5,11 @@ const int analyticsSchemaVersion = 2;
 /// The complete Yorks product-analytics event allowlist. New events must be
 /// reviewed here and documented before a call site can emit them.
 enum AnalyticsEvent {
+  companyRequestStarted('company request started'),
+  companyRequestOpened('company request opened'),
+  companyRequestActionConfirmed('company request action confirmed'),
+  companyRequestActionFailed('company request action failed'),
+  companyRequestActionUnconfirmed('company request action unconfirmed'),
   authenticationAttempted('authentication attempted'),
   authenticationSucceeded('authentication succeeded'),
   authenticationFailed('authentication failed'),
@@ -37,6 +42,10 @@ enum AnalyticsEvent {
   materialRequestApproved('material request approved'),
   materialRequestReturned('material request returned'),
   materialRequestDecisionFailed('material request decision failed'),
+  materialRequestEditingAccessChanged(
+    'material request editing access changed',
+  ),
+  materialRequestEditingAccessFailed('material request editing access failed'),
   approvalActionStarted('approval started'),
   approvalActionCompleted('approval completed'),
   procurementRequestOpened('procurement request opened'),
@@ -132,7 +141,11 @@ enum AnalyticsProperty {
 
 typedef AnalyticsProperties = Map<AnalyticsProperty, Object?>;
 
-enum AnalyticsSearchContext { inventory, materialRequest }
+enum AnalyticsSearchContext {
+  inventory,
+  materialRequest,
+  companyMaterialRequest,
+}
 
 enum AnalyticsScreen {
   splash,
@@ -148,6 +161,9 @@ enum AnalyticsScreen {
   boqGroups,
   boqWorksheet,
   projectDocuments,
+  companyMaterialRequests,
+  companyMaterialRequestDraft,
+  companyMaterialRequestDetail,
   materialRequests,
   materialRequestDraft,
   materialRequestDetail,

@@ -1135,10 +1135,11 @@ void main() {
       'Project Engineer saves a shared pre-approval edit through the trusted command',
       () async {
         final repository = _FakeRequestRepository();
+        final store = _MemoryStore<YorksV1MaterialRequestDraft>();
         final controller = YorksV1MaterialRequestDraftController(
           ownerAuthUserId: 'project-engineer',
           draftId: _draftId,
-          store: _MemoryStore<YorksV1MaterialRequestDraft>(),
+          store: store,
           repository: repository,
           uuidFactory: _Ids().next,
         );
@@ -1181,6 +1182,94 @@ void main() {
         expect(
           repository.updateForApprovalInputs.single.draft.title,
           'Engineer-corrected request',
+        );
+        expect(repository.saveInputs, isEmpty);
+      },
+    );
+
+    test(
+      'delegated approved edit saves on the server and never reports a local-only success',
+      () async {
+        final repository = _FakeRequestRepository();
+        final store = _MemoryStore<YorksV1MaterialRequestDraft>();
+        final requestJson = <String, Object?>{
+          'id': _draftId,
+          'project_id': _projectId,
+          'project_ref': 'B5-TEST',
+          'project_name': 'Test Project',
+          'scope_id': _scopeId,
+          'scope_name': 'Common',
+          'state': 'approved_for_arrangement',
+          'record_version': 4,
+          'created_at': '2026-09-25T00:00:00Z',
+          'updated_at': '2026-09-25T00:00:00Z',
+          'timing': 'normal',
+          'can_edit_post_approval': true,
+          'lines': [
+            {
+              'id': 'approved-line',
+              'display_order': 1,
+              'source_kind': 'custom',
+              'item_description': 'Duct fitting',
+              'requested_qty': '2',
+              'unit': 'Nos',
+            },
+          ],
+        };
+        final controller = YorksV1MaterialRequestDraftController(
+          ownerAuthUserId: 'procurement-editor',
+          draftId: _draftId,
+          store: store,
+          repository: repository,
+          uuidFactory: _Ids().next,
+        );
+        addTearDown(controller.dispose);
+        await controller.hydrateFromServer(
+          YorksV1MaterialRequest.fromRpcJson(requestJson),
+        );
+        expect(controller.state.draft.serverRecordVersion, 4);
+        await controller.updateLine(
+          'approved-line',
+          (line) => line.copyWith(quantity: ''),
+        );
+        expect(await controller.saveDraft(), isFalse);
+        expect(repository.updateForApprovalInputs, isEmpty);
+        expect(repository.saveInputs, isEmpty);
+        await controller.updateLine(
+          'approved-line',
+          (line) => line.copyWith(quantity: '3'),
+        );
+        expect(await controller.saveDraft(), isTrue);
+        expect(repository.updateForApprovalInputs, hasLength(1));
+        expect(
+          repository.updateForApprovalInputs.single.draft.lines.single.quantity,
+          '3',
+        );
+        expect(repository.saveInputs, isEmpty);
+        expect(controller.state.draft.serverRecordVersion, 5);
+        final reopened = YorksV1MaterialRequestDraftController(
+          ownerAuthUserId: 'procurement-editor',
+          draftId: _draftId,
+          store: store,
+          repository: repository,
+          uuidFactory: _Ids().next,
+        );
+        addTearDown(reopened.dispose);
+        expect(
+          await reopened.hydrateFromServer(
+            YorksV1MaterialRequest.fromRpcJson({
+              ...requestJson,
+              'record_version': 5,
+            }),
+          ),
+          isTrue,
+        );
+        await reopened.setTitle('Second saved edit');
+        expect(await reopened.saveDraft(), isTrue);
+        expect(repository.updateForApprovalInputs, hasLength(2));
+        expect(
+          repository.updateForApprovalInputs.last.draft.serverRecordVersion,
+          5,
         );
         expect(repository.saveInputs, isEmpty);
       },

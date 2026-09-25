@@ -60,6 +60,7 @@ void main() {
       'company_material_request_approved',
       'company_material_request_returned',
       'company_material_request_rejected',
+      'company_material_request_cancelled',
     ]) {
       final notification = YorksV1NotificationRecord.fromRpcJson({
         'notification_id': '21000000-0000-4000-8000-000000000005',

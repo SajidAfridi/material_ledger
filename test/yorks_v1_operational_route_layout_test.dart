@@ -169,7 +169,7 @@ void main() {
         ),
         (
           size: const Size(360, 800),
-          entryKey: const ValueKey('mobile-mr-new-company-request'),
+          entryKey: const ValueKey('material-request-centre-create-company'),
         ),
       ]) {
         tester.view.physicalSize = entry.size;
@@ -199,6 +199,11 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.byKey(entry.entryKey), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('material-request-use-switch')),
+          findsNothing,
+        );
+        expect(find.text('Company use'), findsOneWidget);
         expect(tester.takeException(), isNull, reason: '${entry.size}');
       }
 

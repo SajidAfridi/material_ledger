@@ -22,12 +22,14 @@ class YorksV1WorkspaceSearchRepository {
     required YorksV1BoqRepository boq,
     required YorksV1DocumentsRepository documents,
     required YorksV1LogisticsRepository logistics,
+    Future<List<YorksV1WorkspaceSearchResult>> Function(String)? companySearch,
     Duration cacheTtl = const Duration(minutes: 2),
   }) : _projects = projects,
        _materialRequests = materialRequests,
        _boq = boq,
        _documents = documents,
        _logistics = logistics,
+       _companySearch = companySearch,
        _cacheTtl = cacheTtl;
 
   final YorksV1ProjectPortfolioRepository _projects;
@@ -36,6 +38,8 @@ class YorksV1WorkspaceSearchRepository {
   final YorksV1DocumentsRepository _documents;
   final YorksV1LogisticsRepository _logistics;
   final Duration _cacheTtl;
+  final Future<List<YorksV1WorkspaceSearchResult>> Function(String)?
+  _companySearch;
 
   Future<_SearchIndexSnapshot>? _indexFuture;
   YorksV1Role? _indexedRole;
@@ -49,7 +53,16 @@ class YorksV1WorkspaceSearchRepository {
     if (terms.isEmpty) {
       return const YorksV1WorkspaceSearchResponse(results: []);
     }
+    // Company records are searched server-side for the current query. Never
+    // retain a capped cross-user catalogue in the workspace index.
+    final companyFuture = _companySearch == null
+        ? null
+        : _capture<List<YorksV1WorkspaceSearchResult>>(
+            () => _companySearch(query.trim()),
+            const [],
+          );
     final snapshot = await _indexFor(role);
+    final company = await companyFuture;
     final results = <YorksV1WorkspaceSearchResult>[];
     for (final result in snapshot.results) {
       final haystack = normalizeYorksWorkspaceSearchText(result.searchableText);
@@ -60,13 +73,17 @@ class YorksV1WorkspaceSearchRepository {
       }
       results.add(result.withScore(_score(result, terms)));
     }
+    for (final result
+        in company?.value ?? const <YorksV1WorkspaceSearchResult>[]) {
+      results.add(result.withScore(_score(result, terms)));
+    }
     results.sort((a, b) {
       final score = b.score.compareTo(a.score);
       return score == 0 ? a.title.compareTo(b.title) : score;
     });
     return YorksV1WorkspaceSearchResponse(
       results: results.take(60).toList(growable: false),
-      isPartial: snapshot.isPartial,
+      isPartial: snapshot.isPartial || (company?.failed ?? false),
     );
   }
 
@@ -397,7 +414,8 @@ class YorksV1WorkspaceSearchRepository {
     }
     score += switch (result.kind) {
       YorksV1WorkspaceSearchResultKind.project => 80,
-      YorksV1WorkspaceSearchResultKind.materialRequest => 70,
+      YorksV1WorkspaceSearchResultKind.materialRequest ||
+      YorksV1WorkspaceSearchResultKind.companyMaterialRequest => 70,
       YorksV1WorkspaceSearchResultKind.document => 60,
       YorksV1WorkspaceSearchResultKind.boqGroup => 50,
       YorksV1WorkspaceSearchResultKind.boqItem => 40,

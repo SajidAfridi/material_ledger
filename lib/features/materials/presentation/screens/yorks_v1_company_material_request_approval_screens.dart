@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -14,6 +17,12 @@ import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/yorks_v1_company_material_request_provider.dart';
 import '../../../../shared/providers/yorks_v1_arrangement_provider.dart';
 import '../../../../shared/providers/yorks_v1_identity_provider.dart';
+import '../../../../shared/providers/yorks_v1_material_request_provider.dart';
+import '../../../../shared/repositories/yorks_v1_company_material_request_repository.dart';
+import '../widgets/yorks_v1_request_use_switch.dart';
+import '../widgets/yorks_v1_company_request_evidence.dart';
+import 'yorks_v1_company_material_request_operations.dart';
+import 'yorks_v1_company_arrangement_workbench.dart';
 
 class YorksV1CompanyMaterialRequestApprovalInboxScreen
     extends ConsumerStatefulWidget {
@@ -28,204 +37,319 @@ class _CompanyInboxState
     extends ConsumerState<YorksV1CompanyMaterialRequestApprovalInboxScreen> {
   YorksV1CompanyMaterialRequestRegisterView? _view =
       YorksV1CompanyMaterialRequestRegisterView.requests;
-  Future<List<YorksV1CompanyMaterialRequestApprovalInboxItem>>? _register;
+  Future<YorksV1CompanyMaterialRequestPage>? _register;
+  Timer? _searchTimer;
+  int _offset = 0;
+  String _query = '';
 
   @override
   void initState() {
     super.initState();
-    _register = ref
-        .read(yorksV1CompanyMaterialRequestRepositoryProvider)
-        .listRegister(YorksV1CompanyMaterialRequestRegisterView.requests);
+    _load();
   }
 
-  void _select(YorksV1CompanyMaterialRequestRegisterView? view) {
-    setState(() {
-      _view = view;
-      _register = view == null
-          ? null
-          : ref
-                .read(yorksV1CompanyMaterialRequestRepositoryProvider)
-                .listRegister(view);
+  @override
+  void dispose() {
+    _searchTimer?.cancel();
+    super.dispose();
+  }
+
+  void _load() {
+    final repository = ref.read(
+      yorksV1CompanyMaterialRequestRepositoryProvider,
+    );
+    if (repository is YorksV1CompanyMaterialRequestPagedRepository) {
+      _register = (repository as YorksV1CompanyMaterialRequestPagedRepository)
+          .listPage(
+            view: _view?.wireValue ?? 'my_work',
+            query: _query,
+            offset: _offset,
+          );
+    } else {
+      _register =
+          (_view == null
+                  ? repository.listApprovalInbox()
+                  : repository.listRegister(_view!, limit: 200))
+              .then((items) {
+                final matches = items
+                    .where(
+                      (item) => [
+                        item.requestNumber,
+                        item.purpose,
+                        item.requesterDisplayName,
+                        item.beneficiaryDisplayName,
+                        item.responsibleUnitName,
+                      ].join(' ').toLowerCase().contains(_query.toLowerCase()),
+                    )
+                    .toList();
+                return YorksV1CompanyMaterialRequestPage(
+                  items: matches.skip(_offset).take(15).toList(),
+                  totalCount: matches.length,
+                );
+              });
+    }
+  }
+
+  void _select(YorksV1CompanyMaterialRequestRegisterView? view) => setState(() {
+    _view = view;
+    _offset = 0;
+    _load();
+  });
+
+  void _refresh() {
+    ref.invalidate(yorksV1CompanyMaterialRequestDraftOptionsProvider);
+    _select(_view);
+  }
+
+  void _search(String value) {
+    _searchTimer?.cancel();
+    _query = value.trim();
+    _searchTimer = Timer(const Duration(milliseconds: 300), () {
+      if (mounted) _select(_view);
     });
   }
 
-  void _refresh() {
-    if (_view == null) {
-      ref.invalidate(yorksV1CompanyMaterialRequestApprovalInboxProvider);
-    } else {
-      _select(_view);
-    }
+  Future<void> _open(String path) async {
+    await context.push(path);
+    if (mounted) _select(_view);
   }
 
   @override
   Widget build(BuildContext context) {
     final language = ref.watch(languageProvider);
-    final inbox = ref.watch(yorksV1CompanyMaterialRequestApprovalInboxProvider);
-    final views = <YorksV1CompanyMaterialRequestRegisterView>[
-      YorksV1CompanyMaterialRequestRegisterView.requests,
-      if (ref.watch(yorksV1CurrentRoleProvider) == YorksV1Role.procurement)
-        YorksV1CompanyMaterialRequestRegisterView.planning,
-      YorksV1CompanyMaterialRequestRegisterView.issueHistory,
-    ];
+    ref.listen(yorksV1AuthUserIdProvider, (_, _) => _select(_view));
+    ref.listen(
+      yorksV1CompanyMaterialRequestRepositoryProvider,
+      (_, _) => _select(_view),
+    );
+    ref.listen(
+      yorksV1MaterialRequestRealtimeRevisionProvider,
+      (_, _) => _select(_view),
+    );
+    final options = ref.watch(
+      yorksV1CompanyMaterialRequestDraftOptionsProvider,
+    );
     return Scaffold(
       backgroundColor: AppColors.surface,
-      appBar: AppBar(
-        title: Text(
-          YorksV1CompanyMaterialRequestStrings.approvals.active(language),
-        ),
-        actions: [
-          IconButton(
-            tooltip: YorksV1CompanyMaterialRequestStrings.retry.active(
-              language,
-            ),
-            onPressed: _refresh,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        key: const ValueKey('company-request-new-from-inbox'),
-        onPressed: () => context.push('/yorks/material-requests/company/new'),
-        icon: const Icon(Icons.add_rounded),
-        label: Text(
-          YorksV1CompanyMaterialRequestStrings.companyUse.active(language),
-        ),
-      ),
       body: Column(
         children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-            decoration: const BoxDecoration(
-              color: AppColors.surfaceContainerLowest,
-              border: Border(bottom: BorderSide(color: AppColors.line)),
+          YorksV1RequestUseSwitch(company: true, language: language),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    YorksV1CompanyMaterialRequestStrings.approvals.active(
+                      language,
+                    ),
+                    style: AppTypography.headlineSmall.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: YorksV1CompanyMaterialRequestStrings.retry.active(
+                    language,
+                  ),
+                  onPressed: _refresh,
+                  icon: const Icon(Icons.refresh_rounded),
+                ),
+                if (options.valueOrNull?.isNotEmpty == true &&
+                    MediaQuery.sizeOf(context).width < 600)
+                  IconButton.filled(
+                    key: const ValueKey('company-request-new-from-inbox'),
+                    tooltip: YorksV1MaterialRequestStrings.newRequest.active(
+                      language,
+                    ),
+                    onPressed: () =>
+                        _open('/yorks/material-requests/company/new'),
+                    icon: const Icon(Icons.add_rounded),
+                  ),
+                if (options.valueOrNull?.isNotEmpty == true &&
+                    MediaQuery.sizeOf(context).width >= 600)
+                  FilledButton.icon(
+                    key: const ValueKey('company-request-new-from-inbox'),
+                    onPressed: () =>
+                        _open('/yorks/material-requests/company/new'),
+                    icon: const Icon(Icons.add_rounded),
+                    label: Text(
+                      YorksV1MaterialRequestStrings.newRequest.active(language),
+                    ),
+                  ),
+              ],
             ),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1000),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      YorksV1CompanyMaterialRequestStrings.trackRequests.active(
+          ),
+          if (options.hasError)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                children: [
+                  Text(
+                    YorksV1CompanyMaterialRequestStrings.requestOptionsFailed
+                        .active(language),
+                  ),
+                  TextButton(
+                    key: const ValueKey('company-request-options-retry'),
+                    onPressed: _refresh,
+                    child: Text(
+                      YorksV1CompanyMaterialRequestStrings.retry.active(
                         language,
                       ),
-                      style: AppTypography.bodyMedium.copyWith(
-                        color: AppColors.muted,
-                      ),
                     ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        ChoiceChip(
-                          key: const ValueKey('company-register-my-work'),
-                          selected: _view == null,
-                          onSelected: (_) => _select(null),
-                          label: Text(
-                            YorksV1CompanyMaterialRequestStrings.myWork.active(
-                              language,
-                            ),
-                          ),
-                        ),
-                        for (final view in views)
-                          ChoiceChip(
-                            key: ValueKey('company-register-${view.wireValue}'),
-                            selected: _view == view,
-                            onSelected: (_) => _select(view),
-                            label: Text(_registerLabel(view, language)),
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
+                  ),
+                ],
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TextField(
+              key: const ValueKey('company-register-search'),
+              onChanged: _search,
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.search_rounded),
+                hintText: YorksV1CompanyMaterialRequestStrings.searchRequests
+                    .active(language),
               ),
             ),
           ),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                for (final view in <YorksV1CompanyMaterialRequestRegisterView?>[
+                  YorksV1CompanyMaterialRequestRegisterView.requests,
+                  null,
+                  if (ref.watch(yorksV1CurrentRoleProvider) ==
+                      YorksV1Role.procurement)
+                    YorksV1CompanyMaterialRequestRegisterView.planning,
+                  YorksV1CompanyMaterialRequestRegisterView.issueHistory,
+                ])
+                  Padding(
+                    padding: const EdgeInsetsDirectional.only(end: 8),
+                    child: ChoiceChip(
+                      key: ValueKey(
+                        view == null
+                            ? 'company-register-my-work'
+                            : 'company-register-${view.wireValue}',
+                      ),
+                      selected: _view == view,
+                      onSelected: (_) => _select(view),
+                      label: Text(
+                        view == null
+                            ? YorksV1CompanyMaterialRequestStrings.myWork
+                                  .active(language)
+                            : _registerLabel(view, language),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
           Expanded(
-            child: _view == null
-                ? inbox.when(
-                    loading: () =>
-                        const Center(child: CircularProgressIndicator()),
-                    error: (_, _) => _loadError(language),
-                    data: (items) => _requestList(items, language),
-                  )
-                : FutureBuilder(
-                    future: _register,
-                    builder: (context, snapshot) {
-                      if (snapshot.hasError) return _loadError(language);
-                      final items = snapshot.data;
-                      return items == null
-                          ? const Center(child: CircularProgressIndicator())
-                          : _requestList(items, language);
+            child: FutureBuilder<YorksV1CompanyMaterialRequestPage>(
+              key: ValueKey((
+                _view,
+                ref.watch(yorksV1AuthUserIdProvider),
+                _query,
+                _offset,
+              )),
+              future: _register,
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return _Message(
+                    icon: Icons.cloud_off_outlined,
+                    message: YorksV1CompanyMaterialRequestStrings.decisionFailed
+                        .active(language),
+                    action: YorksV1CompanyMaterialRequestStrings.retry.active(
+                      language,
+                    ),
+                    onPressed: () => _select(_view),
+                  );
+                }
+                if (!snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                final page = snapshot.data!;
+                final items = page.items;
+                if (items.isEmpty) {
+                  return _Message(
+                    icon: Icons.task_alt_rounded,
+                    message: YorksV1CompanyMaterialRequestStrings
+                        .noRegisterItems
+                        .active(language),
+                  );
+                }
+                return RefreshIndicator(
+                  onRefresh: () async {
+                    _select(_view);
+                    await _register;
+                  },
+                  child: ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
+                    itemCount: items.length + 1,
+                    itemBuilder: (context, index) {
+                      if (index == items.length) {
+                        return Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            Text(
+                              '${_offset + 1}–${_offset + items.length} / ${page.totalCount}',
+                              style: AppTypography.bodySmall,
+                            ),
+                            IconButton(
+                              tooltip: YorksV1MaterialRequestStrings.back
+                                  .active(language),
+                              onPressed: _offset == 0
+                                  ? null
+                                  : () => setState(() {
+                                      _offset -= 15;
+                                      _load();
+                                    }),
+                              icon: const Icon(Icons.chevron_left_rounded),
+                            ),
+                            IconButton(
+                              tooltip: YorksV1MaterialRequestStrings
+                                  .continueAction
+                                  .active(language),
+                              onPressed:
+                                  _offset + items.length >= page.totalCount
+                                  ? null
+                                  : () => setState(() {
+                                      _offset += 15;
+                                      _load();
+                                    }),
+                              icon: const Icon(Icons.chevron_right_rounded),
+                            ),
+                          ],
+                        );
+                      }
+                      final item = items[index];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: _InboxCard(
+                          item: item,
+                          language: language,
+                          onOpen: () => _open(
+                            item.state == 'draft'
+                                ? '/yorks/material-requests/company/new?draft=${Uri.encodeComponent(item.id)}'
+                                : '/yorks/material-requests/company/${item.id}',
+                          ),
+                        ),
+                      );
                     },
                   ),
+                );
+              },
+            ),
           ),
         ],
       ),
     );
   }
-
-  Widget _loadError(AppLanguage language) => _Message(
-    icon: Icons.cloud_off_outlined,
-    message: YorksV1CompanyMaterialRequestStrings.decisionFailed.active(
-      language,
-    ),
-    action: YorksV1CompanyMaterialRequestStrings.retry.active(language),
-    onPressed: _refresh,
-  );
-
-  Widget _requestList(
-    List<YorksV1CompanyMaterialRequestApprovalInboxItem> items,
-    AppLanguage language,
-  ) => items.isEmpty
-      ? _Message(
-          icon: Icons.task_alt_rounded,
-          message: _view == null
-              ? YorksV1CompanyMaterialRequestStrings.noApprovals.active(
-                  language,
-                )
-              : YorksV1CompanyMaterialRequestStrings.noRegisterItems.active(
-                  language,
-                ),
-        )
-      : ListView(
-          key: ValueKey(_view?.wireValue ?? 'company-approval-inbox-list'),
-          padding: const EdgeInsets.fromLTRB(16, 24, 16, 104),
-          children: [
-            Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1000),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      _view == null
-                          ? YorksV1CompanyMaterialRequestStrings.approvals
-                                .active(language)
-                          : _registerLabel(_view!, language),
-                      style: AppTypography.headlineMedium.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    for (final item in items) ...[
-                      _InboxCard(
-                        item: item,
-                        language: language,
-                        onOpen: () => context.push(
-                          '/yorks/material-requests/company/${item.id}',
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          ],
-        );
 }
 
 String _registerLabel(
@@ -239,14 +363,6 @@ String _registerLabel(
   YorksV1CompanyMaterialRequestRegisterView.issueHistory =>
     YorksV1CompanyMaterialRequestStrings.issueHistory.active(language),
 };
-
-String _decimalText(double value) {
-  if (value == value.truncateToDouble()) return value.toInt().toString();
-  return value
-      .toStringAsFixed(4)
-      .replaceFirst(RegExp(r'0+$'), '')
-      .replaceFirst(RegExp(r'\.$'), '');
-}
 
 class YorksV1CompanyMaterialRequestApprovalScreen
     extends ConsumerStatefulWidget {
@@ -275,7 +391,8 @@ class _ApprovalScreenState
   ) async {
     final reason = await _decisionDialog(type, language);
     if (reason == null || !mounted) return;
-    final signature = '${type.wireValue}:${reason.value ?? ''}';
+    final signature =
+        '${request.recordVersion}:${type.wireValue}:${reason.value ?? ''}';
     if (_decisionSignature != signature) {
       _decisionSignature = signature;
       _idempotencyKey = const Uuid().v4();
@@ -413,7 +530,7 @@ class _ApprovalScreenState
       body: request.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) => _Message(
-          icon: Icons.lock_outline_rounded,
+          icon: Icons.cloud_off_outlined,
           message: YorksV1CompanyMaterialRequestStrings.decisionFailed.active(
             language,
           ),
@@ -444,7 +561,6 @@ class _InboxCard extends StatelessWidget {
     required this.language,
     required this.onOpen,
   });
-
   final YorksV1CompanyMaterialRequestApprovalInboxItem item;
   final AppLanguage language;
   final VoidCallback onOpen;
@@ -452,79 +568,72 @@ class _InboxCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Card(
     margin: EdgeInsets.zero,
+    clipBehavior: Clip.antiAlias,
     child: InkWell(
       key: ValueKey('company-approval-${item.id}'),
       onTap: onOpen,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const CircleAvatar(child: Icon(Icons.approval_outlined)),
+            const Icon(Icons.business_center_outlined, color: AppColors.blue),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    item.requestNumber,
-                    style: AppTypography.titleMedium.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(item.purpose),
-                  const SizedBox(height: 8),
                   Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
+                    spacing: 12,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Chip(
-                        visualDensity: VisualDensity.compact,
-                        label: Text(_stateLabel(item.state, language)),
-                      ),
-                      Chip(
-                        visualDensity: VisualDensity.compact,
-                        avatar: const Icon(
-                          Icons.person_outline_rounded,
-                          size: 18,
+                      Text(
+                        item.requestNumber.isEmpty
+                            ? YorksV1CompanyMaterialRequestStrings.privateDraft
+                                  .active(language)
+                            : item.requestNumber,
+                        style: AppTypography.labelLarge.copyWith(
+                          color: AppColors.blue,
                         ),
-                        label: Text(
-                          '${YorksV1CompanyMaterialRequestStrings.currentOwner.active(language)}: ${_currentOwner(item.state, language)}',
+                      ),
+                      Text(
+                        _stateLabel(item.state, language),
+                        style: AppTypography.labelMedium.copyWith(
+                          color: AppColors.inkSecondary,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   Text(
-                    '${item.categoryName} · ${item.responsibleUnitName} · ${YorksV1CompanyMaterialRequestStrings.itemCount(item.lineCount).active(language)}',
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.muted,
-                    ),
-                  ),
-                  Text(
-                    '${YorksV1CompanyMaterialRequestStrings.requestedBy.active(language)}: ${item.requesterDisplayName}',
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.muted,
-                    ),
-                  ),
-                  Text(
-                    '${YorksV1CompanyMaterialRequestStrings.submittedOn.active(language)}: ${MaterialLocalizations.of(context).formatMediumDate(item.submittedAt.toLocal())}',
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.muted,
+                    item.purpose,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.titleMedium.copyWith(
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${YorksV1CompanyMaterialRequestStrings.nextAction.active(language)}: ${_nextAction(item.state, language)}',
+                    '${item.responsibleUnitName} · ${YorksV1CompanyMaterialRequestStrings.itemCount(item.lineCount).active(language)}',
                     style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.blue,
-                      fontWeight: FontWeight.w700,
+                      color: AppColors.inkSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    item.state == 'draft'
+                        ? YorksV1CompanyMaterialRequestStrings.resumeDraft
+                              .active(language)
+                        : '${_currentOwner(item.state, language)} · ${_nextAction(item.state, language)}',
+                    style: AppTypography.bodySmall.copyWith(
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
               ),
             ),
+            const SizedBox(width: 8),
             const Icon(Icons.chevron_right_rounded),
           ],
         ),
@@ -542,7 +651,9 @@ class _CompanyLifecycleProgress extends StatelessWidget {
   final String state;
   final AppLanguage language;
 
-  int get _activeIndex => switch (state) {
+  int get _activeIndex => stageIndex(state);
+
+  static int stageIndex(String state) => switch (state) {
     'submitted_pending_approval' ||
     'awaiting_company_approval' ||
     'returned_for_changes' ||
@@ -567,31 +678,51 @@ class _CompanyLifecycleProgress extends StatelessWidget {
       YorksV1CompanyMaterialRequestStrings.closed.active(language),
     ];
     return Card(
+      key: const ValueKey('company-request-progress'),
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Wrap(
-          spacing: 8,
-          runSpacing: 8,
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            for (var index = 0; index < labels.length; index++)
-              Chip(
-                avatar: Icon(
-                  index < _activeIndex
-                      ? Icons.check_circle_rounded
-                      : index == _activeIndex
-                      ? Icons.radio_button_checked_rounded
-                      : Icons.radio_button_unchecked_rounded,
-                  size: 18,
-                  color: index <= _activeIndex
-                      ? AppColors.blue
-                      : AppColors.muted,
-                ),
-                label: Text(labels[index]),
-                backgroundColor: index == _activeIndex
-                    ? AppColors.blueContainer
-                    : AppColors.surfaceContainerLow,
+            Text(
+              YorksV1CompanyMaterialRequestStrings.flowDetails.active(language),
+              style: AppTypography.titleMedium.copyWith(
+                fontWeight: FontWeight.w700,
               ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _stateLabel(state, language),
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.inkSecondary,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (var index = 0; index < labels.length; index++)
+                  Chip(
+                    avatar: Icon(
+                      index < _activeIndex
+                          ? Icons.check_circle_rounded
+                          : index == _activeIndex
+                          ? Icons.radio_button_checked_rounded
+                          : Icons.radio_button_unchecked_rounded,
+                      size: 18,
+                      color: index <= _activeIndex
+                          ? AppColors.blue
+                          : AppColors.muted,
+                    ),
+                    label: Text(labels[index]),
+                    backgroundColor: index == _activeIndex
+                        ? AppColors.blueContainer
+                        : AppColors.surfaceContainerLow,
+                  ),
+              ],
+            ),
           ],
         ),
       ),
@@ -606,235 +737,362 @@ class _ApprovalDetail extends StatelessWidget {
     required this.submitting,
     required this.onDecide,
   });
-
   final YorksV1CompanyMaterialRequest request;
   final AppLanguage language;
   final bool submitting;
   final ValueChanged<YorksV1CompanyMaterialRequestDecisionType> onDecide;
 
+  String get _next => request.canReceive && request.pendingDispatches.isNotEmpty
+      ? YorksV1CompanyMaterialRequestStrings.confirmReceipt.active(language)
+      : request.canHandover && request.unallocatedReceiptLines.isNotEmpty
+      ? YorksV1CompanyMaterialRequestStrings.confirmHandover.active(language)
+      : _nextAction(request.state, language);
+
+  String get _owner =>
+      request.canReceive && request.pendingDispatches.isNotEmpty
+      ? request.authorizedReceiver.displayName
+      : request.canHandover && request.unallocatedReceiptLines.isNotEmpty
+      ? request.beneficiary.displayName
+      : switch (request.state) {
+          'submitted_pending_approval' || 'awaiting_company_approval' =>
+            request.approver?.displayName ??
+                _currentOwner(request.state, language),
+          'returned_for_changes' || 'draft' => request.requesterDisplayName,
+          'receipt_pending' ||
+          'partially_dispatched' => request.authorizedReceiver.displayName,
+          'awaiting_beneficiary_handover' => request.beneficiary.displayName,
+          _ => _currentOwner(request.state, language),
+        };
+
+  void _showInformation(BuildContext context) {
+    showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 180),
+      pageBuilder: (dialogContext, _, _) => Align(
+        alignment: AlignmentDirectional.centerEnd,
+        child: Material(
+          color: AppColors.surfaceContainerLowest,
+          child: SafeArea(
+            child: SizedBox(
+              width: MediaQuery.sizeOf(
+                dialogContext,
+              ).width.clamp(0, 440).toDouble(),
+              height: double.infinity,
+              child: ListView(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          YorksV1CompanyMaterialRequestStrings
+                              .showRequestInformation
+                              .active(language),
+                          style: AppTypography.titleLarge,
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: MaterialLocalizations.of(
+                          dialogContext,
+                        ).closeButtonTooltip,
+                        onPressed: () => Navigator.pop(dialogContext),
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ],
+                  ),
+                  const Divider(),
+                  _Fact(
+                    label: YorksV1CompanyMaterialRequestStrings.requestedBy
+                        .active(language),
+                    value: request.requesterDisplayName,
+                  ),
+                  _Fact(
+                    label: YorksV1CompanyMaterialRequestStrings.beneficiary
+                        .active(language),
+                    value: request.beneficiary.displayName,
+                  ),
+                  _Fact(
+                    label: YorksV1CompanyMaterialRequestStrings
+                        .authorizedReceiver
+                        .active(language),
+                    value: request.authorizedReceiver.displayName,
+                  ),
+                  if (request.approver != null)
+                    _Fact(
+                      label: YorksV1CompanyMaterialRequestStrings.approver
+                          .active(language),
+                      value: request.approver!.displayName,
+                    ),
+                  const Divider(),
+                  _Fact(
+                    label: YorksV1CompanyMaterialRequestStrings.currentOwner
+                        .active(language),
+                    value: _owner,
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  _CompanyLifecycleProgress(
+                    state: request.state,
+                    language: language,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+      transitionBuilder: (context, animation, _, child) => SlideTransition(
+        position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
+            .animate(
+              CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+            ),
+        child: child,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => ListView(
-    padding: EdgeInsets.fromLTRB(
-      16,
-      24,
-      16,
-      MediaQuery.sizeOf(context).width < 600 ? 176 : 96,
-    ),
+    padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
     children: [
       Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 960),
+          constraints: const BoxConstraints(maxWidth: 1200),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final badges = Wrap(
+                    spacing: 12,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        request.requestNumber ??
+                            YorksV1CompanyMaterialRequestStrings.privateDraft
+                                .active(language),
+                        style: AppTypography.headlineSmall.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Chip(
+                        avatar: const Icon(
+                          Icons.business_center_outlined,
+                          size: 16,
+                        ),
+                        label: Text(
+                          YorksV1CompanyMaterialRequestStrings.companyUse
+                              .active(language),
+                        ),
+                      ),
+                      Text(
+                        _stateLabel(request.state, language),
+                        style: AppTypography.labelLarge.copyWith(
+                          color: AppColors.blue,
+                        ),
+                      ),
+                      Chip(
+                        label: Text(
+                          YorksV1MaterialRequestStrings.stageOfSeven(
+                            _CompanyLifecycleProgress.stageIndex(
+                                  request.state,
+                                ) +
+                                1,
+                          ).active(language),
+                        ),
+                        backgroundColor: AppColors.successContainer,
+                      ),
+                    ],
+                  );
+                  final info = OutlinedButton.icon(
+                    key: const ValueKey('company-request-information-toggle'),
+                    onPressed: () => _showInformation(context),
+                    icon: const Icon(Icons.info_outline_rounded),
+                    label: Text(
+                      YorksV1CompanyMaterialRequestStrings
+                          .showRequestInformation
+                          .active(language),
+                    ),
+                  );
+                  return constraints.maxWidth >= 720
+                      ? Row(
+                          children: [
+                            Expanded(child: badges),
+                            const SizedBox(width: 12),
+                            info,
+                          ],
+                        )
+                      : Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [badges, info],
+                        );
+                },
+              ),
+              const SizedBox(height: 8),
               Text(
-                request.requestNumber ?? request.id,
-                style: AppTypography.headlineMedium.copyWith(
-                  fontWeight: FontWeight.w800,
+                request.purpose,
+                style: AppTypography.titleLarge.copyWith(
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 6),
               Text(
-                _stateLabel(request.state, language),
-                style: AppTypography.labelLarge.copyWith(
-                  color: request.canDecide ? AppColors.blue : AppColors.muted,
+                '${request.responsibleUnitName} · ${request.deliveryCollectionPoint}',
+                style: AppTypography.bodyMedium.copyWith(
+                  color: AppColors.inkSecondary,
                 ),
               ),
-              const SizedBox(height: 20),
-              _CompanyLifecycleProgress(
-                state: request.state,
+              const SizedBox(height: 16),
+              Align(
+                alignment: MediaQuery.sizeOf(context).width >= 760
+                    ? AlignmentDirectional.centerEnd
+                    : AlignmentDirectional.centerStart,
+                child: Wrap(
+                  key: const ValueKey('company-request-primary-actions'),
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.sm,
+                  children: [
+                    if (request.canDecide) ...[
+                      FilledButton.icon(
+                        key: const ValueKey('company-approval-approve'),
+                        onPressed: submitting
+                            ? null
+                            : () => onDecide(
+                                YorksV1CompanyMaterialRequestDecisionType
+                                    .approved,
+                              ),
+                        icon: const Icon(Icons.check_rounded),
+                        label: Text(
+                          YorksV1CompanyMaterialRequestStrings.approve.active(
+                            language,
+                          ),
+                        ),
+                      ),
+                      OutlinedButton(
+                        key: const ValueKey('company-approval-return'),
+                        onPressed: submitting
+                            ? null
+                            : () => onDecide(
+                                YorksV1CompanyMaterialRequestDecisionType
+                                    .returned,
+                              ),
+                        child: Text(
+                          YorksV1CompanyMaterialRequestStrings.returnForChanges
+                              .active(language),
+                        ),
+                      ),
+                      TextButton(
+                        key: const ValueKey('company-approval-reject'),
+                        onPressed: submitting
+                            ? null
+                            : () => onDecide(
+                                YorksV1CompanyMaterialRequestDecisionType
+                                    .rejected,
+                              ),
+                        child: Text(
+                          YorksV1CompanyMaterialRequestStrings.reject.active(
+                            language,
+                          ),
+                        ),
+                      ),
+                    ],
+                    _FulfilmentActions(request: request, language: language),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Card(
+                margin: EdgeInsets.zero,
+                color: request.state == 'approved_for_procurement'
+                    ? AppColors.successContainer
+                    : AppColors.blueContainer,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Icon(
+                        request.state == 'approved_for_procurement'
+                            ? Icons.verified_rounded
+                            : Icons.timeline_rounded,
+                        color: request.state == 'approved_for_procurement'
+                            ? AppColors.success
+                            : AppColors.blue,
+                        size: 30,
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _next,
+                              style: AppTypography.titleMedium.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${YorksV1CompanyMaterialRequestStrings.currentOwner.active(language)}: $_owner',
+                              style: AppTypography.bodySmall.copyWith(
+                                color: AppColors.inkSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              _CompanyMaterialItemsCard(request: request, language: language),
+              const SizedBox(height: 12),
+              if (request.state != 'cancelled') ...[
+                _CompanyLifecycleProgress(
+                  state: request.state,
+                  language: language,
+                ),
+                const SizedBox(height: 12),
+              ],
+              YorksV1CompanyRequestEvidence(
+                requestId: request.id,
+                recordVersion: request.recordVersion,
                 language: language,
               ),
-              const SizedBox(height: 20),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        request.purpose,
-                        style: AppTypography.titleLarge.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      _Fact(
-                        label: YorksV1CompanyMaterialRequestStrings.currentOwner
-                            .active(language),
-                        value: _currentOwner(request.state, language),
-                      ),
-                      _Fact(
-                        label: YorksV1CompanyMaterialRequestStrings.nextAction
-                            .active(language),
-                        value: _nextAction(request.state, language),
-                      ),
-                      _Fact(
-                        label: YorksV1CompanyMaterialRequestStrings
-                            .responsibleUnit
-                            .active(language),
-                        value: request.responsibleUnitName,
-                      ),
-                      _Fact(
-                        label: YorksV1CompanyMaterialRequestStrings.requestedBy
-                            .active(language),
-                        value: request.requesterDisplayName,
-                      ),
-                      _Fact(
-                        label: YorksV1CompanyMaterialRequestStrings.beneficiary
-                            .active(language),
-                        value: request.beneficiary.displayName,
-                      ),
-                      _Fact(
-                        label: YorksV1CompanyMaterialRequestStrings
-                            .authorizedReceiver
-                            .active(language),
-                        value: request.authorizedReceiver.displayName,
-                      ),
-                      _Fact(
-                        label: YorksV1CompanyMaterialRequestStrings
-                            .deliveryCollectionPoint
-                            .active(language),
-                        value: request.deliveryCollectionPoint,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
               const SizedBox(height: 12),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        YorksV1CompanyMaterialRequestStrings.materialItems
-                            .active(language),
-                        style: AppTypography.titleMedium.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      for (final line in request.lines)
-                        ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: CircleAvatar(
-                            child: Text(line.displayOrder.toString()),
-                          ),
-                          title: Text(line.description),
-                          subtitle: line.brandOrigin == null
-                              ? (double.tryParse(line.withdrawnQuantity) ?? 0) >
-                                        0
-                                    ? Text(
-                                        '${YorksV1CompanyMaterialRequestStrings.withdrawn.active(language)}: ${line.withdrawnQuantity} ${line.unit}',
-                                      )
-                                    : null
-                              : Text(
-                                  [
-                                    line.brandOrigin!,
-                                    if ((double.tryParse(
-                                              line.withdrawnQuantity,
-                                            ) ??
-                                            0) >
-                                        0)
-                                      '${YorksV1CompanyMaterialRequestStrings.withdrawn.active(language)}: ${line.withdrawnQuantity} ${line.unit}',
-                                  ].join(' · '),
-                                ),
-                          trailing: Text('${line.quantity} ${line.unit}'),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
               if (request.decisions.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          YorksV1CompanyMaterialRequestStrings.decisionHistory
-                              .active(language),
-                          style: AppTypography.titleMedium.copyWith(
-                            fontWeight: FontWeight.w800,
+                  margin: EdgeInsets.zero,
+                  child: ExpansionTile(
+                    title: Text(
+                      YorksV1CompanyMaterialRequestStrings.decisionHistory
+                          .active(language),
+                    ),
+                    children: [
+                      for (final decision in request.decisions)
+                        ListTile(
+                          title: Text(
+                            _decisionWireLabel(decision.decision, language),
+                          ),
+                          subtitle: Text(
+                            [
+                              decision.decidedByDisplayName,
+                              decision.decidedByExactRole,
+                              MaterialLocalizations.of(
+                                context,
+                              ).formatMediumDate(decision.decidedAt.toLocal()),
+                              if (decision.reason != null) decision.reason!,
+                            ].join(' · '),
                           ),
                         ),
-                        for (final decision in request.decisions)
-                          ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: Text(
-                              _decisionWireLabel(decision.decision, language),
-                            ),
-                            subtitle: Text(
-                              [
-                                decision.decidedByDisplayName,
-                                if (decision.reason != null) decision.reason!,
-                              ].join(' · '),
-                            ),
-                          ),
-                      ],
-                    ),
+                    ],
                   ),
-                ),
-              ],
-              _FulfilmentActions(request: request, language: language),
-              if (request.canDecide) ...[
-                const SizedBox(height: 20),
-                Wrap(
-                  alignment: WrapAlignment.end,
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    OutlinedButton(
-                      key: const ValueKey('company-approval-reject'),
-                      onPressed: submitting
-                          ? null
-                          : () => onDecide(
-                              YorksV1CompanyMaterialRequestDecisionType
-                                  .rejected,
-                            ),
-                      child: Text(
-                        YorksV1CompanyMaterialRequestStrings.reject.active(
-                          language,
-                        ),
-                      ),
-                    ),
-                    OutlinedButton(
-                      key: const ValueKey('company-approval-return'),
-                      onPressed: submitting
-                          ? null
-                          : () => onDecide(
-                              YorksV1CompanyMaterialRequestDecisionType
-                                  .returned,
-                            ),
-                      child: Text(
-                        YorksV1CompanyMaterialRequestStrings.returnForChanges
-                            .active(language),
-                      ),
-                    ),
-                    FilledButton.icon(
-                      key: const ValueKey('company-approval-approve'),
-                      onPressed: submitting
-                          ? null
-                          : () => onDecide(
-                              YorksV1CompanyMaterialRequestDecisionType
-                                  .approved,
-                            ),
-                      icon: submitting
-                          ? const SizedBox.square(
-                              dimension: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.check_rounded),
-                      label: Text(
-                        YorksV1CompanyMaterialRequestStrings.approve.active(
-                          language,
-                        ),
-                      ),
-                    ),
-                  ],
                 ),
               ],
             ],
@@ -842,6 +1100,206 @@ class _ApprovalDetail extends StatelessWidget {
         ),
       ),
     ],
+  );
+}
+
+class _CompanyMaterialItemsCard extends StatelessWidget {
+  const _CompanyMaterialItemsCard({
+    required this.request,
+    required this.language,
+  });
+
+  final YorksV1CompanyMaterialRequest request;
+  final AppLanguage language;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    margin: EdgeInsets.zero,
+    clipBehavior: Clip.antiAlias,
+    child: Padding(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  YorksV1CompanyMaterialRequestStrings.materialItems.active(
+                    language,
+                  ),
+                  style: AppTypography.titleMedium.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Text(
+                YorksV1CompanyMaterialRequestStrings.itemCount(
+                  request.lines.length,
+                ).active(language),
+                style: AppTypography.labelMedium.copyWith(
+                  color: AppColors.inkSecondary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          LayoutBuilder(
+            builder: (context, constraints) => constraints.maxWidth >= 840
+                ? _desktopTable(context)
+                : Column(
+                    children: [
+                      for (final line in request.lines) _mobileLine(line),
+                    ],
+                  ),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  Widget _desktopTable(BuildContext context) {
+    final headings = [
+      YorksV1CompanyMaterialRequestStrings.rowNumber.active(language),
+      YorksV1CompanyMaterialRequestStrings.itemDescription.active(language),
+      YorksV1CompanyMaterialRequestStrings.sizeIfAny.active(language),
+      YorksV1CompanyMaterialRequestStrings.modelTag.active(language),
+      YorksV1CompanyMaterialRequestStrings.brandOrigin.active(language),
+      YorksV1CompanyMaterialRequestStrings.quantity.active(language),
+      YorksV1CompanyMaterialRequestStrings.unit.active(language),
+    ];
+    return Table(
+      border: TableBorder.all(color: AppColors.line),
+      columnWidths: const {
+        0: FlexColumnWidth(0.6),
+        1: FlexColumnWidth(3.2),
+        2: FlexColumnWidth(1.35),
+        3: FlexColumnWidth(1.55),
+        4: FlexColumnWidth(1.55),
+        5: FlexColumnWidth(0.9),
+        6: FlexColumnWidth(0.9),
+      },
+      defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+      children: [
+        TableRow(
+          decoration: const BoxDecoration(color: AppColors.surfaceContainerLow),
+          children: [
+            for (final heading in headings) _cell(heading, header: true),
+          ],
+        ),
+        for (final line in request.lines)
+          TableRow(
+            children: [
+              _cell('${line.displayOrder}'),
+              _descriptionCell(line),
+              _cell(line.size ?? ''),
+              _cell(
+                [
+                  line.model,
+                  line.equipmentTag,
+                ].whereType<String>().where((v) => v.isNotEmpty).join(' · '),
+              ),
+              _cell(line.brandOrigin ?? ''),
+              _cell(line.quantity),
+              _cell(line.unit),
+            ],
+          ),
+      ],
+    );
+  }
+
+  Widget _cell(String value, {bool header = false, bool strong = false}) =>
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 13),
+        child: Text(
+          value,
+          style: header
+              ? AppTypography.labelSmall.copyWith(color: AppColors.inkSecondary)
+              : AppTypography.bodySmall.copyWith(
+                  fontWeight: strong ? FontWeight.w700 : FontWeight.normal,
+                ),
+        ),
+      );
+
+  Widget _descriptionCell(YorksV1CompanyMaterialRequestLine line) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          line.description,
+          style: AppTypography.bodySmall.copyWith(fontWeight: FontWeight.w700),
+        ),
+        _lineProgress(line),
+      ],
+    ),
+  );
+
+  Widget _lineProgress(YorksV1CompanyMaterialRequestLine line) {
+    if (request.currentSupplyPlan == null && request.decisions.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final facts = [
+      '${YorksV1CompanyMaterialRequestStrings.received.active(language)}: ${line.goodReceivedQuantity}',
+      if ((double.tryParse(line.handedOverQuantity) ?? 0) > 0)
+        '${YorksV1CompanyMaterialRequestStrings.handedOver.active(language)}: ${line.handedOverQuantity}',
+      if ((double.tryParse(line.withdrawnQuantity) ?? 0) > 0)
+        '${YorksV1CompanyMaterialRequestStrings.withdrawn.active(language)}: ${line.withdrawnQuantity}',
+      if ((double.tryParse(line.returnedQuantity) ?? 0) > 0)
+        '${YorksV1CompanyMaterialRequestStrings.returned.active(language)}: ${line.returnedQuantity}',
+    ];
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Text(
+        facts.join(' · '),
+        style: AppTypography.bodySmall.copyWith(color: AppColors.inkSecondary),
+      ),
+    );
+  }
+
+  Widget _mobileLine(YorksV1CompanyMaterialRequestLine line) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            CircleAvatar(radius: 14, child: Text('${line.displayOrder}')),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(line.description, style: AppTypography.titleSmall),
+            ),
+            Text(
+              '${line.quantity} ${line.unit}',
+              style: AppTypography.labelLarge,
+            ),
+          ],
+        ),
+        if ([
+          line.size,
+          line.model,
+          line.equipmentTag,
+          line.brandOrigin,
+        ].any((value) => value?.isNotEmpty == true))
+          Padding(
+            padding: const EdgeInsetsDirectional.only(start: 36, top: 4),
+            child: Text(
+              [line.size, line.model, line.equipmentTag, line.brandOrigin]
+                  .whereType<String>()
+                  .where((value) => value.isNotEmpty)
+                  .join(' · '),
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.inkSecondary,
+              ),
+            ),
+          ),
+        Padding(
+          padding: const EdgeInsetsDirectional.only(start: 36),
+          child: _lineProgress(line),
+        ),
+        const Divider(),
+      ],
+    ),
   );
 }
 
@@ -857,8 +1315,20 @@ class _FulfilmentActions extends ConsumerStatefulWidget {
 
 class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
   bool _busy = false;
+  final Map<String, String> _commandKeys = {};
+  String _commandKey(String operation, Object payload) =>
+      _commandKeys.putIfAbsent(
+        '$operation:${widget.request.recordVersion}:${jsonEncode(payload)}',
+        () => const Uuid().v4(),
+      );
 
   Future<void> _reviseAndResubmit() async {
+    final formKey = GlobalKey<FormState>();
+    final reason = TextEditingController();
+    final descriptions = {
+      for (final line in widget.request.lines)
+        line.id: TextEditingController(text: line.description),
+    };
     final purpose = TextEditingController(text: widget.request.purpose);
     final delivery = TextEditingController(
       text: widget.request.deliveryCollectionPoint,
@@ -867,7 +1337,7 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
       for (final line in widget.request.lines)
         line.id: TextEditingController(text: line.quantity),
     };
-    final confirmed = await showDialog<bool>(
+    final dialog = DialogRoute<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text(
@@ -876,39 +1346,87 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
           ),
         ),
         content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: purpose,
-                decoration: InputDecoration(
-                  labelText: YorksV1CompanyMaterialRequestStrings.purpose
-                      .active(widget.language),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: delivery,
-                decoration: InputDecoration(
-                  labelText: YorksV1CompanyMaterialRequestStrings
-                      .deliveryCollectionPoint
-                      .active(widget.language),
-                ),
-              ),
-              for (final line in widget.request.lines) ...[
-                const SizedBox(height: 12),
-                TextField(
-                  controller: quantities[line.id],
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
+          child: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: purpose,
+                  validator: (v) => v?.trim().isNotEmpty == true
+                      ? null
+                      : YorksV1CompanyMaterialRequestStrings.changeReason
+                            .active(widget.language),
                   decoration: InputDecoration(
-                    labelText:
-                        '${line.description} · ${YorksV1CompanyMaterialRequestStrings.quantity.active(widget.language)}',
+                    labelText: YorksV1CompanyMaterialRequestStrings.purpose
+                        .active(widget.language),
                   ),
                 ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: delivery,
+                  validator: (v) => v?.trim().isNotEmpty == true
+                      ? null
+                      : YorksV1CompanyMaterialRequestStrings
+                            .deliveryCollectionPoint
+                            .active(widget.language),
+                  decoration: InputDecoration(
+                    labelText: YorksV1CompanyMaterialRequestStrings
+                        .deliveryCollectionPoint
+                        .active(widget.language),
+                  ),
+                ),
+                Text(
+                  YorksV1CompanyMaterialRequestStrings.correctionNotice.active(
+                    widget.language,
+                  ),
+                ),
+                TextFormField(
+                  key: const ValueKey("company-change-reason"),
+                  controller: reason,
+                  decoration: InputDecoration(
+                    labelText: YorksV1CompanyMaterialRequestStrings.changeReason
+                        .active(widget.language),
+                  ),
+                  validator: (v) => v?.trim().isNotEmpty == true
+                      ? null
+                      : YorksV1CompanyMaterialRequestStrings.changeReason
+                            .active(widget.language),
+                ),
+                for (final line in widget.request.lines) ...[
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: descriptions[line.id],
+                    decoration: InputDecoration(
+                      labelText: YorksV1CompanyMaterialRequestStrings
+                          .itemDescription
+                          .active(widget.language),
+                    ),
+                    validator: (v) => v?.trim().isNotEmpty == true
+                        ? null
+                        : YorksV1CompanyMaterialRequestStrings.itemDescription
+                              .active(widget.language),
+                  ),
+                  TextFormField(
+                    controller: quantities[line.id],
+                    validator: (v) {
+                      final q = double.tryParse(v?.trim() ?? '');
+                      return q != null && q.isFinite && q > 0
+                          ? null
+                          : YorksV1CompanyMaterialRequestStrings.quantityLimit
+                                .active(widget.language);
+                    },
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: InputDecoration(
+                      labelText:
+                          '${line.description} · ${YorksV1CompanyMaterialRequestStrings.quantity.active(widget.language)}',
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
         actions: [
@@ -919,7 +1437,11 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
             ),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.pop(dialogContext, true);
+              }
+            },
             child: Text(
               YorksV1CompanyMaterialRequestStrings.reviseAndResubmit.active(
                 widget.language,
@@ -929,6 +1451,11 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
         ],
       ),
     );
+    final confirmed = await Navigator.of(
+      context,
+      rootNavigator: true,
+    ).push(dialog);
+    await dialog.completed;
     if (confirmed == true && mounted) {
       await _run(
         () => ref
@@ -937,26 +1464,111 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
               requestId: widget.request.id,
               expectedVersion: widget.request.recordVersion,
               purpose: purpose.text.trim(),
+              reason: reason.text.trim(),
               deliveryCollectionPoint: delivery.text.trim(),
               lines: [
                 for (final line in widget.request.lines)
                   {
                     'id': line.id,
-                    'item_description': line.description,
+                    'item_description': descriptions[line.id]!.text.trim(),
                     'brand_origin': line.brandOrigin,
                     'requested_qty': quantities[line.id]!.text.trim(),
                     'unit': line.unit,
                   },
               ],
-              idempotencyKey: const Uuid().v4(),
+              idempotencyKey: _commandKey('revise', [
+                reason.text.trim(),
+                for (final line in widget.request.lines)
+                  descriptions[line.id]!.text.trim(),
+                purpose.text.trim(),
+                delivery.text.trim(),
+                for (final line in widget.request.lines)
+                  quantities[line.id]!.text.trim(),
+              ]),
             ),
       );
+    }
+    reason.dispose();
+    for (final controller in descriptions.values) {
+      controller.dispose();
     }
     purpose.dispose();
     delivery.dispose();
     for (final controller in quantities.values) {
       controller.dispose();
     }
+  }
+
+  Future<void> _cancelRequest() async {
+    final reason = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    final dialog = DialogRoute<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          YorksV1CompanyMaterialRequestStrings.cancelRequest.active(
+            widget.language,
+          ),
+        ),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            key: const ValueKey("company-change-reason"),
+            controller: reason,
+            autofocus: true,
+            maxLines: 3,
+            maxLength: 2000,
+            decoration: InputDecoration(
+              labelText: YorksV1CompanyMaterialRequestStrings.changeReason
+                  .active(widget.language),
+            ),
+            validator: (v) => v?.trim().isNotEmpty == true
+                ? null
+                : YorksV1CompanyMaterialRequestStrings.changeReason.active(
+                    widget.language,
+                  ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(
+              YorksV1MaterialRequestStrings.back.active(widget.language),
+            ),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.pop(dialogContext, true);
+              }
+            },
+            child: Text(
+              YorksV1CompanyMaterialRequestStrings.cancelRequest.active(
+                widget.language,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    final confirmed = await Navigator.of(
+      context,
+      rootNavigator: true,
+    ).push(dialog);
+    await dialog.completed;
+    final explanation = reason.text.trim();
+    reason.dispose();
+    if (confirmed != true || !mounted) return;
+    await _run(
+      () => ref
+          .read(yorksV1CompanyMaterialRequestRepositoryProvider)
+          .cancel(
+            requestId: widget.request.id,
+            expectedVersion: widget.request.recordVersion,
+            reason: explanation,
+            idempotencyKey: _commandKey('cancel', explanation),
+          ),
+    );
   }
 
   Future<void> _run(
@@ -993,58 +1605,91 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
   }
 
   Future<void> _plan() async {
-    final inventory = await ref.read(
-      yorksV1ArrangementInventoryProvider.future,
-    );
-    if (!mounted) return;
-    final lines = <Map<String, Object?>>[];
-    for (final line in widget.request.lines) {
-      final outstanding = double.tryParse(line.withdrawableQuantity) ?? 0;
-      if (outstanding <= 0) continue;
-      final available = inventory
-          .where((item) => item.unit.toLowerCase() == line.unit.toLowerCase())
-          .toList(growable: false);
-      final result = await showDialog<_PlanChoice>(
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final inventory = await ref.read(
+        yorksV1ArrangementInventoryProvider.future,
+      );
+      if (!mounted) return;
+      final outstanding = widget.request.lines
+          .where(
+            (line) => (double.tryParse(line.withdrawableQuantity) ?? 0) > 0,
+          )
+          .toList();
+      await showDialog<void>(
         context: context,
-        builder: (dialogContext) => _PlanDialog(
-          line: line,
-          outstandingQuantity: _decimalText(outstanding),
-          inventory: available,
+        barrierDismissible: false,
+        builder: (_) => YorksV1CompanyArrangementWorkbench(
+          request: widget.request,
+          inventory: inventory,
           language: widget.language,
+          onSave: (choices) async {
+            final lines = [
+              for (var i = 0; i < choices.length; i++)
+                choices[i].toPayload(outstanding[i].id),
+            ];
+            await ref
+                .read(yorksV1CompanyMaterialRequestRepositoryProvider)
+                .saveSupplyPlan(
+                  requestId: widget.request.id,
+                  expectedVersion: widget.request.recordVersion,
+                  lines: lines,
+                  idempotencyKey: _commandKey('plan', lines),
+                );
+            ref.invalidate(
+              yorksV1CompanyMaterialRequestProvider(widget.request.id),
+            );
+          },
         ),
       );
-      if (result == null || !mounted) return;
-      lines.add(result.toPayload(line.id));
-    }
-    await _run(
-      () => ref
-          .read(yorksV1CompanyMaterialRequestRepositoryProvider)
-          .saveSupplyPlan(
-            requestId: widget.request.id,
-            expectedVersion: widget.request.recordVersion,
-            lines: lines,
-            idempotencyKey: const Uuid().v4(),
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              YorksV1CompanyMaterialRequestStrings.actionFailed.active(
+                widget.language,
+              ),
+            ),
           ),
-    );
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _dispatch() async {
-    final plan = widget.request.currentSupplyPlan;
-    final planLines = plan?['lines'];
+    final planLines = widget.request.currentSupplyPlan?['lines'];
     if (planLines is! List) return;
-    final lines = <Map<String, Object?>>[];
+    final items = <CompanyQuantityItem>[];
     for (final raw in planLines.whereType<Map>()) {
-      final map = Map<String, dynamic>.from(raw);
-      final remaining =
-          double.tryParse(map['arranged_qty']?.toString() ?? '') ?? 0;
-      if (remaining > 0) {
-        lines.add({
-          'supply_line_id': map['id'],
-          'dispatch_qty': remaining.toString(),
-        });
+      final remaining = raw['dispatchable_qty']?.toString() ?? '0';
+      final line = widget.request.lines
+          .where((line) => line.id == raw['request_line_id'])
+          .firstOrNull;
+      if (line != null && (double.tryParse(remaining) ?? 0) > 0) {
+        items.add(
+          CompanyQuantityItem(
+            id: raw['id'].toString(),
+            description: line.description,
+            unit: line.unit,
+            maximum: remaining,
+          ),
+        );
       }
     }
-    if (lines.isEmpty) return;
+    final selected = await _quantities(
+      YorksV1CompanyMaterialRequestStrings.dispatch.active(widget.language),
+      items,
+      selectAll: true,
+    );
+    if (selected == null || !mounted) return;
+    final lines = [
+      for (final entry in selected.quantities.entries)
+        {'supply_line_id': entry.key, 'dispatch_qty': entry.value},
+    ];
     await _run(
       () => ref
           .read(yorksV1CompanyMaterialRequestRepositoryProvider)
@@ -1052,7 +1697,7 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
             requestId: widget.request.id,
             expectedVersion: widget.request.recordVersion,
             lines: lines,
-            idempotencyKey: const Uuid().v4(),
+            idempotencyKey: _commandKey('dispatch', lines),
           ),
     );
   }
@@ -1062,18 +1707,41 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
     final dispatch = widget.request.pendingDispatches.first;
     final rawLines = dispatch['lines'];
     if (rawLines is! List) return;
-    final lines = <Map<String, Object?>>[];
-    for (final raw in rawLines.whereType<Map>()) {
-      final choice = await showDialog<_ReceiptChoice>(
-        context: context,
-        builder: (dialogContext) => _ReceiptDialog(
-          dispatchedQuantity: raw['dispatched_qty'].toString(),
-          language: widget.language,
-        ),
-      );
-      if (choice == null || !mounted) return;
-      lines.add(choice.toPayload(raw['id'].toString()));
+    final records = rawLines.whereType<Map>().toList();
+    String label(Map raw) {
+      final line = widget.request.lines
+          .where((line) => line.id == raw['request_line_id'])
+          .firstOrNull;
+      return '${line?.description ?? ''} · ${raw['dispatched_qty']} ${line?.unit ?? ''}';
     }
+
+    final choices = await showDialog<List<_ReceiptChoice>>(
+      context: context,
+      builder: (_) => CompanyLineReview<_ReceiptChoice>(
+        title:
+            '${YorksV1CompanyMaterialRequestStrings.confirmReceipt.active(widget.language)} · ${dispatch['dispatch_number'] ?? ''}',
+        descriptions: records.map(label).toList(),
+        language: widget.language,
+        confirmLabel: YorksV1CompanyMaterialRequestStrings.confirmReceipt
+            .active(widget.language),
+        summary: (choice) =>
+            '${YorksV1CompanyMaterialRequestStrings.received.active(widget.language)}: ${choice.goodQuantity}',
+        edit: (index, previous) => showDialog<_ReceiptChoice>(
+          context: context,
+          builder: (_) => _ReceiptDialog(
+            description: label(records[index]),
+            dispatchedQuantity: records[index]['dispatched_qty'].toString(),
+            language: widget.language,
+            initial: previous,
+          ),
+        ),
+      ),
+    );
+    if (choices == null || !mounted) return;
+    final lines = [
+      for (var i = 0; i < choices.length; i++)
+        choices[i].toPayload(records[i]['id'].toString()),
+    ];
     await _run(
       () => ref
           .read(yorksV1CompanyMaterialRequestRepositoryProvider)
@@ -1082,87 +1750,138 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
             dispatchId: dispatch['id'].toString(),
             expectedVersion: widget.request.recordVersion,
             lines: lines,
-            idempotencyKey: const Uuid().v4(),
+            idempotencyKey: _commandKey('receipt', [dispatch['id'], lines]),
           ),
     );
   }
 
   Future<void> _handover() async {
+    final actor = ref.read(yorksV1AuthUserIdProvider);
+    if (actor == null) return;
+    final beneficiaryAcknowledges =
+        actor == widget.request.beneficiary.authUserId;
+    final selected = await _quantities(
+      YorksV1CompanyMaterialRequestStrings.confirmHandover.active(
+        widget.language,
+      ),
+      _quantityItems(widget.request.unallocatedReceiptLines, 'available_qty'),
+      selectAll: true,
+      message:
+          '${widget.request.beneficiary.displayName} — ${(beneficiaryAcknowledges ? YorksV1CompanyMaterialRequestStrings.handoverSelf : YorksV1CompanyMaterialRequestStrings.handoverWitness).active(widget.language)}',
+    );
+    if (selected == null || !mounted) return;
+    final basis = beneficiaryAcknowledges
+        ? 'beneficiary_confirmed'
+        : 'authorized_receiver_witnessed';
     final lines = [
-      for (final line in widget.request.unallocatedReceiptLines)
-        {'receipt_line_id': line['id'], 'quantity': line['available_qty']},
+      for (final entry in selected.quantities.entries)
+        {'receipt_line_id': entry.key, 'quantity': entry.value},
     ];
-    if (lines.isEmpty) return;
-    final witnessed =
-        widget.request.authorizedReceiver.authUserId !=
-        widget.request.beneficiary.authUserId;
     await _run(
       () => ref
           .read(yorksV1CompanyMaterialRequestRepositoryProvider)
           .confirmHandover(
             requestId: widget.request.id,
             expectedVersion: widget.request.recordVersion,
-            acknowledgementBasis: witnessed
-                ? 'authorized_receiver_witnessed'
-                : 'beneficiary_confirmed',
+            acknowledgementBasis: basis,
             lines: lines,
-            idempotencyKey: const Uuid().v4(),
+            idempotencyKey: _commandKey('handover', [basis, lines]),
           ),
     );
   }
 
   Future<void> _return() async {
-    final reason = await _promptReason(
-      title: YorksV1CompanyMaterialRequestStrings.submitReturn.active(
-        widget.language,
-      ),
-      confirmLabel: YorksV1CompanyMaterialRequestStrings.submitReturn.active(
-        widget.language,
-      ),
+    final selected = await _quantities(
+      YorksV1CompanyMaterialRequestStrings.submitReturn.active(widget.language),
+      _quantityItems(widget.request.returnableHandoverLines, 'returnable_qty'),
+      requireReason: true,
     );
-    if (reason == null || !mounted) return;
+    if (selected == null || !mounted) return;
     final lines = [
-      for (final line in widget.request.returnableHandoverLines)
-        {'handover_line_id': line['id'], 'quantity': line['returnable_qty']},
+      for (final entry in selected.quantities.entries)
+        {'handover_line_id': entry.key, 'quantity': entry.value},
     ];
-    if (lines.isEmpty) return;
     await _run(
       () => ref
           .read(yorksV1CompanyMaterialRequestRepositoryProvider)
           .submitReturn(
             requestId: widget.request.id,
-            reason: reason,
+            reason: selected.reason!,
             lines: lines,
-            idempotencyKey: const Uuid().v4(),
+            idempotencyKey: _commandKey('return', [selected.reason, lines]),
           ),
     );
   }
 
   Future<void> _withdrawRemainder() async {
-    final reason = await _promptReason(
-      title: YorksV1CompanyMaterialRequestStrings.withdrawRemainder.active(
+    final selected = await _quantities(
+      YorksV1CompanyMaterialRequestStrings.withdrawRemainder.active(
         widget.language,
       ),
-      confirmLabel: YorksV1CompanyMaterialRequestStrings.withdrawRemainder
-          .active(widget.language),
+      [
+        for (final line in widget.request.lines)
+          if ((double.tryParse(line.withdrawableQuantity) ?? 0) > 0)
+            CompanyQuantityItem(
+              id: line.id,
+              description: line.description,
+              unit: line.unit,
+              maximum: line.withdrawableQuantity,
+            ),
+      ],
+      requireReason: true,
     );
-    if (reason == null || !mounted) return;
-    final lines = <Map<String, Object?>>[
-      for (final line in widget.request.lines)
-        if ((double.tryParse(line.withdrawableQuantity) ?? 0) > 0)
-          {'request_line_id': line.id, 'quantity': line.withdrawableQuantity},
+    if (selected == null || !mounted) return;
+    final lines = [
+      for (final entry in selected.quantities.entries)
+        {'request_line_id': entry.key, 'quantity': entry.value},
     ];
-    if (lines.isEmpty) return;
     await _run(
       () => ref
           .read(yorksV1CompanyMaterialRequestRepositoryProvider)
           .withdrawRemainder(
             requestId: widget.request.id,
             expectedVersion: widget.request.recordVersion,
-            reason: reason,
+            reason: selected.reason!,
             lines: lines,
-            idempotencyKey: const Uuid().v4(),
+            idempotencyKey: _commandKey('withdraw', [selected.reason, lines]),
           ),
+    );
+  }
+
+  List<CompanyQuantityItem> _quantityItems(
+    List<Map<String, dynamic>> records,
+    String quantityKey,
+  ) => [
+    for (final raw in records)
+      for (final line in widget.request.lines.where(
+        (line) => line.id == raw['request_line_id'],
+      ))
+        CompanyQuantityItem(
+          id: raw['id'].toString(),
+          description: line.description,
+          unit: line.unit,
+          maximum: raw[quantityKey].toString(),
+        ),
+  ];
+
+  Future<CompanyQuantitySelection?> _quantities(
+    String title,
+    List<CompanyQuantityItem> items, {
+    bool requireReason = false,
+    bool selectAll = false,
+    String? message,
+  }) async {
+    if (items.isEmpty) return null;
+    return showDialog<CompanyQuantitySelection>(
+      context: context,
+      builder: (_) => CompanyQuantityReview(
+        title: title,
+        items: items,
+        language: widget.language,
+        requireReason: requireReason,
+        selectAll: selectAll,
+        message: message,
+      ),
     );
   }
 
@@ -1210,41 +1929,34 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
             confirm: true,
             reusable: reusable,
             reason: null,
-            idempotencyKey: const Uuid().v4(),
+            idempotencyKey: _commandKey('confirm-return', [returnId, reusable]),
           ),
     );
-  }
-
-  Future<String?> _promptReason({
-    required String title,
-    required String confirmLabel,
-  }) async {
-    final result = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => _CompanyReasonDialog(
-        title: title,
-        confirmLabel: confirmLabel,
-        reasonLabel: YorksV1CompanyMaterialRequestStrings.reasonRequired.active(
-          widget.language,
-        ),
-        cancelLabel: YorksV1MaterialRequestStrings.cancel.active(
-          widget.language,
-        ),
-      ),
-    );
-    return result?.trim().isEmpty == true ? null : result;
   }
 
   @override
   Widget build(BuildContext context) {
     final actions = <Widget>[];
+    if (widget.request.canCancel) {
+      actions.add(
+        OutlinedButton.icon(
+          onPressed: _busy ? null : _cancelRequest,
+          icon: const Icon(Icons.cancel_outlined),
+          label: Text(
+            YorksV1CompanyMaterialRequestStrings.cancelRequest.active(
+              widget.language,
+            ),
+          ),
+        ),
+      );
+    }
     if (widget.request.canRevise) {
       actions.add(
-        FilledButton.icon(
+        OutlinedButton.icon(
           onPressed: _busy ? null : _reviseAndResubmit,
           icon: const Icon(Icons.edit_note_rounded),
           label: Text(
-            YorksV1CompanyMaterialRequestStrings.reviseAndResubmit.active(
+            YorksV1CompanyMaterialRequestStrings.editRequest.active(
               widget.language,
             ),
           ),
@@ -1252,16 +1964,24 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
       );
     }
     if (widget.request.canPlan) {
-      actions.add(
-        FilledButton.icon(
-          onPressed: _busy ? null : _plan,
-          icon: const Icon(Icons.inventory_2_outlined),
-          label: Text(
-            YorksV1CompanyMaterialRequestStrings.saveSupplyPlan.active(
-              widget.language,
-            ),
-          ),
+      final label = Text(
+        YorksV1CompanyMaterialRequestStrings.arrangeItems.active(
+          widget.language,
         ),
+      );
+      const icon = Icon(Icons.inventory_2_outlined);
+      actions.add(
+        widget.request.canDispatch
+            ? OutlinedButton.icon(
+                onPressed: _busy ? null : _plan,
+                icon: icon,
+                label: label,
+              )
+            : FilledButton.icon(
+                onPressed: _busy ? null : _plan,
+                icon: icon,
+                label: label,
+              ),
       );
     }
     if (widget.request.canDispatch) {
@@ -1360,7 +2080,7 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
                       .close(
                         requestId: widget.request.id,
                         expectedVersion: widget.request.recordVersion,
-                        idempotencyKey: const Uuid().v4(),
+                        idempotencyKey: _commandKey('close', widget.request.id),
                       ),
                 ),
           icon: const Icon(Icons.task_alt_rounded),
@@ -1373,76 +2093,8 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
       );
     }
     if (actions.isEmpty) return const SizedBox.shrink();
-    return Card(
-      margin: const EdgeInsets.only(top: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              YorksV1CompanyMaterialRequestStrings.fulfilment.active(
-                widget.language,
-              ),
-              style: AppTypography.titleMedium.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Wrap(spacing: 12, runSpacing: 12, children: actions),
-          ],
-        ),
-      ),
-    );
+    return Wrap(spacing: 8, runSpacing: 8, children: actions);
   }
-}
-
-class _CompanyReasonDialog extends StatefulWidget {
-  const _CompanyReasonDialog({
-    required this.title,
-    required this.confirmLabel,
-    required this.reasonLabel,
-    required this.cancelLabel,
-  });
-
-  final String title;
-  final String confirmLabel;
-  final String reasonLabel;
-  final String cancelLabel;
-
-  @override
-  State<_CompanyReasonDialog> createState() => _CompanyReasonDialogState();
-}
-
-class _CompanyReasonDialogState extends State<_CompanyReasonDialog> {
-  final TextEditingController _controller = TextEditingController();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: Text(widget.title),
-    content: TextField(
-      controller: _controller,
-      minLines: 2,
-      maxLines: 5,
-      decoration: InputDecoration(labelText: widget.reasonLabel),
-    ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.pop(context),
-        child: Text(widget.cancelLabel),
-      ),
-      FilledButton(
-        onPressed: () => Navigator.pop(context, _controller.text.trim()),
-        child: Text(widget.confirmLabel),
-      ),
-    ],
-  );
 }
 
 class _ReceiptChoice {
@@ -1470,9 +2122,13 @@ class _ReceiptDialog extends StatefulWidget {
   const _ReceiptDialog({
     required this.dispatchedQuantity,
     required this.language,
+    required this.description,
+    this.initial,
   });
   final String dispatchedQuantity;
   final AppLanguage language;
+  final String description;
+  final _ReceiptChoice? initial;
 
   @override
   State<_ReceiptDialog> createState() => _ReceiptDialogState();
@@ -1480,13 +2136,16 @@ class _ReceiptDialog extends StatefulWidget {
 
 class _ReceiptDialogState extends State<_ReceiptDialog> {
   String _outcome = 'received';
+  bool _invalid = false;
   final TextEditingController _good = TextEditingController();
   final TextEditingController _note = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _good.text = widget.dispatchedQuantity;
+    _outcome = widget.initial?.outcome ?? 'received';
+    _good.text = widget.initial?.goodQuantity ?? widget.dispatchedQuantity;
+    _note.text = widget.initial?.note ?? '';
   }
 
   @override
@@ -1503,74 +2162,87 @@ class _ReceiptDialogState extends State<_ReceiptDialog> {
         widget.language,
       ),
     ),
-    content: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        DropdownButtonFormField<String>(
-          initialValue: _outcome,
-          items: [
-            DropdownMenuItem(
-              value: 'received',
-              child: Text(
-                YorksV1CompanyMaterialRequestStrings.receivedGood.active(
-                  widget.language,
+    content: SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(widget.description),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            initialValue: _outcome,
+            items: [
+              DropdownMenuItem(
+                value: 'received',
+                child: Text(
+                  YorksV1CompanyMaterialRequestStrings.receivedGood.active(
+                    widget.language,
+                  ),
                 ),
               ),
-            ),
-            DropdownMenuItem(
-              value: 'missing',
-              child: Text(
-                YorksV1CompanyMaterialRequestStrings.missing.active(
-                  widget.language,
+              DropdownMenuItem(
+                value: 'missing',
+                child: Text(
+                  YorksV1CompanyMaterialRequestStrings.missing.active(
+                    widget.language,
+                  ),
                 ),
               ),
-            ),
-            DropdownMenuItem(
-              value: 'damaged',
-              child: Text(
-                YorksV1CompanyMaterialRequestStrings.damaged.active(
-                  widget.language,
+              DropdownMenuItem(
+                value: 'damaged',
+                child: Text(
+                  YorksV1CompanyMaterialRequestStrings.damaged.active(
+                    widget.language,
+                  ),
                 ),
               ),
-            ),
-            DropdownMenuItem(
-              value: 'incorrect',
-              child: Text(
-                YorksV1CompanyMaterialRequestStrings.incorrect.active(
-                  widget.language,
+              DropdownMenuItem(
+                value: 'incorrect',
+                child: Text(
+                  YorksV1CompanyMaterialRequestStrings.incorrect.active(
+                    widget.language,
+                  ),
                 ),
+              ),
+            ],
+            onChanged: (value) => setState(() {
+              _outcome = value!;
+              if (value == 'received') {
+                _good.text = widget.dispatchedQuantity;
+              } else {
+                _good.text = '0';
+              }
+            }),
+          ),
+          if (_outcome != 'received') ...[
+            const SizedBox(height: 12),
+            TextField(
+              controller: _good,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: InputDecoration(
+                labelText: YorksV1CompanyMaterialRequestStrings.receivedGood
+                    .active(widget.language),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _note,
+              decoration: InputDecoration(
+                labelText: YorksV1CompanyMaterialRequestStrings.receiptNote
+                    .active(widget.language),
               ),
             ),
           ],
-          onChanged: (value) => setState(() {
-            _outcome = value!;
-            if (value == 'received') {
-              _good.text = widget.dispatchedQuantity;
-            } else {
-              _good.text = '0';
-            }
-          }),
-        ),
-        if (_outcome != 'received') ...[
-          const SizedBox(height: 12),
-          TextField(
-            controller: _good,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: InputDecoration(
-              labelText: YorksV1CompanyMaterialRequestStrings.receivedGood
-                  .active(widget.language),
+          if (_invalid)
+            Text(
+              YorksV1CompanyMaterialRequestStrings.checkLine.active(
+                widget.language,
+              ),
+              style: AppTypography.bodySmall.copyWith(color: AppColors.error),
             ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _note,
-            decoration: InputDecoration(
-              labelText: YorksV1CompanyMaterialRequestStrings.receiptNote
-                  .active(widget.language),
-            ),
-          ),
         ],
-      ],
+      ),
     ),
     actions: [
       TextButton(
@@ -1584,9 +2256,12 @@ class _ReceiptDialogState extends State<_ReceiptDialog> {
           final dispatched = double.tryParse(widget.dispatchedQuantity) ?? 0;
           final good = double.tryParse(_good.text.trim()) ?? -1;
           final exception = dispatched - good;
-          if (good < 0 ||
+          if (!good.isFinite ||
+              good < 0 ||
               exception < 0 ||
-              (_outcome != 'received' && _note.text.trim().isEmpty)) {
+              (_outcome != 'received' &&
+                  (exception <= 0 || _note.text.trim().isEmpty))) {
+            setState(() => _invalid = true);
             return;
           }
           Navigator.pop(
@@ -1609,78 +2284,76 @@ class _ReceiptDialogState extends State<_ReceiptDialog> {
   );
 }
 
-class _PlanChoice {
-  const _PlanChoice({
-    required this.decision,
-    required this.quantity,
-    this.inventoryItemId,
-    this.externalSupplier,
-    this.reason,
-  });
-  final String decision;
-  final String quantity;
-  final String? inventoryItemId;
-  final String? externalSupplier;
-  final String? reason;
-
-  Map<String, Object?> toPayload(String requestLineId) => {
-    'request_line_id': requestLineId,
-    'decision': decision,
-    'source_kind': quantity == '0'
-        ? null
-        : inventoryItemId == null
-        ? 'external_supplier'
-        : 'warehouse',
-    'inventory_item_id': inventoryItemId,
-    'external_supplier': externalSupplier,
-    'arranged_qty': quantity,
-    'expected_available_date': null,
-    'follow_up_date': decision == 'unavailable'
-        ? DateTime.now()
-              .add(const Duration(days: 7))
-              .toIso8601String()
-              .split('T')
-              .first
-        : null,
-    'reason': reason,
-  };
-}
-
-class _PlanDialog extends StatefulWidget {
-  const _PlanDialog({
+class CompanySupplyPlanDialog extends StatefulWidget {
+  const CompanySupplyPlanDialog({
+    super.key,
     required this.line,
     required this.outstandingQuantity,
     required this.inventory,
     required this.language,
+    this.initial,
   });
   final YorksV1CompanyMaterialRequestLine line;
   final String outstandingQuantity;
+  final CompanySupplyPlanChoice? initial;
   final List<YorksV1InventoryItem> inventory;
   final AppLanguage language;
 
   @override
-  State<_PlanDialog> createState() => _PlanDialogState();
+  State<CompanySupplyPlanDialog> createState() =>
+      CompanySupplyPlanDialogState();
 }
 
-class _PlanDialogState extends State<_PlanDialog> {
+class CompanySupplyPlanDialogState extends State<CompanySupplyPlanDialog> {
   late final TextEditingController _quantity = TextEditingController(
     text: widget.outstandingQuantity,
   );
+  final TextEditingController _stockSearch = TextEditingController();
   final TextEditingController _supplier = TextEditingController();
   final TextEditingController _reason = TextEditingController();
   String _decision = 'full';
   String _source = 'warehouse';
   String? _inventoryItemId;
+  DateTime? _followUp;
+  bool _invalid = false;
 
   @override
   void initState() {
     super.initState();
-    _inventoryItemId = widget.inventory.firstOrNull?.id;
-    if (_inventoryItemId == null) _source = 'external_supplier';
+    final previous = widget.initial;
+    _inventoryItemId = previous?.inventoryItemId;
+    _decision = previous?.decision ?? 'full';
+    _source = previous == null
+        ? 'warehouse'
+        : previous.inventoryItemId == null
+        ? 'external_supplier'
+        : 'warehouse';
+    _quantity.text = previous?.quantity ?? widget.outstandingQuantity;
+    _supplier.text = previous?.externalSupplier ?? '';
+    _reason.text = previous?.reason ?? '';
+    _followUp = DateTime.tryParse(previous?.followUpDate ?? '');
+    final selected = widget.inventory
+        .where((item) => item.id == _inventoryItemId)
+        .firstOrNull;
+    if (selected != null) {
+      _stockSearch.text =
+          '${selected.description} · ${selected.availableQuantity} ${selected.unit}';
+    }
+    _stockSearch.addListener(() {
+      final chosen = widget.inventory
+          .where((item) => item.id == _inventoryItemId)
+          .firstOrNull;
+      if (chosen != null &&
+          _stockSearch.text !=
+              '${chosen.description} · ${chosen.availableQuantity} ${chosen.unit}') {
+        setState(() => _inventoryItemId = null);
+      }
+    });
   }
 
   @override
   void dispose() {
+    _stockSearch.dispose();
     _quantity.dispose();
     _supplier.dispose();
     _reason.dispose();
@@ -1695,6 +2368,7 @@ class _PlanDialogState extends State<_PlanDialog> {
         mainAxisSize: MainAxisSize.min,
         children: [
           DropdownButtonFormField<String>(
+            isExpanded: true,
             initialValue: _decision,
             items: [
               DropdownMenuItem(
@@ -1732,6 +2406,9 @@ class _PlanDialogState extends State<_PlanDialog> {
           const SizedBox(height: 12),
           if (_decision != 'unavailable') ...[
             SegmentedButton<String>(
+              direction: MediaQuery.sizeOf(context).width < 600
+                  ? Axis.vertical
+                  : Axis.horizontal,
               segments: [
                 ButtonSegment(
                   value: 'warehouse',
@@ -1756,18 +2433,32 @@ class _PlanDialogState extends State<_PlanDialog> {
             ),
             const SizedBox(height: 12),
             if (_source == 'warehouse')
-              DropdownButtonFormField<String>(
-                initialValue: _inventoryItemId,
-                items: [
+              DropdownMenu<String>(
+                key: const ValueKey('company-plan-stock-search'),
+                controller: _stockSearch,
+                initialSelection: _inventoryItemId,
+                expandedInsets: EdgeInsets.zero,
+                enableFilter: true,
+                enableSearch: true,
+                requestFocusOnTap: true,
+                menuHeight: 260,
+                label: Text(
+                  YorksV1CompanyMaterialRequestStrings.chooseInventory.active(
+                    widget.language,
+                  ),
+                ),
+                dropdownMenuEntries: [
                   for (final item in widget.inventory)
-                    DropdownMenuItem(
+                    DropdownMenuEntry(
                       value: item.id,
-                      child: Text(
-                        '${item.description} (${item.availableQuantity})',
+                      label:
+                          '${item.description} · ${item.availableQuantity} ${item.unit}',
+                      labelWidget: Text(
+                        '${item.description} · ${item.availableQuantity} ${item.unit}',
                       ),
                     ),
                 ],
-                onChanged: (value) => setState(() => _inventoryItemId = value),
+                onSelected: (value) => setState(() => _inventoryItemId = value),
               )
             else
               TextField(
@@ -1800,31 +2491,102 @@ class _PlanDialogState extends State<_PlanDialog> {
               ),
             ),
           ],
+          if (_decision == 'unavailable')
+            TextButton.icon(
+              onPressed: () async {
+                final now = DateUtils.dateOnly(DateTime.now());
+                final date = await showDatePicker(
+                  context: context,
+                  initialDate: _followUp != null && !_followUp!.isBefore(now)
+                      ? _followUp!
+                      : now,
+                  firstDate: now,
+                  lastDate: now.add(const Duration(days: 3650)),
+                );
+                if (date != null && mounted) setState(() => _followUp = date);
+              },
+              icon: const Icon(Icons.calendar_today_outlined),
+              label: Text(
+                _followUp == null
+                    ? YorksV1CompanyMaterialRequestStrings.followUpDate.active(
+                        widget.language,
+                      )
+                    : MaterialLocalizations.of(
+                        context,
+                      ).formatMediumDate(_followUp!),
+              ),
+            ),
+          if (_invalid)
+            Text(
+              YorksV1CompanyMaterialRequestStrings.checkLine.active(
+                widget.language,
+              ),
+              style: AppTypography.bodySmall.copyWith(color: AppColors.error),
+            ),
         ],
       ),
     ),
     actions: [
       TextButton(
+        key: const ValueKey('company-plan-cancel'),
         onPressed: () => Navigator.pop(context),
         child: Text(
           YorksV1MaterialRequestStrings.cancel.active(widget.language),
         ),
       ),
       FilledButton(
-        onPressed: () => Navigator.pop(
-          context,
-          _PlanChoice(
-            decision: _decision,
-            quantity: _decision == 'unavailable' ? '0' : _quantity.text.trim(),
-            inventoryItemId: _source == 'warehouse' ? _inventoryItemId : null,
-            externalSupplier: _source == 'external_supplier'
-                ? _supplier.text.trim()
-                : null,
-            reason: _decision == 'full' ? null : _reason.text.trim(),
-          ),
-        ),
+        key: const ValueKey('company-plan-save'),
+        onPressed: () {
+          final quantity = _decision == 'unavailable'
+              ? 0.0
+              : double.tryParse(_quantity.text.trim());
+          final maximum = double.tryParse(widget.outstandingQuantity) ?? 0;
+          final invalid =
+              quantity == null ||
+              !quantity.isFinite ||
+              quantity < 0 ||
+              quantity > maximum ||
+              (_decision == 'full' && quantity != maximum) ||
+              (_decision == 'partial' &&
+                  (quantity <= 0 || quantity >= maximum)) ||
+              (_decision != 'full' && _reason.text.trim().isEmpty) ||
+              (_decision == 'unavailable' &&
+                  (_followUp == null ||
+                      _followUp!.isBefore(
+                        DateUtils.dateOnly(DateTime.now()),
+                      ))) ||
+              (_decision != 'unavailable' &&
+                  (_source == 'warehouse'
+                      ? _inventoryItemId == null
+                      : _supplier.text.trim().isEmpty));
+          if (invalid) {
+            setState(() => _invalid = true);
+            return;
+          }
+          Navigator.pop(
+            context,
+            CompanySupplyPlanChoice(
+              decision: _decision,
+              quantity: _decision == 'unavailable'
+                  ? '0'
+                  : _quantity.text.trim(),
+              inventoryItemId:
+                  _decision != 'unavailable' && _source == 'warehouse'
+                  ? _inventoryItemId
+                  : null,
+              externalSupplier:
+                  _decision != 'unavailable' && _source == 'external_supplier'
+                  ? _supplier.text.trim()
+                  : null,
+              reason: _decision == 'full' ? null : _reason.text.trim(),
+              followUpDate: _decision == 'unavailable'
+                  ? _followUp!.toIso8601String().split('T').first
+                  : null,
+            ),
+          );
+        },
         child: Text(
-          YorksV1CompanyMaterialRequestStrings.saveSupplyPlan.active(
+          YorksV1CompanyMaterialRequestStrings.reviewItems.active(
             widget.language,
           ),
         ),
@@ -1890,6 +2652,7 @@ class _Message extends StatelessWidget {
 }
 
 String _stateLabel(String state, AppLanguage language) => switch (state) {
+  'draft' => YorksV1CompanyMaterialRequestStrings.privateDraft.active(language),
   'approved_for_procurement' =>
     YorksV1CompanyMaterialRequestStrings.approvedForProcurement.active(
       language,
@@ -1900,8 +2663,10 @@ String _stateLabel(String state, AppLanguage language) => switch (state) {
   'arranging' => YorksV1CompanyMaterialRequestStrings.arranging.active(
     language,
   ),
-  'ready_for_delivery' || 'partially_dispatched' =>
+  'ready_for_delivery' =>
     YorksV1CompanyMaterialRequestStrings.readyForDelivery.active(language),
+  'partially_dispatched' =>
+    YorksV1MaterialRequestStrings.partiallyDispatched.active(language),
   'receipt_pending' =>
     YorksV1CompanyMaterialRequestStrings.receiptPending.active(language),
   'partially_received' =>
@@ -1912,6 +2677,9 @@ String _stateLabel(String state, AppLanguage language) => switch (state) {
     language,
   ),
   'closed' => YorksV1CompanyMaterialRequestStrings.closed.active(language),
+  'cancelled' => YorksV1CompanyMaterialRequestStrings.cancelled.active(
+    language,
+  ),
   _ => YorksV1CompanyMaterialRequestStrings.awaitingApproval.active(language),
 };
 
@@ -1923,6 +2691,11 @@ String _currentOwner(String state, AppLanguage language) => switch (state) {
   'ready_for_delivery' ||
   'partially_dispatched' =>
     YorksV1CompanyMaterialRequestStrings.procurementOwner.active(language),
+  'receipt_pending' =>
+    YorksV1CompanyMaterialRequestStrings.authorizedReceiver.active(language),
+  'awaiting_beneficiary_handover' =>
+    YorksV1CompanyMaterialRequestStrings.beneficiary.active(language),
+  'closed' || 'rejected' || 'cancelled' => _stateLabel(state, language),
   _ => YorksV1CompanyMaterialRequestStrings.requesterOwner.active(language),
 };
 
@@ -1931,6 +2704,21 @@ String _nextAction(String state, AppLanguage language) => switch (state) {
     YorksV1CompanyMaterialRequestStrings.reviewAndDecide.active(language),
   'approved_for_procurement' || 'arranging' =>
     YorksV1CompanyMaterialRequestStrings.arrangeSupply.active(language),
+  'draft' => YorksV1CompanyMaterialRequestStrings.resumeDraft.active(language),
+  'returned_for_changes' =>
+    YorksV1CompanyMaterialRequestStrings.reviseAndResubmit.active(language),
+  'ready_for_delivery' || 'partially_dispatched' =>
+    YorksV1CompanyMaterialRequestStrings.dispatch.active(language),
+  'receipt_pending' =>
+    YorksV1CompanyMaterialRequestStrings.confirmReceipt.active(language),
+  'partially_received' =>
+    YorksV1CompanyMaterialRequestStrings.arrangeItems.active(language),
+  'awaiting_beneficiary_handover' =>
+    YorksV1CompanyMaterialRequestStrings.confirmHandover.active(language),
+  'fulfilled' => YorksV1CompanyMaterialRequestStrings.closeRequest.active(
+    language,
+  ),
+  'closed' || 'rejected' || 'cancelled' => _stateLabel(state, language),
   _ => YorksV1CompanyMaterialRequestStrings.awaitResolution.active(language),
 };
 

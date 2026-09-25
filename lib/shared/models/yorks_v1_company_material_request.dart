@@ -63,15 +63,20 @@ class YorksV1CompanyMaterialRequestApprovalPreflight {
     required this.approvalRouteId,
     required this.policyVersion,
     required this.approver,
+    this.eligibleApprovers = const [],
   });
 
   final String approvalRouteId;
   final String policyVersion;
   final YorksV1CompanyMaterialRequestPerson approver;
+  final List<YorksV1CompanyMaterialRequestPerson> eligibleApprovers;
 
   factory YorksV1CompanyMaterialRequestApprovalPreflight.fromRpcJson(
     Map<String, dynamic> json,
   ) => YorksV1CompanyMaterialRequestApprovalPreflight(
+    eligibleApprovers: _maps(json['eligible_approvers'])
+        .map(YorksV1CompanyMaterialRequestPerson.fromRpcJson)
+        .toList(growable: false),
     approvalRouteId: _requiredText(json, 'approval_route_id'),
     policyVersion: _requiredText(json, 'policy_version'),
     approver: YorksV1CompanyMaterialRequestPerson(
@@ -204,6 +209,7 @@ class YorksV1CompanyMaterialRequestDraft {
     this.deliveryCollectionPoint,
     this.beneficiaryAuthUserId,
     this.authorizedReceiverAuthUserId,
+    this.selectedApproverAuthUserId,
   });
 
   final String id;
@@ -218,6 +224,7 @@ class YorksV1CompanyMaterialRequestDraft {
   final String? deliveryCollectionPoint;
   final String? beneficiaryAuthUserId;
   final String? authorizedReceiverAuthUserId;
+  final String? selectedApproverAuthUserId;
 
   YorksV1CompanyMaterialRequestDraft copyWith({
     int? recordVersion,
@@ -230,6 +237,8 @@ class YorksV1CompanyMaterialRequestDraft {
     String? deliveryCollectionPoint,
     String? beneficiaryAuthUserId,
     String? authorizedReceiverAuthUserId,
+    String? selectedApproverAuthUserId,
+    bool clearApprover = false,
     bool clearScheduledDate = false,
     bool clearBeneficiary = false,
     bool clearAuthorizedReceiver = false,
@@ -250,6 +259,9 @@ class YorksV1CompanyMaterialRequestDraft {
     beneficiaryAuthUserId: clearBeneficiary
         ? null
         : beneficiaryAuthUserId ?? this.beneficiaryAuthUserId,
+    selectedApproverAuthUserId: clearApprover
+        ? null
+        : selectedApproverAuthUserId ?? this.selectedApproverAuthUserId,
     authorizedReceiverAuthUserId: clearAuthorizedReceiver
         ? null
         : authorizedReceiverAuthUserId ?? this.authorizedReceiverAuthUserId,
@@ -280,6 +292,8 @@ class YorksV1CompanyMaterialRequestDraft {
     'delivery_collection_point': deliveryCollectionPoint?.trim(),
     'beneficiary_auth_user_id': beneficiaryAuthUserId,
     'authorized_receiver_auth_user_id': authorizedReceiverAuthUserId,
+    if (selectedApproverAuthUserId != null)
+      'selected_approver_auth_user_id': selectedApproverAuthUserId,
     'lines': [for (final line in lines) line.toRpcJson()],
   };
 }
@@ -359,7 +373,7 @@ class YorksV1CompanyMaterialRequestApprovalInboxItem {
     Map<String, dynamic> json,
   ) => YorksV1CompanyMaterialRequestApprovalInboxItem(
     id: _requiredText(json, 'id'),
-    requestNumber: _requiredText(json, 'request_number'),
+    requestNumber: _trimToNull(json['request_number']?.toString()) ?? '',
     recordVersion: _requiredInt(json, 'record_version'),
     state: _requiredText(json, 'state'),
     categoryName: _requiredText(json, 'category_name'),
@@ -369,7 +383,9 @@ class YorksV1CompanyMaterialRequestApprovalInboxItem {
     beneficiaryDisplayName: _requiredText(json, 'beneficiary_display_name'),
     submittedAt:
         _date(json['submitted_at']) ??
-        (throw const FormatException('Missing submitted_at')),
+        _date(json['updated_at']) ??
+        _date(json['created_at']) ??
+        (throw const FormatException('Missing request timestamp')),
     lineCount: _requiredInt(json, 'line_count'),
   );
 }
@@ -398,6 +414,8 @@ class YorksV1CompanyMaterialRequest {
     required this.requesterDisplayName,
     required this.requesterExactRole,
     required this.lines,
+    this.categoryId,
+    this.responsibleUnitId,
     this.canDecide = false,
     this.canPlan = false,
     this.canDispatch = false,
@@ -407,6 +425,8 @@ class YorksV1CompanyMaterialRequest {
     this.canSubmitReturn = false,
     this.canDecideReturns = false,
     this.canRevise = false,
+    this.canCancel = false,
+    this.selectedApproverAuthUserId,
     this.canWithdrawRemainder = false,
     this.currentSupplyPlan,
     this.pendingDispatches = const [],
@@ -437,6 +457,8 @@ class YorksV1CompanyMaterialRequest {
   final String? approvalPolicyVersion;
   final String? requestNumber;
   final List<YorksV1CompanyMaterialRequestLine> lines;
+  final String? categoryId;
+  final String? responsibleUnitId;
   final bool canDecide;
   final bool canPlan;
   final bool canDispatch;
@@ -446,6 +468,8 @@ class YorksV1CompanyMaterialRequest {
   final bool canSubmitReturn;
   final bool canDecideReturns;
   final bool canRevise;
+  final bool canCancel;
+  final String? selectedApproverAuthUserId;
   final bool canWithdrawRemainder;
   final Map<String, dynamic>? currentSupplyPlan;
   final List<Map<String, dynamic>> pendingDispatches;
@@ -488,6 +512,8 @@ class YorksV1CompanyMaterialRequest {
       json['approval_policy_version']?.toString(),
     ),
     requestNumber: _trimToNull(json['request_number']?.toString()),
+    categoryId: _trimToNull(json['category_id']?.toString()),
+    responsibleUnitId: _trimToNull(json['responsible_unit_id']?.toString()),
     canDecide: json['can_decide'] == true,
     canPlan: json['can_plan'] == true,
     canDispatch: json['can_dispatch'] == true,
@@ -497,6 +523,10 @@ class YorksV1CompanyMaterialRequest {
     canSubmitReturn: json['can_submit_return'] == true,
     canDecideReturns: json['can_decide_returns'] == true,
     canRevise: json['can_revise'] == true,
+    canCancel: json['can_cancel'] == true,
+    selectedApproverAuthUserId: _trimToNull(
+      json['selected_approver_auth_user_id']?.toString(),
+    ),
     canWithdrawRemainder: json['can_withdraw_remainder'] == true,
     currentSupplyPlan: json['current_supply_plan'] is Map
         ? Map<String, dynamic>.from(json['current_supply_plan'] as Map)
@@ -548,3 +578,12 @@ List<Map<String, dynamic>> _maps(Object? raw) => raw is! List
         for (final item in raw)
           if (item is Map) Map<String, dynamic>.from(item),
       ];
+
+class YorksV1CompanyMaterialRequestPage {
+  const YorksV1CompanyMaterialRequestPage({
+    required this.items,
+    required this.totalCount,
+  });
+  final List<YorksV1CompanyMaterialRequestApprovalInboxItem> items;
+  final int totalCount;
+}

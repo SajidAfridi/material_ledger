@@ -276,7 +276,8 @@ select is(
 select is(
   (select count(*) from public.v1_notifications
    where entity_id = 'c2000000-0000-4000-8000-000000000010'
-     and event_code = 'company_material_request_approved'),
+     and event_code = 'company_material_request_approved'
+     and recipient_auth_user_id = '10000000-0000-4000-8000-000000000002'),
   1::bigint,
   'Approval creates exactly one requester notification'
 );

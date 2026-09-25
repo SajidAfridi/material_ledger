@@ -7,8 +7,17 @@ import 'dart:io';
 // its isolated artifact measured 10,177,884 raw / 2,747,966 gzip bytes. The
 // final 50 kB covers the same candidate with every approved staging rollout
 // enabled; that artifact measured 10,205,890 raw / 2,714,714 gzip bytes.
-// Keep the existing transferred-size ceiling unchanged.
-const _mainDartJsRawBudget = 10250000;
+// The approved MR post-approval editor adds a named-grant dialog and role-safe
+// recovery copy; its staged artifact measured 10,255,834 raw / 2,767,999
+// gzip bytes. Allow 15 kB for that slice and keep the transfer ceiling unchanged.
+// The approved inline delegation switch and ordered record actions add 2.6 kB
+// to the staging baseline. Reserve 5 kB for this UI slice; retain the 2.9 MB
+// compressed transfer ceiling and every route/asset verification gate.
+// The combined Company request register and its distinct request-type icons
+// measure 10,287,901 raw / 2,773,546 gzip bytes with every staging module on.
+// Allow 30 kB raw parse growth for this reviewed slice; retain the transfer
+// ceiling and all other startup checks.
+const _mainDartJsRawBudget = 10300000;
 const _mainDartJsGzipBudget = 2900000;
 const _indexHtmlRawBudget = 40000;
 

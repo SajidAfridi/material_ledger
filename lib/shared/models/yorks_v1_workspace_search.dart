@@ -6,6 +6,7 @@ enum YorksV1WorkspaceSearchResultKind {
   boqGroup,
   boqItem,
   materialRequest,
+  companyMaterialRequest,
   materialItem,
   document,
 }
@@ -145,6 +146,8 @@ class YorksV1WorkspaceSearchResult {
     YorksV1WorkspaceSearchResultKind.project => Icons.account_tree_rounded,
     YorksV1WorkspaceSearchResultKind.boqGroup => Icons.folder_outlined,
     YorksV1WorkspaceSearchResultKind.boqItem => Icons.table_rows_outlined,
+    YorksV1WorkspaceSearchResultKind.companyMaterialRequest =>
+      Icons.business_center_outlined,
     YorksV1WorkspaceSearchResultKind.materialRequest =>
       Icons.assignment_rounded,
     YorksV1WorkspaceSearchResultKind.materialItem => Icons.inventory_2_rounded,
