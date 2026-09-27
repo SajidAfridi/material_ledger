@@ -28,7 +28,12 @@ import 'dart:io';
 // receipts/PDC dashboard and shared in-project host. It measures 10,423,928
 // raw / 2,806,317 gzip bytes. Reserve 16 kB raw headroom while retaining the
 // stricter 2.9 MB transferred-size ceiling and every other startup check.
-const _mainDartJsRawBudget = 10440000;
+// The production Accounts release adds the responsive billing workbench and
+// complete protected Excel/PDF backup composer. The merged production build
+// measures 10,462,712 raw / 2,818,164 gzip bytes. Reserve 22 kB of raw parse
+// headroom for deterministic compiler movement; keep the tighter transferred
+// network ceiling unchanged.
+const _mainDartJsRawBudget = 10485000;
 const _mainDartJsGzipBudget = 2900000;
 const _indexHtmlRawBudget = 40000;
 
