@@ -30,6 +30,52 @@ void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   for (final width in [1366.0, 360.0]) {
+    for (final companyEnabled in [false, true]) {
+      testWidgets('Accountant Company navigation $companyEnabled at $width', (
+        tester,
+      ) async {
+        _setViewport(tester, Size(width, 800));
+        addTearDown(() => _resetViewport(tester));
+        final preferences = await SharedPreferences.getInstance();
+        await tester.pumpWidget(
+          _ShellTestApp(
+            role: YorksV1Role.accountant,
+            preferences: preferences,
+            flags: YorksV1FeatureFlags(
+              foundation: true,
+              projects: true,
+              boq: true,
+              excel: true,
+              requests: true,
+              arrangement: true,
+              logistics: true,
+              returnsDocuments: true,
+              documents: true,
+              companyMaterialRequests: companyEnabled,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final requests = width < 720
+            ? find.byWidgetPredicate(
+                (widget) =>
+                    widget is Semantics &&
+                    widget.properties.label ==
+                        YorksV1ShellStrings.materialRequests.primary,
+              )
+            : find.text(YorksV1ShellStrings.materialRequests.primary);
+        expect(requests, companyEnabled ? findsOneWidget : findsNothing);
+        expect(find.text(YorksV1ShellStrings.projects.primary), findsNothing);
+        expect(
+          find.text(YorksV1ShellStrings.browseInventory.primary),
+          findsNothing,
+        );
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+
+  for (final width in [1366.0, 360.0]) {
     testWidgets('native account menu controls current view at $width', (
       tester,
     ) async {
@@ -657,11 +703,13 @@ class _ShellTestApp extends StatelessWidget {
     required this.role,
     required this.preferences,
     this.fullscreenController,
+    this.flags,
   });
 
   final YorksV1Role role;
   final SharedPreferences preferences;
   final YorksWorkspaceFullscreenController? fullscreenController;
+  final YorksV1FeatureFlags? flags;
 
   @override
   Widget build(BuildContext context) {
@@ -684,6 +732,8 @@ class _ShellTestApp extends StatelessWidget {
       overrides: [
         sharedPreferencesProvider.overrideWithValue(preferences),
         yorksV1CurrentRoleProvider.overrideWithValue(role),
+        if (flags != null)
+          yorksV1FeatureFlagsProvider.overrideWithValue(flags!),
         if (fullscreenController != null)
           yorksWorkspaceFullscreenControllerProvider.overrideWith(
             (_) => fullscreenController!,

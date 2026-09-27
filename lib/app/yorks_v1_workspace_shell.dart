@@ -78,6 +78,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
         (!isAccountant ||
             accountsEnabled ||
             workforceEnabled ||
+            companyRequestsEnabled ||
             analyticsEnabled) &&
         ref.watch(supabaseClientProvider) != null;
     final permissionState = connectedV1Permissions
@@ -421,6 +422,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
       final accounts = path(RoutePaths.yorksV1Accounts);
       final projects = path(RoutePaths.yorksV1AccountsProjects);
       final claims = path(RoutePaths.yorksV1AccountsClaims);
+      final requests = path(RoutePaths.yorksV1MaterialRequests);
       final payments = path(RoutePaths.yorksV1AccountsClientPayments);
       final more = _YorksDestination(
         label: AppStrings.more,
@@ -430,7 +432,13 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
             : Icons.grid_view_rounded,
         path: RoutePaths.yorksV1MobileMore,
       );
-      return [?accounts, ?projects, ?claims, ?payments, more];
+      return [
+        ?accounts,
+        ?projects,
+        if (companyRequestsEnabled) ?requests else ?claims,
+        ?payments,
+        more,
+      ];
     }
     final requiredHome = home!;
     if (!nativeMobile) {
@@ -667,6 +675,8 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
       final path = destination.path;
       if (path == RoutePaths.engineerHome) return true;
       if (role == YorksV1Role.accountant &&
+          !(companyRequestsEnabled &&
+              path == RoutePaths.yorksV1MaterialRequests) &&
           path != RoutePaths.yorksV1Accounts &&
           path != RoutePaths.yorksV1Workforce &&
           (path == null ||
@@ -714,9 +724,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
         return allows(YorksV1CapabilityKeys.projectsView, role != null);
       }
       if (path == RoutePaths.yorksV1MaterialRequests) {
-        return (companyRequestsEnabled &&
-                role != null &&
-                role != YorksV1Role.accountant) ||
+        return (companyRequestsEnabled && role != null) ||
             allows(YorksV1CapabilityKeys.materialRequestsView, role != null);
       }
       if (path == RoutePaths.yorksV1TeamChat) {

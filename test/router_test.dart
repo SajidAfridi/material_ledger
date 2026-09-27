@@ -577,6 +577,71 @@ void main() {
     }
   });
 
+  testWidgets('Accountant Company access never opens scoped Project routes', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final preferences = await SharedPreferences.getInstance();
+    for (final companyEnabled in [false, true]) {
+      final router = createAppRouter(
+        isOnboarded: true,
+        isLoggedIn: true,
+        role: UserRole.accountant,
+        user: AppUser(
+          id: 'company-accountant',
+          fullName: 'Accountant',
+          email: 'accountant@yorks.test',
+          role: UserRole.accountant,
+          createdAt: DateTime.utc(2026, 9, 27),
+          yorksV1RoleCache: YorksV1Role.accountant,
+          yorksV1Roles: const [YorksV1Role.accountant],
+        ),
+        yorksV1ProjectsEnabled: true,
+        yorksV1RequestsEnabled: true,
+        yorksV1CompanyMaterialRequestsEnabled: companyEnabled,
+        yorksV1Role: YorksV1Role.accountant,
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [sharedPreferencesProvider.overrideWithValue(preferences)],
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      for (final path in [
+        RoutePaths.yorksV1MaterialRequests,
+        RoutePaths.yorksV1CompanyMaterialRequestNew,
+      ]) {
+        router.go(path);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+        expect(
+          router.routeInformationProvider.value.uri.path,
+          companyEnabled ? path : RoutePaths.engineerHome,
+        );
+      }
+      for (final path in [
+        '${RoutePaths.yorksV1MaterialRequests}?project_id=project-1',
+        '${RoutePaths.yorksV1MaterialRequests}/new',
+        '${RoutePaths.yorksV1MaterialRequests}/project-request-1',
+        RoutePaths.yorksV1Projects,
+        RoutePaths.yorksV1Inventory,
+      ]) {
+        router.go(path);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+        expect(
+          router.routeInformationProvider.value.uri.path,
+          RoutePaths.engineerHome,
+          reason: 'Accountant denied $path',
+        );
+      }
+      await tester.pumpWidget(const SizedBox.shrink());
+      router.dispose();
+    }
+  });
+
   testWidgets(
     'eligible V1 actors need independent create and edit capabilities',
     (tester) async {
