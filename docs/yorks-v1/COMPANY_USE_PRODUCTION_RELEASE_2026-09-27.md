@@ -1,85 +1,94 @@
-# Company Use production release preparation — 27 September 2026
+# Company Use production release — 27 September 2026
 
-Status: **enablement authorized; awaiting real production policy configuration**.
-No production deployment, data change, schema change or grant was performed by
-this preparation. The current production release remains PR #30.
+Status: **publication authorized; staged staff policy verified; final artifact gates in progress**.
+The live production alias still carries PR #30 until the verified candidate is promoted.
 
-## User request and implementation
+## Approved behavior and scope
 
-The product owner explicitly requested publishing Company Use in production.
-The release removes the environment-specific frontend pause and lets the
-existing `YORKS_V1_COMPANY_MATERIAL_REQUESTS` flag control production exactly as
-it controls staging. The tracked default stays false. Request dependencies,
-protected participant authorization, approval separation, quantity constraints
-and all existing trusted commands remain unchanged. The obsolete production
-pause test is replaced by a deployment-flag test.
+The product owner authorized publishing Company Use and subsequently specified
+company-wide requesting and six categories. [Product decision §30](PRODUCT_DECISIONS.md)
+records the exact access scope. Every active canonical Yorks account may request,
+be a beneficiary and receive in the six published Company Operations scopes:
+Personal Use, Office Supplies, Warehouse Supplies, Worker Supplies, Safety & PPE
+and Other. All six existing approver roles may approve. The existing **Submit
+and Approve** fast path retains its independent beneficiary/receiver exclusion.
+Accountant and Procurement inherit no Project MR, BOQ or stock mutation authority.
 
-Production base: `486fea7efbb06945e00b7e9c494f3e2e53b22da1`.
-The inspected live JavaScript hash is
+The implementation removes the production-only frontend pause while retaining
+the default-off deployment flag, exposes the Company entry to Accountant in the
+shared shell and both route guards, and adds protected, explicitly configured
+staff policies. Per-person dated grants and immutable provenance are provisioned
+for existing and future active Auth accounts. Live Auth role/ban/deletion and the
+canonical profile mirror are rechecked. Revoked grants never reopen automatically;
+inactive/expired staff policy removes its generated authority. Existing individual
+Company scopes and business evidence remain intact.
+
+Production base: `486fea7efbb06945e00b7e9c494f3e2e53b22da1` (PR #30).
+Inspected previous public JavaScript SHA256:
 `15e5cdf0d48eb9d6fa0bb21d73411ed43a199f7ef573c031ff4072ff10855929`.
-The isolated release branch is
-`codex/yorks-company-use-production-20260927`. Unrelated primary-worktree edits
-are preserved.
+Branch: `codex/yorks-company-use-production-20260927`; PR #32. The dirty primary
+checkout is preserved; builds and commits use the isolated checkout.
 
-## Configuration required before enablement
+## Database and configuration
 
-Read-only production inspection found **zero categories, responsible units,
-authorizations, approval routes and Company requests**. Staging has one visibly
-labelled demo category/unit and technical-persona grants. Those demo grants
-are not a production policy and must never be copied into production.
+Canonical additive migration: `20260927011706_company_material_request_staff_policy.sql`.
+Install itself creates no catalog, authority or business records. Reviewed launch
+configuration is the repeatable [operator SQL](../../tool/company-material-request-launch-policy.sql).
+It uses generated catalog IDs and real live-role users, never technical personas
+in production. Initial routing picks a real active Admin primary and Senior
+Mechanical Engineer (or another eligible approver) alternate; selected approver
+choices remain independent and server validated.
 
-The release owner must specify real categories and responsible units plus the
-people authorized as requesters, approvers, receivers and beneficiaries.
-Beneficiaries require active Yorks logins. Approval requires the existing dated
-category/unit grant and exact approved role; an approver cannot also receive
-or benefit from that request. Permission assignments must be attributable and
-must not be inferred from project membership or broad role labels.
+Production preflight found no Company catalog or requests and 25 active users,
+including 17 approver-role accounts. Staging uses only its existing seven visibly
+labelled technical personas; the historical demo policy remains separate.
+Staging now has six real launch scopes, 150 generated grants/provenance records,
+and six routes, alongside its existing demo data. The staged migration ledger
+was reconciled to the canonical version only after exact statement MD5 matching.
 
-This is the existing configuration boundary in
-[T01](COMPANY_MATERIAL_REQUEST_T01_IMPLEMENTATION.md), not a request for another
-deployment approval. Missing configuration remains fail-closed.
+## Verified gates and explicit limitations
 
-## Verification completed during preparation
+- Changed Dart formatting, analyzer and diff checks passed.
+- Complete PostgreSQL 17.6 migration reset and pgTAP suite passed: **112 files,
+  3,191 assertions**, including 51 new staff-policy assertions. All nine exact
+  roles, demotion/promotion, new Auth onboarding, inactive/banned/deleted users,
+  mirror mismatch, unknown roles, revoked grants, policy disablement, direct API
+  denials, and immutable provenance are covered.
+- Local competing policy provisioning returned 4/0 grants with exactly four
+  provenance events. Re-running launch configuration created no duplicate grants.
+- Six Accountant routing/navigation tests passed, including flag-off behavior,
+  shared-home/Company access and Project/Inventory/editor denials at desktop and
+  360px. The combined-home tests also exercise Accountant.
+- Dedicated staging Auth/REST: **35 new staff-policy checks** passed with seven
+  technical personas. Six categories/all active participants, PE fast approval,
+  concurrent duplicate retries, one recorded decision/number, non-approver and
+  beneficiary/receiver self-approval denials, Accountant private draft/submission,
+  Project write denial and cancellation preservation were checked. Median options
+  round trip across seven reads was **861 ms**, including network, not an SQL-only
+  performance benchmark. A connection reset before final cancellation commit was
+  reconciled by read-back and resumed; all synthetic evidence was cancelled.
+- The prior 30-check staging Company lifecycle was repeated successfully after
+  this migration: supply revision/reapproval, dispatch, receiver confirmation,
+  beneficiary handover, immutable issue evidence, closure and cancellation retry.
+  These are technical smoke checks, not named-employee/manual UAT.
+- Full Flutter suite: **1,674 passed / 270 existing failed**, with **no new failing
+  names** versus the earlier 1,666/270 preparation run. The complete Flutter gate
+  remains red; unrelated goldens/baselines were not rewritten. This release does
+  not claim every legacy state or platform/manual check is certified.
+- Supabase security advisors found no new warning on the internal provisioner or
+  Auth trigger. The two service-only tables intentionally have RLS with no client
+  policies. Existing unrelated advisor warnings remain outside this release.
 
-- Explicit production flag on, flag off and disabled-request dependency checks
-  passed. The generic flag default remains off.
-- Analyzer, changed-Dart formatting and diff checks passed.
-- 118 focused Company, register, repository, operation, responsive, router and
-  analytics tests passed, including desktop and 360px rendering.
-- Full Flutter suite: 1,666 passed, 270 failed. All failing names were present
-  in the preceding production-source run; there are no new failing names. The
-  obsolete production-pause test accounts for the one removed failure. The
-  complete Flutter gate remains red; unrelated baselines were not rewritten.
-- Dedicated staging Auth/REST lifecycle: 30 checks passed with technical
-  personas, including private-draft denials, independent approval, Procurement
-  revision/reapproval, external-source dispatch, receiver confirmation,
-  beneficiary handover, immutable issue evidence, closure and cancellation
-  retries. Synthetic records are labelled `STAGING RELEASE` and retained as
-  closed/cancelled evidence. This is not named-employee/manual UAT.
-- All 54 Company-related function definitions match staging and production.
-  The 12 relevant migration ledger entries match. All 23 Company relations
-  have RLS; ordinary client writes and anonymous reads are denied. None of the
-  54 functions permits anonymous execution. No database migration is required
-  for this frontend flag change.
-- Company-enabled CI web build passed its startup budget: 10,354,389 raw bytes
-  and 2,787,138 gzip bytes for the entry JavaScript. This uses `ci.invalid` and
-  is not a hosted production artifact.
+CI web/APK, final hosted desktop/360px visuals, PostHog ingestion, production
+policy preservation checks and candidate/public artifact hashes are recorded in
+the external signed-evidence package after completion. The CI APK uses the
+separate ephemeral certificate and is not a production Android release.
 
-The previous PR #30 source already passed complete PostgreSQL 15 and 17.6
-database suites (111 files / 3,140 assertions each). No SQL definition changes
-are introduced here; that prior gate and the new live fingerprint/permission
-checks have distinct evidence boundaries.
+## Rollback and preservation
 
-## Remaining release work and rollback
-
-Publish only the explicitly supplied real policy, verify its effective
-participant/approver resolution, and verify the final Company-enabled staging
-and production artifacts before promotion. The broader
-[T06](COMPANY_MATERIAL_REQUEST_T06_END_TO_END_HARDENING.md) return-register and
-controlled-document acceptance boundaries remain explicit. The known Flutter
-baseline failures are not a full-suite pass.
-
-Rollback is the existing Company flag off and the preceding compatible web
-artifact. Preserve all Company and Project IDs, drafts, approvals, reservations,
-movements, dispatches, receipts, handovers, returns, immutable issue evidence
-and audit history. Do not delete business evidence or revert schema.
+Rollback uses the Company flag off and the previous compatible verified web
+artifact. Disable the protected staff policy if participant access must be paused.
+Keep all Company/Project IDs, private drafts, grants/revocations, approval/supply
+snapshots, reservations, movements, dispatches, receipts, handovers, returns,
+immutable issue evidence and audit/provenance history. Do not drop schema, reset
+counters, copy staging users or delete business records.

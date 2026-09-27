@@ -614,9 +614,13 @@ bool? _isAllowedForRole(
   if (_isYorksV1WorkforcePath(path)) return true;
   if (_isYorksV1AnalyticsPath(path)) return true;
 
-  // Accountant is an Accounts-only identity. Normalized Accounts paths are
-  // accepted above and then resolved through the protected capability guard.
-  if (role == UserRole.accountant) return false;
+  // The protected V1 guard resolves Company flag/scope separately. Accept
+  // only its shared home and Company paths at this compatibility layer.
+  if (role == UserRole.accountant) {
+    return path == RoutePaths.yorksV1MaterialRequests ||
+        path == RoutePaths.yorksV1CompanyMaterialRequests ||
+        path.startsWith('${RoutePaths.yorksV1CompanyMaterialRequests}/');
+  }
 
   // Materials hub is an office tab; engineers use their own Browse instead.
   if (path == RoutePaths.materials) return role.usesAdminPanel;
@@ -783,9 +787,16 @@ bool? _isYorksV1RouteAllowedForRole(
     );
   }
 
-  // Accountant inherits no non-Accounts project, BOQ, MR, Inventory or
-  // administration route merely because it is a recognized platform role.
-  if (role == YorksV1Role.accountant) return false;
+  // Company staff policy is independent of project/stock authority. Accountant
+  // may enter Company requests and the unscoped, server-filtered shared home.
+  if (role == YorksV1Role.accountant) {
+    final projectId = uri.queryParameters['project_id']?.trim();
+    return companyMaterialRequestsEnabled &&
+        (path == RoutePaths.yorksV1CompanyMaterialRequests ||
+            path.startsWith('${RoutePaths.yorksV1CompanyMaterialRequests}/') ||
+            (path == RoutePaths.yorksV1MaterialRequests &&
+                (projectId == null || projectId.isEmpty)));
+  }
 
   if (path == RoutePaths.yorksV1Projects ||
       path.startsWith('${RoutePaths.yorksV1Projects}/')) {

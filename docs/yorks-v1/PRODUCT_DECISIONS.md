@@ -1749,3 +1749,47 @@ The Company request detail uses the same lifecycle hierarchy and responsive
 action placement as Project MR while retaining Company-specific recipient,
 handover and return rules. This does not change Project MR authority or release
 any Company feature to production before its separate acceptance.
+
+
+### 30. Company-wide launch policy — 27 September 2026
+
+The product owner authorized Company Use production publication and explicitly
+requested that anyone may raise a Company request. This supersedes the initial
+unconfigured, individually named requester rollout in Company T01 only. Every
+active Yorks account with one of the nine exact server-controlled roles may
+request, be a beneficiary and receive within a published Company staff scope.
+Accountant and Procurement gain this Company-specific participant authority;
+they gain no Engineering Project MR, BOQ, project or stock mutation authority.
+
+The six launch categories are Personal Use, Office Supplies, Warehouse Supplies,
+Worker Supplies, Safety & PPE and Other. Their stable codes are `personal`,
+`office`, `warehouse`, `workers`, `safety`, `other`. The initial responsible unit
+is Company Operations (`COMPANY`). Labels are catalog data, not hard-coded UI
+copy. Separate office/warehouse/worker supply categories reflect the owner's
+operational categories; the PPE label is consistent with the primary
+[OSHA PPE overview](https://www.osha.gov/personal-protective-equipment), without
+asserting a US legal obligation or formal
+[UNSPSC](https://www.ungm.org/Public/UNSPSC) classification.
+
+Project Engineer, Senior Mechanical Engineer, Project Manager, Workshop
+In-Charge, Document Controller and Admin receive Company approver authority in
+these scopes. The existing **Submit and Approve** fast path and independent
+beneficiary/receiver exclusion in §29 remain unchanged. Initial routing uses a
+real active Admin as accountable primary and a real active Senior Mechanical
+Engineer (or another eligible approver) as alternate. The requester can select
+any eligible independent approver, or themselves when §29 permits it.
+
+An explicit protected staff policy provisions dated per-person grants and
+append-only source/version/subject/role evidence. Auth onboarding and exact-role
+changes apply that published policy. Unknown, banned, deleted, inactive or
+inconsistent identities fail closed. Approver demotion is checked against live
+Auth, even with a stale JWT or retained grant. Automatic provisioning never
+reopens any prior ended/revoked grant; restoring that person requires an explicit
+reviewed grant. Disabling/expiring a staff policy disables its generated grants
+without deleting history. Historical individual policy scopes remain intact.
+
+The shared Material Requests home and Company routes become discoverable to
+Accountant when the Company flag is on. Project-scoped request routes remain
+denied. Company publication keeps its existing private drafts, selected approval,
+supply revision/reapproval, dispatch, receipt, handover, return and immutable
+evidence rules, and uses the existing Material Request visual hierarchy.

@@ -16,63 +16,65 @@ import 'package:material_ledger/shared/repositories/yorks_v1_material_request_re
 import 'support/yorks_v1_permission_test_support.dart';
 
 void main() {
-  for (final width in [360.0, 1366.0]) {
-    testWidgets(
-      'Combined home keeps Company creation and one register at $width',
-      (tester) async {
-        SharedPreferences.setMockInitialValues({});
-        final preferences = await SharedPreferences.getInstance();
-        tester.view.physicalSize = Size(width, 900);
-        tester.view.devicePixelRatio = 1;
-        addTearDown(tester.view.resetPhysicalSize);
-        addTearDown(tester.view.resetDevicePixelRatio);
-        final repository = _Register();
-        await tester.pumpWidget(
-          ProviderScope(
-            overrides: [
-              sharedPreferencesProvider.overrideWithValue(preferences),
-              yorksV1FeatureFlagsProvider.overrideWithValue(
-                const YorksV1FeatureFlags(
-                  foundation: true,
-                  projects: true,
-                  boq: true,
-                  excel: true,
-                  requests: true,
-                  arrangement: true,
-                  logistics: true,
-                  returnsDocuments: true,
-                  documents: true,
-                  companyMaterialRequests: true,
+  for (final role in [YorksV1Role.siteEngineer, YorksV1Role.accountant]) {
+    for (final width in [360.0, 1366.0]) {
+      testWidgets(
+        'Combined home keeps Company creation and one register for ${role.name} at $width',
+        (tester) async {
+          SharedPreferences.setMockInitialValues({});
+          final preferences = await SharedPreferences.getInstance();
+          tester.view.physicalSize = Size(width, 900);
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          final repository = _Register();
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: [
+                sharedPreferencesProvider.overrideWithValue(preferences),
+                yorksV1FeatureFlagsProvider.overrideWithValue(
+                  const YorksV1FeatureFlags(
+                    foundation: true,
+                    projects: true,
+                    boq: true,
+                    excel: true,
+                    requests: true,
+                    arrangement: true,
+                    logistics: true,
+                    returnsDocuments: true,
+                    documents: true,
+                    companyMaterialRequests: true,
+                  ),
                 ),
-              ),
-              yorksV1CurrentRoleProvider.overrideWithValue(
-                YorksV1Role.siteEngineer,
-              ),
-              yorksV1CurrentPermissionSnapshotProvider.overrideWith(
-                (ref) => YorksV1TestPermissionController(
-                  yorksV1TrustedFeaturePermissionState(),
+                yorksV1CurrentRoleProvider.overrideWithValue(role),
+                yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+                  (ref) => YorksV1TestPermissionController(
+                    yorksV1TrustedFeaturePermissionState(),
+                  ),
                 ),
-              ),
-              yorksV1MaterialRequestRepositoryProvider.overrideWithValue(
-                repository,
-              ),
-            ],
-            child: const MaterialApp(home: YorksV1MaterialRequestsScreen()),
-          ),
-        );
-        await tester.pumpAndSettle();
-        expect(repository.loads, greaterThan(0));
-        expect(
-          find.byKey(const ValueKey('material-request-centre-create-company')),
-          findsOneWidget,
-        );
-        expect(
-          find.byKey(const ValueKey('material-request-use-switch')),
-          findsNothing,
-        );
-        expect(tester.takeException(), isNull);
-      },
-    );
+                yorksV1MaterialRequestRepositoryProvider.overrideWithValue(
+                  repository,
+                ),
+              ],
+              child: const MaterialApp(home: YorksV1MaterialRequestsScreen()),
+            ),
+          );
+          await tester.pumpAndSettle();
+          expect(repository.loads, greaterThan(0));
+          expect(
+            find.byKey(
+              const ValueKey('material-request-centre-create-company'),
+            ),
+            findsOneWidget,
+          );
+          expect(
+            find.byKey(const ValueKey('material-request-use-switch')),
+            findsNothing,
+          );
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
   }
 }
 
