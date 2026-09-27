@@ -197,13 +197,36 @@ void main() {
     await _pumpProjectBilling(tester, const Size(1366, 900));
 
     expect(find.byType(DataTable), findsOneWidget);
-    expect(find.text('Stage Value'), findsOneWidget);
-    expect(find.text('Eligible Amount'), findsOneWidget);
-    expect(find.text('Already Claimed'), findsOneWidget);
+    expect(find.text('Stage Value'), findsWidgets);
+    expect(find.text('Eligible Amount'), findsWidgets);
+    expect(find.text('Available to Claim'), findsWidgets);
     expect(find.text('AED 8,400,000.00'), findsWidgets);
     expect(tester.takeException(), isNull);
+    await expectLater(
+      find.byType(YorksProjectAccountsScreen),
+      matchesGoldenFile(
+        'goldens/yorks_r39_project_accounts_billing_workbench_desktop.png',
+      ),
+    );
   });
 
+  testWidgets('Billing Progress expands and collapses a building workbench', (
+    tester,
+  ) async {
+    await _pumpProjectBilling(tester, const Size(1366, 900));
+
+    const expandedKey = ValueKey('accounts-building-expanded-building-1');
+    expect(find.byKey(expandedKey), findsOneWidget);
+    await tester.tap(find.text('Substation Building').first);
+    await tester.pumpAndSettle();
+    expect(find.byKey(expandedKey), findsNothing);
+
+    await tester.tap(find.text('Substation Building').first);
+    await tester.pumpAndSettle();
+    expect(find.byKey(expandedKey), findsOneWidget);
+    expect(find.text('Design'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
   testWidgets('Project Accounts dashboard renders authorized desktop data', (
     tester,
   ) async {
@@ -444,15 +467,21 @@ void main() {
 
     expect(find.byType(DataTable), findsNothing);
     await tester.scrollUntilVisible(
-      find.text('Design'),
+      find.text('Design').first,
       320,
       scrollable: find.byType(Scrollable).first,
     );
     await tester.pumpAndSettle();
-    expect(find.text('Design'), findsOneWidget);
+    expect(find.text('Design'), findsWidgets);
     expect(find.byIcon(Icons.tune_rounded), findsOneWidget);
-    expect(find.textContaining('Stage Value:'), findsOneWidget);
+    expect(find.text('Stage Value'), findsOneWidget);
     expect(tester.takeException(), isNull);
+    await expectLater(
+      find.byType(YorksProjectAccountsScreen),
+      matchesGoldenFile(
+        'goldens/yorks_r39_project_accounts_billing_workbench_mobile.png',
+      ),
+    );
   });
 
   testWidgets('Claims and invoices remain actionable at 390px', (tester) async {
@@ -472,6 +501,10 @@ void main() {
     expect(find.text('INV-YRA322-001'), findsOneWidget);
     expect(find.byIcon(Icons.tune_rounded), findsOneWidget);
     expect(tester.takeException(), isNull);
+    await expectLater(
+      find.byType(YorksProjectAccountsScreen),
+      matchesGoldenFile('goldens/yorks_r39_project_accounts_claims_mobile.png'),
+    );
   });
 
   testWidgets(
@@ -484,11 +517,17 @@ void main() {
       );
 
       expect(find.byType(DataTable), findsOneWidget);
-      expect(find.text('Claimed Ex VAT'), findsOneWidget);
-      expect(find.text('Certified Ex VAT'), findsOneWidget);
-      expect(find.text('Amount Paid Till Date'), findsOneWidget);
-      expect(find.text('INV-YRA322-001'), findsOneWidget);
+      expect(find.text('Claimed Ex VAT'), findsWidgets);
+      expect(find.text('Certified Ex VAT'), findsWidgets);
+      expect(find.text('Amount Paid Till Date'), findsWidgets);
+      expect(find.text('INV-YRA322-001'), findsWidgets);
       expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byType(YorksProjectAccountsScreen),
+        matchesGoldenFile(
+          'goldens/yorks_r39_project_accounts_claims_desktop.png',
+        ),
+      );
     },
   );
 
@@ -509,9 +548,15 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('New supplier bill'), findsOneWidget);
-    expect(find.text('SUP-001'), findsOneWidget);
+    expect(find.text('SUP-001'), findsWidgets);
     expect(find.byType(TextField), findsOneWidget);
     expect(tester.takeException(), isNull);
+    await expectLater(
+      find.byType(YorksProjectAccountsScreen),
+      matchesGoldenFile(
+        'goldens/yorks_r39_project_accounts_supplier_bills_mobile.png',
+      ),
+    );
   });
 
   testWidgets('Supplier bills expose evidence and payment states on desktop', (
@@ -525,12 +570,59 @@ void main() {
     );
 
     expect(find.byType(DataTable), findsOneWidget);
-    expect(find.text('PO / LPO'), findsOneWidget);
-    expect(find.text('Accepted delivery'), findsOneWidget);
+    expect(find.text('PO / LPO'), findsWidgets);
+    expect(find.text('Accepted delivery'), findsWidgets);
     expect(find.text('Invoice Evidence'), findsOneWidget);
-    expect(find.text('SUP-001'), findsOneWidget);
+    expect(find.text('SUP-001'), findsWidgets);
     expect(tester.takeException(), isNull);
+    await expectLater(
+      find.byType(YorksProjectAccountsScreen),
+      matchesGoldenFile(
+        'goldens/yorks_r39_project_accounts_supplier_bills_desktop.png',
+      ),
+    );
   });
+
+  for (final size in [const Size(1366, 900), const Size(390, 844)]) {
+    testWidgets('Receipts & PDC matches the reference at ${size.width}px', (
+      tester,
+    ) async {
+      await _pumpProjectTab(tester, size, YorksProjectAccountsTab.receiptsPdc);
+
+      expect(find.text('Collections summary'), findsOneWidget);
+      expect(find.text('PDC instrument status'), findsOneWidget);
+      expect(find.text('RCPT-009'), findsWidgets);
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byType(YorksProjectAccountsScreen),
+        matchesGoldenFile(
+          size.width > 700
+              ? 'goldens/yorks_r39_project_accounts_receipts_pdc_desktop.png'
+              : 'goldens/yorks_r39_project_accounts_receipts_pdc_mobile.png',
+        ),
+      );
+    });
+  }
+
+  for (final tab in const [
+    YorksProjectAccountsTab.documents,
+    YorksProjectAccountsTab.activity,
+  ]) {
+    for (final size in [const Size(1366, 900), const Size(390, 844)]) {
+      testWidgets('${tab.name} is visually verified at ${size.width}px', (
+        tester,
+      ) async {
+        await _pumpProjectTab(tester, size, tab);
+        expect(tester.takeException(), isNull);
+        await expectLater(
+          find.byType(YorksProjectAccountsScreen),
+          matchesGoldenFile(
+            'goldens/yorks_r39_project_accounts_${tab.name}_${size.width > 700 ? 'desktop' : 'mobile'}.png',
+          ),
+        );
+      });
+    }
+  }
 
   testWidgets('T07 critical Accounts views fit every release viewport', (
     tester,
@@ -546,6 +638,7 @@ void main() {
       for (final tab in const [
         YorksProjectAccountsTab.billing,
         YorksProjectAccountsTab.invoices,
+        YorksProjectAccountsTab.receiptsPdc,
         YorksProjectAccountsTab.supplierBills,
         YorksProjectAccountsTab.documents,
         YorksProjectAccountsTab.activity,
@@ -564,6 +657,9 @@ void main() {
           reason:
               '${tab.name} must fit ${size.width}x${size.height} without overflow.',
         );
+        if (size.width <= 390) {
+          _expectSelectedAccountsTabVisible(tester, tab, size.width);
+        }
       }
     }
   });
@@ -689,6 +785,15 @@ Future<void> _pumpProjectTab(
     );
     await Future.wait([receivables.loadClaims(), receivables.loadInvoices()]);
   }
+  if (tab == YorksProjectAccountsTab.receiptsPdc) {
+    final receivables = container.read(
+      yorksAccountsReceivablesControllerProvider('project-322').notifier,
+    );
+    await Future.wait([
+      receivables.loadInvoices(),
+      receivables.loadReceiptsAndPdc(),
+    ]);
+  }
   if (tab == YorksProjectAccountsTab.supplierBills) {
     await container
         .read(yorksAccountsSupplierControllerProvider('project-322').notifier)
@@ -705,7 +810,37 @@ Future<void> _pumpProjectTab(
         .load();
   }
   await tester.pump(const Duration(milliseconds: 100));
-  await tester.pump(const Duration(milliseconds: 250));
+  await tester.pumpAndSettle();
+}
+
+void _expectSelectedAccountsTabVisible(
+  WidgetTester tester,
+  YorksProjectAccountsTab tab,
+  double viewportWidth,
+) {
+  final label = switch (tab) {
+    YorksProjectAccountsTab.overview => 'Overview',
+    YorksProjectAccountsTab.billing => 'Billing Progress',
+    YorksProjectAccountsTab.invoices => 'Claims & Invoices',
+    YorksProjectAccountsTab.receiptsPdc => 'Receipts & PDC',
+    YorksProjectAccountsTab.supplierBills => 'Supplier Bills',
+    YorksProjectAccountsTab.documents => 'Documents',
+    YorksProjectAccountsTab.activity => 'Activity',
+  };
+  final tabButton = find
+      .ancestor(of: find.text(label), matching: find.byType(InkWell))
+      .first;
+  final rect = tester.getRect(tabButton);
+  expect(
+    rect.left,
+    greaterThanOrEqualTo(0),
+    reason: '$label must scroll fully into the mobile tab viewport.',
+  );
+  expect(
+    rect.right,
+    lessThanOrEqualTo(viewportWidth),
+    reason: '$label must scroll fully into the mobile tab viewport.',
+  );
 }
 
 final class _Repository implements YorksAccountsPortfolioRepository {
@@ -857,6 +992,14 @@ final class _ReceivablesRepository
   }) async => _invoices;
 
   @override
+  Future<YorksAccountsReceivablesLedgerProjection> listReceiptsAndPdc(
+    String projectId, {
+    String? invoiceId,
+    YorksAccountsCompositeCursor? before,
+    int limit = 50,
+  }) async => _receivablesLedger;
+
+  @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
@@ -920,7 +1063,42 @@ final class _DocumentsRepository implements YorksV1AccountsDocumentsRepository {
     bool includeArchived = false,
   }) async => YorksV1AccountsDocumentWorkspace(
     projectId: projectId,
-    documents: const [],
+    documents: [
+      YorksV1Document(
+        id: 'accounts-document-1',
+        classification: YorksV1DocumentClassification.commercial,
+        createdAt: DateTime.utc(2026, 8, 24, 9),
+        currentVersion: YorksV1DocumentVersion(
+          id: 'accounts-document-version-1',
+          revisionNumber: 1,
+          bucketId: 'controlled-documents',
+          objectPath: 'accounts/project-322/contract-agreement.pdf',
+          fileName: 'Contract Agreement.pdf',
+          mimeType: 'application/pdf',
+          byteSize: 2400000,
+          sha256:
+              '1111111111111111111111111111111111111111111111111111111111111111',
+          origin: YorksV1DocumentOrigin.uploaded,
+          uploadedAt: DateTime.utc(2026, 8, 24, 9),
+          uploadedByAuthUserId: 'accountant-1',
+          uploadedByRole: 'accountant',
+          uploadedByDisplayName: 'Accounts User',
+          sourceEntityType: YorksV1DocumentEntityType.accountsBaselineRevision,
+          sourceEntityId: 'baseline-1',
+          sourceRevision: '1',
+        ),
+        links: [
+          YorksV1DocumentLink(
+            id: 'accounts-document-link-1',
+            projectId: projectId,
+            entityType: YorksV1DocumentEntityType.accountsBaselineRevision,
+            entityId: 'baseline-1',
+            linkedAt: DateTime.utc(2026, 8, 24, 9),
+          ),
+        ],
+        accountsDocumentType: YorksV1AccountsDocumentType.contract,
+      ),
+    ],
     uploadTargets: const [
       YorksV1AccountsDocumentTarget(
         entityType: YorksV1DocumentEntityType.accountsBaselineRevision,
@@ -1172,6 +1350,58 @@ final _invoices = YorksAccountsInvoicesProjection(
       dueState: YorksAccountsDueState.onTrack,
       recordVersion: 3,
       updatedAt: DateTime.utc(2026, 8, 26, 10),
+    ),
+  ],
+  nextCursor: null,
+  capabilities: _receivablesCapabilities,
+  commands: _receivablesCommands,
+);
+
+final _receivablesLedger = YorksAccountsReceivablesLedgerProjection(
+  schemaVersion: 2,
+  projectId: 'project-322',
+  invoiceId: null,
+  entries: [
+    YorksAccountsReceivablesLedgerEntry(
+      ledgerEntryId: 'payment-entry-1',
+      occurredAt: DateTime.utc(2026, 9, 18, 10, 24),
+      entryType: YorksAccountsReceivablesLedgerEntryType.payment,
+      invoiceId: 'invoice-1',
+      payment: YorksAccountsLedgerPayment(
+        paymentId: 'payment-1',
+        entryKind: YorksAccountsPaymentEntryKind.receipt,
+        paymentDate: YorksAccountsDate.parse('2026-09-18'),
+        paymentMethod: 'Bank Transfer',
+        paymentReference: 'RCPT-009',
+        amount: YorksAccountsDecimal.parse('50000'),
+        originalPaymentId: null,
+        pdcId: null,
+        actorAuthUserId: 'accountant-1',
+        actorExactRole: 'accountant',
+      ),
+      pdcEvent: null,
+    ),
+    YorksAccountsReceivablesLedgerEntry(
+      ledgerEntryId: 'pdc-entry-1',
+      occurredAt: DateTime.utc(2026, 9, 16, 9, 15),
+      entryType: YorksAccountsReceivablesLedgerEntryType.pdcEvent,
+      invoiceId: 'invoice-1',
+      payment: null,
+      pdcEvent: YorksAccountsClientPdcEvent(
+        eventId: 'pdc-entry-1',
+        projectId: 'project-322',
+        invoiceId: 'invoice-1',
+        pdcId: 'PDC-102',
+        sequenceNumber: 2,
+        fromStatus: YorksAccountsPdcStatus.received,
+        toStatus: YorksAccountsPdcStatus.deposited,
+        actionDate: YorksAccountsDate.parse('2026-09-16'),
+        reason: null,
+        linkedPaymentId: null,
+        actorAuthUserId: 'accountant-1',
+        actorExactRole: 'accountant',
+        occurredAt: DateTime.utc(2026, 9, 16, 9, 15),
+      ),
     ),
   ],
   nextCursor: null,

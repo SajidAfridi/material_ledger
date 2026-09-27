@@ -1,10 +1,22 @@
 enum YorksAccountsReportKind {
   portfolio('portfolio'),
   projectSummary('project_summary'),
+  commercialBaseline('commercial_baseline'),
+  buildingAllocations('building_allocations'),
+  stageAllocations('stage_allocations'),
   billingProgress('billing_progress'),
+  progressHistory('progress_history'),
+  clientClaims('client_claims'),
+  claimLines('claim_lines'),
   clientInvoices('client_invoices'),
+  certifications('certifications'),
+  clientReceipts('client_receipts'),
+  pdcRegister('pdc_register'),
+  pdcEvents('pdc_events'),
   supplierBills('supplier_bills'),
-  pdcRegister('pdc_register');
+  supplierPayments('supplier_payments'),
+  accountsDocuments('accounts_documents'),
+  accountsActivity('accounts_activity');
 
   const YorksAccountsReportKind(this.wireValue);
 

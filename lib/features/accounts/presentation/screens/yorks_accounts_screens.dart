@@ -6,11 +6,13 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
+import '../../../../shared/models/analytics_event.dart';
 import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/yorks_v1_accounts_strings.dart';
 import '../../../../shared/models/yorks_v1_project_strings.dart';
 import '../../../../shared/models/yorks_v1_domain_error.dart';
 import '../../../../shared/providers/language_provider.dart';
+import '../../../../shared/services/analytics_service.dart';
 import '../../application/accounts_controller.dart';
 import '../../application/accounts_portfolio_controller.dart';
 import '../../application/accounts_portfolio_providers.dart';
@@ -23,10 +25,12 @@ import '../../application/accounts_supplier_providers.dart';
 import '../../domain/accounts_decimal.dart';
 import '../../domain/accounts_models.dart';
 import '../../domain/accounts_portfolio_models.dart';
+import '../../domain/accounts_receivables_inputs.dart';
 import '../../domain/accounts_receivables_models.dart';
 import '../../domain/accounts_records_models.dart';
 import '../../domain/accounts_supplier_models.dart';
 import '../widgets/yorks_accounts_baseline_action_sheet.dart';
+import '../widgets/yorks_accounts_billing_workbench.dart';
 import '../widgets/yorks_accounts_progress_action_sheet.dart';
 import '../widgets/yorks_accounts_receivables_action_sheets.dart';
 import '../widgets/yorks_accounts_records_views.dart';
@@ -289,6 +293,7 @@ class YorksProjectAccountsScreen extends ConsumerStatefulWidget {
 class _YorksProjectAccountsScreenState
     extends ConsumerState<YorksProjectAccountsScreen> {
   int _activeTabLoads = 0;
+  bool _workspaceTracked = false;
 
   @override
   void initState() {
@@ -301,6 +306,7 @@ class _YorksProjectAccountsScreenState
     super.didUpdateWidget(oldWidget);
     if (oldWidget.projectId != widget.projectId ||
         oldWidget.initialTab != widget.initialTab) {
+      if (oldWidget.projectId != widget.projectId) _workspaceTracked = false;
       WidgetsBinding.instance.addPostFrameCallback((_) => _load());
     }
   }
@@ -313,6 +319,18 @@ class _YorksProjectAccountsScreenState
       await ref.read(overviewProvider.notifier).load();
     }
     if (!mounted) return;
+    if (!_workspaceTracked) {
+      _workspaceTracked = true;
+      ref
+          .read(analyticsServiceProvider)
+          .capture(
+            AnalyticsEvent.accountsWorkspaceViewed,
+            properties: {
+              AnalyticsProperty.source: 'project_workspace',
+              AnalyticsProperty.entryPoint: widget.initialTab.name,
+            },
+          );
+    }
     await _loadTab(widget.initialTab, force: force);
   }
 
@@ -386,8 +404,13 @@ class _YorksProjectAccountsScreenState
         final provider = yorksAccountsReceivablesControllerProvider(
           widget.projectId,
         );
-        if (force || ref.read(provider).ledger == null) {
-          pending.add(ref.read(provider.notifier).loadReceiptsAndPdc());
+        final state = ref.read(provider);
+        final controller = ref.read(provider.notifier);
+        if (force || state.ledger == null) {
+          pending.add(controller.loadReceiptsAndPdc());
+        }
+        if (force || state.invoices == null) {
+          pending.add(controller.loadInvoices());
         }
         break;
       case YorksProjectAccountsTab.supplierBills:
@@ -409,6 +432,15 @@ class _YorksProjectAccountsScreenState
   }
 
   void _selectTab(YorksProjectAccountsTab tab) {
+    ref
+        .read(analyticsServiceProvider)
+        .capture(
+          AnalyticsEvent.accountsTabSelected,
+          properties: {
+            AnalyticsProperty.source: tab.name,
+            AnalyticsProperty.entryPoint: 'project_accounts_navigation',
+          },
+        );
     final path = switch (tab) {
       YorksProjectAccountsTab.overview =>
         RoutePaths.yorksV1ProjectAccountsOverviewPath(widget.projectId),
@@ -523,10 +555,15 @@ class _YorksProjectAccountsScreenState
                           projection.capabilities.canExport &&
                               selected == YorksProjectAccountsTab.overview
                           ? YorksAccountsReportActions(
-                              kind: YorksAccountsReportKind.projectSummary,
+                              kind: _overviewExportKinds(
+                                projection.capabilities,
+                              ).first,
                               projectId: widget.projectId,
                               language: language,
                               overviewToolbar: true,
+                              bundledKinds: _overviewExportKinds(
+                                projection.capabilities,
+                              ).skip(1).toList(growable: false),
                             )
                           : null;
                       if (constraints.maxWidth < 1050 || tools == null) {
@@ -652,6 +689,54 @@ YorksAccountsReportKind? _reportKindForTab(
   _ => null,
 };
 
+List<YorksAccountsReportKind> _overviewExportKinds(
+  YorksAccountsProjectUiCapabilities capabilities,
+) {
+  if (!capabilities.viewValues) {
+    return const [YorksAccountsReportKind.billingProgress];
+  }
+  return [
+    YorksAccountsReportKind.projectSummary,
+    YorksAccountsReportKind.commercialBaseline,
+    YorksAccountsReportKind.buildingAllocations,
+    YorksAccountsReportKind.stageAllocations,
+    YorksAccountsReportKind.billingProgress,
+    YorksAccountsReportKind.progressHistory,
+    YorksAccountsReportKind.clientClaims,
+    YorksAccountsReportKind.claimLines,
+    YorksAccountsReportKind.clientInvoices,
+    YorksAccountsReportKind.certifications,
+    YorksAccountsReportKind.clientReceipts,
+    YorksAccountsReportKind.pdcRegister,
+    YorksAccountsReportKind.pdcEvents,
+    if (capabilities.viewSupplierCosts) ...[
+      YorksAccountsReportKind.supplierBills,
+      YorksAccountsReportKind.supplierPayments,
+    ],
+    YorksAccountsReportKind.accountsDocuments,
+    YorksAccountsReportKind.accountsActivity,
+  ];
+}
+
+String _filterDensity(Iterable<Object?> values) {
+  final count = values.where((value) => value != null).length;
+  if (count == 0) return 'none';
+  if (count == 1) return 'single';
+  return 'multiple';
+}
+
+void _trackAccountsRecord(WidgetRef ref, String objectType, String source) {
+  ref
+      .read(analyticsServiceProvider)
+      .capture(
+        AnalyticsEvent.accountsRecordOpened,
+        properties: {
+          AnalyticsProperty.objectType: objectType,
+          AnalyticsProperty.source: source,
+        },
+      );
+}
+
 class _ProjectTabBody extends ConsumerWidget {
   const _ProjectTabBody({
     required this.projectId,
@@ -694,14 +779,30 @@ class _ProjectTabBody extends ConsumerWidget {
       onRetry: () => ref
           .read(yorksAccountsProjectControllerProvider(projectId).notifier)
           .load(),
-      onFilter: ({buildingScopeId, stageKey, actionOwner, hasEvidence}) => ref
-          .read(yorksAccountsProjectControllerProvider(projectId).notifier)
-          .load(
-            buildingScopeId: buildingScopeId,
-            stageKey: stageKey,
-            actionOwner: actionOwner,
-            hasEvidence: hasEvidence,
-          ),
+      onFilter: ({buildingScopeId, stageKey, actionOwner, hasEvidence}) {
+        ref
+            .read(analyticsServiceProvider)
+            .capture(
+              AnalyticsEvent.accountsFilterChanged,
+              properties: {
+                AnalyticsProperty.source: 'billing_progress',
+                AnalyticsProperty.listFilter: _filterDensity([
+                  buildingScopeId,
+                  stageKey,
+                  actionOwner,
+                  hasEvidence,
+                ]),
+              },
+            );
+        return ref
+            .read(yorksAccountsProjectControllerProvider(projectId).notifier)
+            .load(
+              buildingScopeId: buildingScopeId,
+              stageKey: stageKey,
+              actionOwner: actionOwner,
+              hasEvidence: hasEvidence,
+            );
+      },
       onBaseline: (baseline) => showYorksAccountsBaselineActionSheet(
         context,
         projectId: projectId,
@@ -731,6 +832,19 @@ class _ProjectTabBody extends ConsumerWidget {
         controller.loadInvoices();
       },
       onFilter: ({claimStatus, invoiceStatus, dueState}) async {
+        ref
+            .read(analyticsServiceProvider)
+            .capture(
+              AnalyticsEvent.accountsFilterChanged,
+              properties: {
+                AnalyticsProperty.source: 'claims_invoices',
+                AnalyticsProperty.listFilter: _filterDensity([
+                  claimStatus,
+                  invoiceStatus,
+                  dueState,
+                ]),
+              },
+            );
         final controller = ref.read(
           yorksAccountsReceivablesControllerProvider(projectId).notifier,
         );
@@ -745,19 +859,25 @@ class _ProjectTabBody extends ConsumerWidget {
         progress: progress,
         language: language,
       ),
-      onOpenClaim: (claimId, progress) => showYorksAccountsClaimActionsSheet(
-        context,
-        projectId: projectId,
-        claimId: claimId,
-        progress: progress,
-        language: language,
-      ),
-      onOpenInvoice: (invoiceId) => showYorksAccountsInvoiceActionsSheet(
-        context,
-        projectId: projectId,
-        invoiceId: invoiceId,
-        language: language,
-      ),
+      onOpenClaim: (claimId, progress) {
+        _trackAccountsRecord(ref, 'client_claim', 'claims_invoices');
+        return showYorksAccountsClaimActionsSheet(
+          context,
+          projectId: projectId,
+          claimId: claimId,
+          progress: progress,
+          language: language,
+        );
+      },
+      onOpenInvoice: (invoiceId) {
+        _trackAccountsRecord(ref, 'client_invoice', 'claims_invoices');
+        return showYorksAccountsInvoiceActionsSheet(
+          context,
+          projectId: projectId,
+          invoiceId: invoiceId,
+          language: language,
+        );
+      },
     ),
     YorksProjectAccountsTab.receiptsPdc => _ReceiptsPdcView(
       projectId: projectId,
@@ -766,12 +886,15 @@ class _ProjectTabBody extends ConsumerWidget {
       onRetry: () => ref
           .read(yorksAccountsReceivablesControllerProvider(projectId).notifier)
           .loadReceiptsAndPdc(),
-      onOpenInvoice: (invoiceId) => showYorksAccountsInvoiceActionsSheet(
-        context,
-        projectId: projectId,
-        invoiceId: invoiceId,
-        language: language,
-      ),
+      onOpenInvoice: (invoiceId) {
+        _trackAccountsRecord(ref, 'client_invoice', 'receipts_pdc');
+        return showYorksAccountsInvoiceActionsSheet(
+          context,
+          projectId: projectId,
+          invoiceId: invoiceId,
+          language: language,
+        );
+      },
     ),
     YorksProjectAccountsTab.supplierBills => _SupplierBillsView(
       projectId: projectId,
@@ -780,24 +903,42 @@ class _ProjectTabBody extends ConsumerWidget {
       onRetry: () => ref
           .read(yorksAccountsSupplierControllerProvider(projectId).notifier)
           .loadBills(),
-      onFilter: ({search, matchStatus, paymentStatus}) => ref
-          .read(yorksAccountsSupplierControllerProvider(projectId).notifier)
-          .loadBills(
-            search: search,
-            matchStatus: matchStatus,
-            paymentStatus: paymentStatus,
-          ),
+      onFilter: ({search, matchStatus, paymentStatus}) {
+        ref
+            .read(analyticsServiceProvider)
+            .capture(
+              AnalyticsEvent.accountsFilterChanged,
+              properties: {
+                AnalyticsProperty.source: 'supplier_bills',
+                AnalyticsProperty.listFilter: _filterDensity([
+                  search?.trim().isEmpty == false ? 'search' : null,
+                  matchStatus,
+                  paymentStatus,
+                ]),
+              },
+            );
+        return ref
+            .read(yorksAccountsSupplierControllerProvider(projectId).notifier)
+            .loadBills(
+              search: search,
+              matchStatus: matchStatus,
+              paymentStatus: paymentStatus,
+            );
+      },
       onCreate: () => showYorksAccountsSupplierBillDraftSheet(
         context,
         projectId: projectId,
         language: language,
       ),
-      onOpen: (supplierBillId) => showYorksAccountsSupplierBillActionsSheet(
-        context,
-        projectId: projectId,
-        supplierBillId: supplierBillId,
-        language: language,
-      ),
+      onOpen: (supplierBillId) {
+        _trackAccountsRecord(ref, 'supplier_bill', 'supplier_bills');
+        return showYorksAccountsSupplierBillActionsSheet(
+          context,
+          projectId: projectId,
+          supplierBillId: supplierBillId,
+          language: language,
+        );
+      },
     ),
     YorksProjectAccountsTab.documents => YorksAccountsDocumentsView(
       projectId: projectId,
@@ -1982,6 +2123,7 @@ class _BillingProgressViewState extends State<_BillingProgressView> {
         if (progress.capabilities.canViewValues && progress.totals != null) ...[
           _BillingFormulaStrip(
             totals: progress.totals!,
+            entries: progress.progress,
             language: widget.language,
           ),
           const SizedBox(height: AppSpacing.md),
@@ -1998,158 +2140,11 @@ class _BillingProgressViewState extends State<_BillingProgressView> {
           onClear: _clearFilters,
         ),
         const SizedBox(height: AppSpacing.md),
-        _Panel(
-          padding: EdgeInsets.zero,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _SectionHeader(title: _t(widget.language, 'billing')),
-              LayoutBuilder(
-                builder: (context, constraints) => constraints.maxWidth < 820
-                    ? Column(
-                        children: [
-                          for (final entry in progress.progress)
-                            _ProgressLedgerCard(
-                              entry: entry,
-                              language: widget.language,
-                              canViewValues:
-                                  progress.capabilities.canViewValues,
-                              onAction:
-                                  _hasAvailableProgressAction(progress, entry)
-                                  ? () => widget.onAction(entry, progress)
-                                  : null,
-                            ),
-                        ],
-                      )
-                    : SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: DataTable(
-                          dataRowMinHeight: 64,
-                          dataRowMaxHeight: 72,
-                          columns: [
-                            DataColumn(
-                              label: Text(_t(widget.language, 'building')),
-                            ),
-                            DataColumn(
-                              label: Text(_t(widget.language, 'stage')),
-                            ),
-                            if (progress.capabilities.canViewValues)
-                              DataColumn(
-                                numeric: true,
-                                label: Text(_t(widget.language, 'stage_value')),
-                              ),
-                            DataColumn(
-                              numeric: true,
-                              label: Text(_t(widget.language, 'suggested')),
-                            ),
-                            DataColumn(
-                              numeric: true,
-                              label: Text(_t(widget.language, 'confirmed')),
-                            ),
-                            DataColumn(
-                              label: Text(_t(widget.language, 'review')),
-                            ),
-                            DataColumn(
-                              label: Text(
-                                _t(widget.language, 'owner_evidence'),
-                              ),
-                            ),
-                            if (progress.capabilities.canViewValues)
-                              DataColumn(
-                                numeric: true,
-                                label: Text(
-                                  _t(widget.language, 'eligible_amount'),
-                                ),
-                              ),
-                            DataColumn(
-                              label: Text(_t(widget.language, 'last_update')),
-                            ),
-                            DataColumn(
-                              label: Text(_t(widget.language, 'action')),
-                            ),
-                          ],
-                          rows: [
-                            for (final entry in progress.progress)
-                              DataRow(
-                                cells: [
-                                  DataCell(Text(entry.buildingName ?? '—')),
-                                  DataCell(
-                                    Text(entry.stageLabel ?? entry.stageKey),
-                                  ),
-                                  if (progress.capabilities.canViewValues)
-                                    DataCell(
-                                      Text(
-                                        entry.stageValue == null
-                                            ? '—'
-                                            : _money(entry.stageValue!),
-                                      ),
-                                    ),
-                                  DataCell(
-                                    Text(_percentLabel(entry.suggestedPercent)),
-                                  ),
-                                  DataCell(
-                                    Text(_percentLabel(entry.confirmedPercent)),
-                                  ),
-                                  DataCell(
-                                    _Badge(
-                                      _wireLabel(
-                                        widget.language,
-                                        entry.reviewStatus.wireValue,
-                                      ),
-                                    ),
-                                  ),
-                                  DataCell(
-                                    SizedBox(
-                                      width: 260,
-                                      child: _TwoLine(
-                                        title: _wireLabel(
-                                          widget.language,
-                                          entry.actionOwner,
-                                        ),
-                                        subtitle: entry.evidenceSummary ?? '—',
-                                      ),
-                                    ),
-                                  ),
-                                  if (progress.capabilities.canViewValues)
-                                    DataCell(
-                                      Text(
-                                        entry.confirmedEligible == null
-                                            ? '—'
-                                            : _money(entry.confirmedEligible!),
-                                      ),
-                                    ),
-                                  DataCell(
-                                    Text(
-                                      entry.updatedAt?.toLocal().toString() ??
-                                          '—',
-                                    ),
-                                  ),
-                                  DataCell(
-                                    _hasAvailableProgressAction(progress, entry)
-                                        ? OutlinedButton(
-                                            onPressed: () => widget.onAction(
-                                              entry,
-                                              progress,
-                                            ),
-                                            child: Text(
-                                              _t(
-                                                widget.language,
-                                                'open_action',
-                                              ),
-                                            ),
-                                          )
-                                        : Text(
-                                            _t(widget.language, 'no_action'),
-                                          ),
-                                  ),
-                                ],
-                              ),
-                          ],
-                        ),
-                      ),
-              ),
-            ],
-          ),
+        YorksAccountsBillingWorkbench(
+          baseline: baseline,
+          progress: progress,
+          language: widget.language,
+          onAction: (entry) => widget.onAction(entry, progress),
         ),
       ],
     );
@@ -2529,6 +2524,7 @@ class _InvoicesViewState extends State<_InvoicesView> {
   YorksAccountsClaimStatus? _claimStatus;
   YorksAccountsInvoiceStatus? _invoiceStatus;
   YorksAccountsDueState? _dueState;
+  String? _selectedInvoiceId;
 
   int get _activeFilterCount => [
     _claimStatus,
@@ -2571,6 +2567,44 @@ class _InvoicesViewState extends State<_InvoicesView> {
     final canCreate =
         claimProjection!.commands.createClaimDraft && progress != null;
     final empty = invoices.isEmpty && claims.isEmpty;
+    final draftClaims = claims
+        .where((claim) => claim.status == YorksAccountsClaimStatus.draft)
+        .fold<YorksAccountsDecimal>(
+          YorksAccountsDecimal.zero,
+          (total, claim) => total + claim.claimedExVat,
+        );
+    final readyClaims = claims
+        .where(
+          (claim) => claim.status == YorksAccountsClaimStatus.readyForAccounts,
+        )
+        .fold<YorksAccountsDecimal>(
+          YorksAccountsDecimal.zero,
+          (total, claim) => total + claim.claimedExVat,
+        );
+    final submitted = invoices.fold<YorksAccountsDecimal>(
+      YorksAccountsDecimal.zero,
+      (total, invoice) => total + invoice.claimedExVat,
+    );
+    final certified = invoices.fold<YorksAccountsDecimal>(
+      YorksAccountsDecimal.zero,
+      (total, invoice) => total + invoice.certifiedExVat,
+    );
+    final stillDue = invoices.fold<YorksAccountsDecimal>(
+      YorksAccountsDecimal.zero,
+      (total, invoice) => total + invoice.stillDue,
+    );
+    final selectedInvoice = invoices
+        .cast<YorksAccountsClientInvoiceSummary?>()
+        .firstWhere(
+          (invoice) => invoice?.invoiceId == _selectedInvoiceId,
+          orElse: () => invoices.isEmpty ? null : invoices.first,
+        );
+    final selectedClaim = selectedInvoice == null
+        ? null
+        : claims.cast<YorksAccountsClientClaimSummary?>().firstWhere(
+            (claim) => claim?.claimId == selectedInvoice.claimId,
+            orElse: () => null,
+          );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -2584,6 +2618,54 @@ class _InvoicesViewState extends State<_InvoicesView> {
             ),
           ),
         if (canCreate && !empty) const SizedBox(height: AppSpacing.md),
+        _AccountsMetricStrip(
+          items: [
+            (
+              Icons.edit_note_outlined,
+              const Color(0xFF1766D5),
+              _t(widget.language, 'claim_drafts'),
+              _money(draftClaims),
+              '${claims.where((claim) => claim.status == YorksAccountsClaimStatus.draft).length} ${_t(widget.language, 'claims').toLowerCase()}',
+            ),
+            (
+              Icons.verified_outlined,
+              const Color(0xFF0D9D61),
+              _t(widget.language, 'ready_for_invoicing'),
+              _money(readyClaims),
+              '${claims.where((claim) => claim.status == YorksAccountsClaimStatus.readyForAccounts).length} ${_t(widget.language, 'claims').toLowerCase()}',
+            ),
+            (
+              Icons.receipt_long_outlined,
+              const Color(0xFF7C4DDB),
+              _t(widget.language, 'submitted_invoices'),
+              _money(submitted),
+              '${invoices.length} ${_t(widget.language, 'invoices').toLowerCase()}',
+            ),
+            (
+              Icons.fact_check_outlined,
+              const Color(0xFF12A066),
+              _t(widget.language, 'client_certified'),
+              _money(certified),
+              _t(widget.language, 'net_excluding_vat'),
+            ),
+            (
+              Icons.warning_amber_rounded,
+              const Color(0xFFD85B45),
+              _t(widget.language, 'still_due'),
+              _money(stillDue),
+              '${invoices.where((invoice) => invoice.dueState == YorksAccountsDueState.overdue).length} ${_t(widget.language, 'overdue').toLowerCase()}',
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        if (!empty) ...[
+          _ClaimsPipelineSummary(
+            claims: claims,
+            invoices: invoices,
+            language: widget.language,
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ],
         _InvoiceRegisterFilters(
           language: widget.language,
           claimStatus: _claimStatus,
@@ -2611,39 +2693,386 @@ class _InvoicesViewState extends State<_InvoicesView> {
                 ? _t(widget.language, 'prepare_claim')
                 : null,
           ),
-        if (claims.isNotEmpty)
-          _RegisterList(
-            title: _t(widget.language, 'recent_claims'),
-            children: [
-              for (final claim in claims)
-                _RegisterRow(
-                  icon: Icons.fact_check_outlined,
-                  title: claim.claimReference,
-                  subtitle:
-                      '${_wireLabel(widget.language, claim.status.wireValue)} · '
-                      '${claim.periodStart} – ${claim.periodEnd}',
-                  values: [_money(claim.claimedExVat)],
-                  onTap: progress == null
-                      ? null
-                      : () => widget.onOpenClaim(claim.claimId, progress),
-                  actionLabel: _t(widget.language, 'open_action'),
-                ),
-            ],
-          ),
-        if (claims.isNotEmpty && invoices.isNotEmpty)
-          const SizedBox(height: AppSpacing.lg),
-        if (invoices.isNotEmpty)
-          _InvoiceRegister(
-            invoices: invoices,
-            language: widget.language,
-            onOpen: widget.onOpenInvoice,
+        if (!empty)
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final register = Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (claims.isNotEmpty)
+                    _RegisterList(
+                      title: _t(widget.language, 'recent_claims'),
+                      children: [
+                        for (final claim in claims)
+                          _RegisterRow(
+                            icon: Icons.fact_check_outlined,
+                            title: claim.claimReference,
+                            subtitle:
+                                '${_wireLabel(widget.language, claim.status.wireValue)} · '
+                                '${claim.periodStart} – ${claim.periodEnd}',
+                            values: [_money(claim.claimedExVat)],
+                            onTap: progress == null
+                                ? null
+                                : () => widget.onOpenClaim(
+                                    claim.claimId,
+                                    progress,
+                                  ),
+                            actionLabel: _t(widget.language, 'open_action'),
+                          ),
+                      ],
+                    ),
+                  if (claims.isNotEmpty && invoices.isNotEmpty)
+                    const SizedBox(height: AppSpacing.lg),
+                  if (invoices.isNotEmpty)
+                    _InvoiceRegister(
+                      invoices: invoices,
+                      language: widget.language,
+                      selectedInvoiceId: selectedInvoice?.invoiceId,
+                      onSelect: (invoice) => setState(
+                        () => _selectedInvoiceId = invoice.invoiceId,
+                      ),
+                      onOpen: widget.onOpenInvoice,
+                    ),
+                ],
+              );
+              if (constraints.maxWidth < 1120 || selectedInvoice == null) {
+                return register;
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: register),
+                  const SizedBox(width: AppSpacing.md),
+                  SizedBox(
+                    width: 318,
+                    child: _InvoiceDetailsPanel(
+                      invoice: selectedInvoice,
+                      claim: selectedClaim,
+                      language: widget.language,
+                      onOpen: () =>
+                          widget.onOpenInvoice(selectedInvoice.invoiceId),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
       ],
     );
   }
 }
 
-class _ReceiptsPdcView extends StatelessWidget {
+class _ClaimsPipelineSummary extends StatelessWidget {
+  const _ClaimsPipelineSummary({
+    required this.claims,
+    required this.invoices,
+    required this.language,
+  });
+
+  final List<YorksAccountsClientClaimSummary> claims;
+  final List<YorksAccountsClientInvoiceSummary> invoices;
+  final AppLanguage language;
+
+  @override
+  Widget build(BuildContext context) {
+    final claimDrafts = claims
+        .where((claim) => claim.status == YorksAccountsClaimStatus.draft)
+        .length;
+    final ready = claims
+        .where(
+          (claim) => claim.status == YorksAccountsClaimStatus.readyForAccounts,
+        )
+        .length;
+    final submittedInvoiceCount = invoices
+        .where(
+          (invoice) =>
+              invoice.status != YorksAccountsInvoiceStatus.draft &&
+              invoice.status != YorksAccountsInvoiceStatus.cancelled,
+        )
+        .length;
+    final certifiedInvoiceCount = invoices
+        .where((invoice) => invoice.certifiedExVat.isPositive)
+        .length;
+    final submitted = invoices.fold<YorksAccountsDecimal>(
+      YorksAccountsDecimal.zero,
+      (value, invoice) => value + invoice.claimedExVat,
+    );
+    final certified = invoices.fold<YorksAccountsDecimal>(
+      YorksAccountsDecimal.zero,
+      (value, invoice) => value + invoice.certifiedExVat,
+    );
+    final paid = invoices.fold<YorksAccountsDecimal>(
+      YorksAccountsDecimal.zero,
+      (value, invoice) => value + invoice.amountPaidTillDate,
+    );
+    final due = invoices.fold<YorksAccountsDecimal>(
+      YorksAccountsDecimal.zero,
+      (value, invoice) => value + invoice.stillDue,
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final pipeline = _Panel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _SectionHeader(title: _t(language, 'claims_pipeline')),
+              const SizedBox(height: AppSpacing.md),
+              Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
+                children: [
+                  _PipelineStep(
+                    number: 1,
+                    label: _t(language, 'claim_drafts'),
+                    value: '$claimDrafts',
+                    color: AppColors.primary,
+                  ),
+                  _PipelineStep(
+                    number: 2,
+                    label: _t(language, 'ready_for_invoicing'),
+                    value: '$ready',
+                    color: AppColors.success,
+                  ),
+                  _PipelineStep(
+                    number: 3,
+                    label: _t(language, 'submitted_invoices'),
+                    value: '$submittedInvoiceCount',
+                    color: AppColors.purple,
+                  ),
+                  _PipelineStep(
+                    number: 4,
+                    label: _t(language, 'client_certified'),
+                    value: '$certifiedInvoiceCount',
+                    color: AppColors.success,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+        final summary = _Panel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _SectionHeader(
+                title: _t(language, 'invoice_certification_summary'),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              _CommercialBar(
+                label: _t(language, 'submitted_invoices'),
+                amount: submitted,
+                maximum: submitted,
+                color: AppColors.primary,
+              ),
+              _CommercialBar(
+                label: _t(language, 'client_certified'),
+                amount: certified,
+                maximum: submitted,
+                color: AppColors.success,
+              ),
+              _CommercialBar(
+                label: _t(language, 'paid_till_date'),
+                amount: paid,
+                maximum: submitted,
+                color: AppColors.tertiary,
+              ),
+              _CommercialBar(
+                label: _t(language, 'still_due'),
+                amount: due,
+                maximum: submitted,
+                color: AppColors.warning,
+              ),
+            ],
+          ),
+        );
+        if (constraints.maxWidth < 860) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              pipeline,
+              const SizedBox(height: AppSpacing.md),
+              summary,
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(flex: 3, child: pipeline),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(flex: 2, child: summary),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _PipelineStep extends StatelessWidget {
+  const _PipelineStep({
+    required this.number,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final int number;
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 178,
+    constraints: const BoxConstraints(minHeight: 86),
+    padding: const EdgeInsets.all(AppSpacing.md),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.07),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      border: Border.all(color: color.withValues(alpha: 0.2)),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CircleAvatar(
+          radius: 15,
+          backgroundColor: color,
+          foregroundColor: AppColors.onPrimary,
+          child: Text('$number', style: AppTypography.labelSmall),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: AppTypography.labelMedium),
+              const SizedBox(height: 4),
+              Text(value, style: AppTypography.titleLarge),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _CommercialBar extends StatelessWidget {
+  const _CommercialBar({
+    required this.label,
+    required this.amount,
+    required this.maximum,
+    required this.color,
+  });
+
+  final String label;
+  final YorksAccountsDecimal amount;
+  final YorksAccountsDecimal maximum;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final max = double.tryParse(maximum.canonicalText) ?? 0;
+    final value = double.tryParse(amount.canonicalText) ?? 0;
+    final progress = max <= 0 ? 0.0 : (value / max).clamp(0.0, 1.0);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(child: Text(label, style: AppTypography.bodySmall)),
+              Text(_money(amount), style: AppTypography.labelMedium),
+            ],
+          ),
+          const SizedBox(height: 5),
+          LinearProgressIndicator(
+            value: progress,
+            minHeight: 7,
+            borderRadius: BorderRadius.circular(99),
+            color: color,
+            backgroundColor: AppColors.surfaceContainerHighest,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InvoiceDetailsPanel extends StatelessWidget {
+  const _InvoiceDetailsPanel({
+    required this.invoice,
+    required this.claim,
+    required this.language,
+    required this.onOpen,
+  });
+
+  final YorksAccountsClientInvoiceSummary invoice;
+  final YorksAccountsClientClaimSummary? claim;
+  final AppLanguage language;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) => _Panel(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                _t(language, 'invoice_details'),
+                style: AppTypography.titleMedium,
+              ),
+            ),
+            _Badge(_wireLabel(language, invoice.status.wireValue)),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Text(invoice.invoiceReference, style: AppTypography.titleLarge),
+        const SizedBox(height: AppSpacing.md),
+        _DetailLine(
+          label: _t(language, 'related_claim'),
+          value: claim?.claimReference ?? '—',
+        ),
+        _DetailLine(
+          label: _t(language, 'submitted'),
+          value: '${invoice.submissionDate ?? '—'}',
+        ),
+        _DetailLine(
+          label: _t(language, 'due_date'),
+          value: '${invoice.dueDate ?? '—'}',
+        ),
+        _DetailLine(
+          label: _t(language, 'claimed_ex_vat'),
+          value: _money(invoice.claimedExVat),
+        ),
+        _DetailLine(
+          label: _t(language, 'certified_ex_vat'),
+          value: _money(invoice.certifiedExVat),
+        ),
+        _DetailLine(
+          label: _t(language, 'paid_till_date'),
+          value: _money(invoice.amountPaidTillDate),
+          valueColor: AppColors.success,
+        ),
+        _DetailLine(
+          label: _t(language, 'still_due'),
+          value: _money(invoice.stillDue),
+          valueColor: invoice.stillDue.isPositive ? AppColors.error : null,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        FilledButton.icon(
+          onPressed: onOpen,
+          icon: const Icon(Icons.open_in_new_rounded),
+          label: Text(_t(language, 'open_action')),
+        ),
+      ],
+    ),
+  );
+}
+
+class _ReceiptsPdcView extends StatefulWidget {
   const _ReceiptsPdcView({
     required this.projectId,
     required this.state,
@@ -2658,41 +3087,169 @@ class _ReceiptsPdcView extends StatelessWidget {
   final Future<bool> Function(String invoiceId) onOpenInvoice;
 
   @override
+  State<_ReceiptsPdcView> createState() => _ReceiptsPdcViewState();
+}
+
+class _ReceiptsPdcViewState extends State<_ReceiptsPdcView> {
+  String? _selectedLedgerEntryId;
+
+  @override
   Widget build(BuildContext context) {
-    final entries = state.ledger?.entries;
-    if (entries == null) {
+    final entries = widget.state.ledger?.entries;
+    final invoices = widget.state.invoices?.invoices;
+    if (entries == null || invoices == null) {
       return _AccountsStatePanel(
-        status: state.status,
-        language: language,
-        error: state.error,
-        onRetry: onRetry,
+        status: widget.state.status,
+        language: widget.language,
+        error: widget.state.error,
+        onRetry: widget.onRetry,
       );
     }
-    if (entries.isEmpty) {
-      return _EmptyPanel(
-        icon: Icons.payments_outlined,
-        title: _t(language, 'no_records'),
-      );
-    }
-    return _RegisterList(
-      title: _t(language, 'receipts_pdc'),
+    final receiptTotal = entries
+        .where((entry) => entry.payment != null)
+        .fold<YorksAccountsDecimal>(YorksAccountsDecimal.zero, (total, entry) {
+          final payment = entry.payment!;
+          return payment.entryKind == YorksAccountsPaymentEntryKind.reversal
+              ? total - payment.amount
+              : total + payment.amount;
+        });
+    final pdcEvents = entries.where((entry) => entry.pdcEvent != null).toList();
+    final stillDue = invoices.fold<YorksAccountsDecimal>(
+      YorksAccountsDecimal.zero,
+      (value, invoice) => value + invoice.stillDue,
+    );
+    final certified = invoices.fold<YorksAccountsDecimal>(
+      YorksAccountsDecimal.zero,
+      (value, invoice) => value + invoice.certifiedExVat,
+    );
+    final pdcExposure = invoices.fold<YorksAccountsDecimal>(
+      YorksAccountsDecimal.zero,
+      (value, invoice) => value + invoice.pdcExposure,
+    );
+    final overdue = invoices
+        .where((invoice) => invoice.dueState == YorksAccountsDueState.overdue)
+        .length;
+    final cleared = pdcEvents
+        .where(
+          (entry) => entry.pdcEvent!.toStatus == YorksAccountsPdcStatus.cleared,
+        )
+        .length;
+    final selected = entries
+        .cast<YorksAccountsReceivablesLedgerEntry?>()
+        .firstWhere(
+          (entry) => entry?.ledgerEntryId == _selectedLedgerEntryId,
+          orElse: () => entries.isEmpty ? null : entries.first,
+        );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (final entry in entries)
-          _RegisterRow(
-            icon: entry.payment == null
-                ? Icons.event_note_outlined
-                : Icons.payments_outlined,
-            title:
-                entry.payment?.paymentReference ??
-                _wireLabel(
-                  language,
-                  entry.pdcEvent?.toStatus.wireValue ?? 'pdc',
+        _AccountsMetricStrip(
+          items: [
+            (
+              Icons.payments_outlined,
+              const Color(0xFF0D9D61),
+              _t(widget.language, 'actual_receipts_gross'),
+              _money(receiptTotal),
+              _t(widget.language, 'cash_received_clients'),
+            ),
+            (
+              Icons.schedule_outlined,
+              const Color(0xFFE18418),
+              _t(widget.language, 'still_due_gross'),
+              _money(stillDue),
+              _t(widget.language, 'certified_balance_outstanding'),
+            ),
+            (
+              Icons.credit_card_outlined,
+              const Color(0xFF7C4DDB),
+              _t(widget.language, 'active_pdc_exposure'),
+              _money(pdcExposure),
+              _t(widget.language, 'held_not_deducted'),
+            ),
+            (
+              Icons.warning_amber_rounded,
+              const Color(0xFFD84C4C),
+              _t(widget.language, 'overdue_certified_invoices'),
+              '$overdue',
+              _t(widget.language, 'invoices_past_due'),
+            ),
+            (
+              Icons.query_stats_rounded,
+              const Color(0xFF1766D5),
+              _t(widget.language, 'cleared_this_month'),
+              '$cleared',
+              _t(widget.language, 'pdc_receipts_month'),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        _CollectionsSummary(
+          certified: certified,
+          received: receiptTotal,
+          stillDue: stillDue,
+          pdcExposure: pdcExposure,
+          pdcEvents: pdcEvents,
+          language: widget.language,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final register = entries.isEmpty
+                ? _EmptyPanel(
+                    icon: Icons.payments_outlined,
+                    title: _t(widget.language, 'no_records'),
+                  )
+                : _RegisterList(
+                    title: _t(widget.language, 'receipts_pdc'),
+                    children: [
+                      for (final entry in entries)
+                        _SelectableRegisterRow(
+                          selected:
+                              entry.ledgerEntryId == selected?.ledgerEntryId,
+                          icon: entry.payment == null
+                              ? Icons.event_note_outlined
+                              : Icons.payments_outlined,
+                          title:
+                              entry.payment?.paymentReference ??
+                              _wireLabel(
+                                widget.language,
+                                entry.pdcEvent?.toStatus.wireValue ?? 'pdc',
+                              ),
+                          subtitle:
+                              '${entry.occurredAt.toLocal()} · ${entry.invoiceId}',
+                          values: [
+                            if (entry.payment != null)
+                              _money(entry.payment!.amount),
+                          ],
+                          onSelect: () => setState(
+                            () => _selectedLedgerEntryId = entry.ledgerEntryId,
+                          ),
+                          onOpen: () => widget.onOpenInvoice(entry.invoiceId),
+                          actionLabel: _t(widget.language, 'open_action'),
+                        ),
+                    ],
+                  );
+            if (constraints.maxWidth < 1120 || selected == null) {
+              return register;
+            }
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: register),
+                const SizedBox(width: AppSpacing.md),
+                SizedBox(
+                  width: 318,
+                  child: _ReceivableLedgerDetailsPanel(
+                    entry: selected,
+                    language: widget.language,
+                    onOpenInvoice: () =>
+                        widget.onOpenInvoice(selected.invoiceId),
+                  ),
                 ),
-            subtitle: '${entry.occurredAt.toLocal()} · ${entry.invoiceId}',
-            values: [if (entry.payment != null) _money(entry.payment!.amount)],
-            onTap: () => onOpenInvoice(entry.invoiceId),
-            actionLabel: _t(language, 'open_action'),
-          ),
+              ],
+            );
+          },
+        ),
       ],
     );
   }
@@ -2730,6 +3287,7 @@ class _SupplierBillsViewState extends State<_SupplierBillsView> {
   Timer? _searchTimer;
   YorksAccountsSupplierMatchStatus? _matchStatus;
   YorksAccountsSupplierPaymentStatus? _paymentStatus;
+  String? _selectedBillId;
 
   @override
   void dispose() {
@@ -2786,6 +3344,36 @@ class _SupplierBillsViewState extends State<_SupplierBillsView> {
       );
     }
     final canCreate = widget.state.bills!.commands.createBill;
+    final total = bills.fold<YorksAccountsDecimal>(
+      YorksAccountsDecimal.zero,
+      (value, bill) => value + bill.totalInclVat,
+    );
+    final approved = bills
+        .where(
+          (bill) => bill.status == YorksAccountsSupplierBillStatus.approved,
+        )
+        .fold<YorksAccountsDecimal>(
+          YorksAccountsDecimal.zero,
+          (value, bill) => value + bill.totalInclVat,
+        );
+    final paid = bills.fold<YorksAccountsDecimal>(
+      YorksAccountsDecimal.zero,
+      (value, bill) => value + bill.paidAmount,
+    );
+    final outstanding = bills.fold<YorksAccountsDecimal>(
+      YorksAccountsDecimal.zero,
+      (value, bill) => value + bill.outstandingAmount,
+    );
+    final exceptions = bills
+        .where(
+          (bill) =>
+              bill.matchStatus != YorksAccountsSupplierMatchStatus.matched,
+        )
+        .length;
+    final selectedBill = bills.cast<YorksAccountsSupplierBill?>().firstWhere(
+      (bill) => bill?.supplierBillId == _selectedBillId,
+      orElse: () => bills.isEmpty ? null : bills.first,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -2799,6 +3387,50 @@ class _SupplierBillsViewState extends State<_SupplierBillsView> {
             ),
           ),
         if (canCreate) const SizedBox(height: AppSpacing.md),
+        _AccountsMetricStrip(
+          items: [
+            (
+              Icons.description_outlined,
+              const Color(0xFF1766D5),
+              _t(widget.language, 'supplier_bills_total'),
+              _money(total),
+              '${bills.length} ${_t(widget.language, 'supplier_bills').toLowerCase()}',
+            ),
+            (
+              Icons.task_alt_rounded,
+              const Color(0xFF0D9D61),
+              _t(widget.language, 'approved_for_payment'),
+              _money(approved),
+              _t(widget.language, 'gross_including_vat'),
+            ),
+            (
+              Icons.payments_outlined,
+              const Color(0xFF0B9C61),
+              _t(widget.language, 'paid_to_suppliers'),
+              _money(paid),
+              _t(widget.language, 'gross_including_vat'),
+            ),
+            (
+              Icons.schedule_outlined,
+              const Color(0xFFE18418),
+              _t(widget.language, 'unpaid_supplier_balance'),
+              _money(outstanding),
+              _t(widget.language, 'gross_including_vat'),
+            ),
+            (
+              Icons.warning_amber_rounded,
+              const Color(0xFFD84C4C),
+              _t(widget.language, 'evidence_exceptions'),
+              '$exceptions',
+              _t(widget.language, 'bills_require_attention'),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        if (bills.isNotEmpty) ...[
+          _SupplierEvidenceSummary(bills: bills, language: widget.language),
+          const SizedBox(height: AppSpacing.md),
+        ],
         _SupplierRegisterFilters(
           language: widget.language,
           searchController: _searchController,
@@ -2828,24 +3460,550 @@ class _SupplierBillsViewState extends State<_SupplierBillsView> {
                 : null,
           )
         else
-          _SupplierBillRegister(
-            bills: bills,
-            language: widget.language,
-            onOpen: widget.onOpen,
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final register = _SupplierBillRegister(
+                bills: bills,
+                language: widget.language,
+                selectedBillId: selectedBill?.supplierBillId,
+                onSelect: (bill) =>
+                    setState(() => _selectedBillId = bill.supplierBillId),
+                onOpen: widget.onOpen,
+              );
+              if (constraints.maxWidth < 1120 || selectedBill == null) {
+                return register;
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: register),
+                  const SizedBox(width: AppSpacing.md),
+                  SizedBox(
+                    width: 318,
+                    child: _SupplierBillDetailsPanel(
+                      bill: selectedBill,
+                      language: widget.language,
+                      onOpen: () => widget.onOpen(selectedBill.supplierBillId),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
       ],
     );
   }
 }
 
+class _CollectionsSummary extends StatelessWidget {
+  const _CollectionsSummary({
+    required this.certified,
+    required this.received,
+    required this.stillDue,
+    required this.pdcExposure,
+    required this.pdcEvents,
+    required this.language,
+  });
+
+  final YorksAccountsDecimal certified;
+  final YorksAccountsDecimal received;
+  final YorksAccountsDecimal stillDue;
+  final YorksAccountsDecimal pdcExposure;
+  final List<YorksAccountsReceivablesLedgerEntry> pdcEvents;
+  final AppLanguage language;
+
+  @override
+  Widget build(BuildContext context) {
+    final counts = <YorksAccountsPdcStatus, int>{};
+    for (final entry in pdcEvents) {
+      final status = entry.pdcEvent!.toStatus;
+      counts[status] = (counts[status] ?? 0) + 1;
+    }
+    final maximum = certified.compareTo(stillDue) >= 0 ? certified : stillDue;
+    final collectionPanel = _Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionHeader(title: _t(language, 'collections_summary')),
+          const SizedBox(height: 4),
+          Text(
+            _t(language, 'collections_subtitle'),
+            style: AppTypography.bodySmall,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _CommercialBar(
+            label: _t(language, 'client_certified'),
+            amount: certified,
+            maximum: maximum,
+            color: AppColors.primary,
+          ),
+          _CommercialBar(
+            label: _t(language, 'actual_receipts_gross'),
+            amount: received,
+            maximum: maximum,
+            color: AppColors.success,
+          ),
+          _CommercialBar(
+            label: _t(language, 'still_due_gross'),
+            amount: stillDue,
+            maximum: maximum,
+            color: AppColors.warning,
+          ),
+          _CommercialBar(
+            label: _t(language, 'active_pdc_exposure'),
+            amount: pdcExposure,
+            maximum: maximum,
+            color: AppColors.purple,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          _InlineNotice(
+            icon: Icons.info_outline_rounded,
+            message: _t(language, 'held_pdc_note'),
+          ),
+        ],
+      ),
+    );
+    final statusPanel = _Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionHeader(title: _t(language, 'pdc_instrument_status')),
+          const SizedBox(height: AppSpacing.md),
+          if (counts.isEmpty)
+            Text(_t(language, 'no_records'), style: AppTypography.bodyMedium)
+          else
+            for (final entry in counts.entries)
+              _DetailLine(
+                label: _wireLabel(language, entry.key.wireValue),
+                value: '${entry.value}',
+                valueColor: _statusColor(entry.key.wireValue),
+              ),
+        ],
+      ),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 860) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              collectionPanel,
+              const SizedBox(height: AppSpacing.md),
+              statusPanel,
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(flex: 3, child: collectionPanel),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(flex: 2, child: statusPanel),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ReceivableLedgerDetailsPanel extends StatelessWidget {
+  const _ReceivableLedgerDetailsPanel({
+    required this.entry,
+    required this.language,
+    required this.onOpenInvoice,
+  });
+
+  final YorksAccountsReceivablesLedgerEntry entry;
+  final AppLanguage language;
+  final VoidCallback onOpenInvoice;
+
+  @override
+  Widget build(BuildContext context) {
+    final payment = entry.payment;
+    final pdc = entry.pdcEvent;
+    return _Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            payment == null
+                ? _t(language, 'pdc_instrument_details')
+                : _t(language, 'receipt_entries'),
+            style: AppTypography.titleMedium,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            payment?.paymentReference ?? pdc?.pdcId ?? '—',
+            style: AppTypography.titleLarge,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _DetailLine(
+            label: _t(language, 'linked_invoice'),
+            value: entry.invoiceId,
+          ),
+          if (payment != null) ...[
+            _DetailLine(
+              label: _t(language, 'receipt_date'),
+              value: '${payment.paymentDate}',
+            ),
+            _DetailLine(
+              label: _t(language, 'method'),
+              value: payment.paymentMethod,
+            ),
+            _DetailLine(
+              label: _t(language, 'total'),
+              value: _money(payment.amount),
+              valueColor: AppColors.success,
+            ),
+          ],
+          if (pdc != null) ...[
+            _DetailLine(
+              label: _t(language, 'status'),
+              value: _wireLabel(language, pdc.toStatus.wireValue),
+              valueColor: _statusColor(pdc.toStatus.wireValue),
+            ),
+            _DetailLine(
+              label: _t(language, 'cheque_date'),
+              value: '${pdc.actionDate}',
+            ),
+            _DetailLine(
+              label: _t(language, 'revision'),
+              value: '${pdc.sequenceNumber}',
+            ),
+            if (pdc.reason != null)
+              _DetailLine(label: _t(language, 'reason'), value: pdc.reason!),
+          ],
+          const SizedBox(height: AppSpacing.md),
+          FilledButton.icon(
+            onPressed: onOpenInvoice,
+            icon: const Icon(Icons.open_in_new_rounded),
+            label: Text(_t(language, 'open_invoice')),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SupplierEvidenceSummary extends StatelessWidget {
+  const _SupplierEvidenceSummary({required this.bills, required this.language});
+
+  final List<YorksAccountsSupplierBill> bills;
+  final AppLanguage language;
+
+  @override
+  Widget build(BuildContext context) {
+    final total = bills.fold<YorksAccountsDecimal>(
+      YorksAccountsDecimal.zero,
+      (value, bill) => value + bill.totalInclVat,
+    );
+    final paid = bills.fold<YorksAccountsDecimal>(
+      YorksAccountsDecimal.zero,
+      (value, bill) => value + bill.paidAmount,
+    );
+    final outstanding = bills.fold<YorksAccountsDecimal>(
+      YorksAccountsDecimal.zero,
+      (value, bill) => value + bill.outstandingAmount,
+    );
+    final matched = bills
+        .where(
+          (bill) =>
+              bill.matchStatus == YorksAccountsSupplierMatchStatus.matched,
+        )
+        .length;
+    final review = bills
+        .where(
+          (bill) => bill.matchStatus == YorksAccountsSupplierMatchStatus.review,
+        )
+        .length;
+    final blocked = bills.length - matched - review;
+    final evidencePanel = _Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionHeader(title: _t(language, 'evidence_completeness')),
+          const SizedBox(height: AppSpacing.md),
+          _DetailLine(
+            label: _wireLabel(language, 'matched'),
+            value: '$matched',
+            valueColor: AppColors.success,
+          ),
+          _DetailLine(
+            label: _wireLabel(language, 'review'),
+            value: '$review',
+            valueColor: AppColors.warning,
+          ),
+          _DetailLine(
+            label: _wireLabel(language, 'blocked'),
+            value: '$blocked',
+            valueColor: AppColors.error,
+          ),
+        ],
+      ),
+    );
+    final outlookPanel = _Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionHeader(title: _t(language, 'payment_outlook')),
+          const SizedBox(height: AppSpacing.md),
+          _CommercialBar(
+            label: _t(language, 'supplier_bills_total'),
+            amount: total,
+            maximum: total,
+            color: AppColors.primary,
+          ),
+          _CommercialBar(
+            label: _t(language, 'paid_to_suppliers'),
+            amount: paid,
+            maximum: total,
+            color: AppColors.success,
+          ),
+          _CommercialBar(
+            label: _t(language, 'unpaid_supplier_balance'),
+            amount: outstanding,
+            maximum: total,
+            color: AppColors.warning,
+          ),
+        ],
+      ),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 860) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              evidencePanel,
+              const SizedBox(height: AppSpacing.md),
+              outlookPanel,
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(flex: 2, child: evidencePanel),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(flex: 3, child: outlookPanel),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _SupplierBillDetailsPanel extends StatelessWidget {
+  const _SupplierBillDetailsPanel({
+    required this.bill,
+    required this.language,
+    required this.onOpen,
+  });
+
+  final YorksAccountsSupplierBill bill;
+  final AppLanguage language;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) => _Panel(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                _t(language, 'supplier_bill_detail'),
+                style: AppTypography.titleMedium,
+              ),
+            ),
+            _Badge(_wireLabel(language, bill.status.wireValue)),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Text(bill.supplierInvoiceReference, style: AppTypography.titleLarge),
+        const SizedBox(height: AppSpacing.md),
+        _DetailLine(label: _t(language, 'supplier'), value: bill.supplierName),
+        _DetailLine(
+          label: _t(language, 'gross_including_vat'),
+          value: _money(bill.totalInclVat),
+        ),
+        _DetailLine(
+          label: _t(language, 'invoice_date'),
+          value: '${bill.invoiceDate}',
+        ),
+        _DetailLine(label: _t(language, 'due_date'), value: '${bill.dueDate}'),
+        _DetailLine(
+          label: _t(language, 'match_status'),
+          value: _wireLabel(language, bill.matchStatus.wireValue),
+          valueColor: _statusColor(bill.matchStatus.wireValue),
+        ),
+        _DetailLine(
+          label: _t(language, 'payment_status'),
+          value: _wireLabel(language, bill.paymentStatus.wireValue),
+          valueColor: _statusColor(bill.paymentStatus.wireValue),
+        ),
+        _DetailLine(
+          label: _t(language, 'po_lpo'),
+          value: bill.poLpoReference ?? '—',
+        ),
+        _DetailLine(
+          label: _t(language, 'accepted_delivery'),
+          value: bill.acceptedDeliveryReference ?? '—',
+        ),
+        _DetailLine(
+          label: _t(language, 'paid_to_suppliers'),
+          value: _money(bill.paidAmount),
+          valueColor: AppColors.success,
+        ),
+        _DetailLine(
+          label: _t(language, 'unpaid_supplier_balance'),
+          value: _money(bill.outstandingAmount),
+          valueColor: bill.outstandingAmount.isPositive
+              ? AppColors.error
+              : null,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        FilledButton.icon(
+          onPressed: onOpen,
+          icon: const Icon(Icons.open_in_new_rounded),
+          label: Text(_t(language, 'open_action')),
+        ),
+      ],
+    ),
+  );
+}
+
+class _DetailLine extends StatelessWidget {
+  const _DetailLine({
+    required this.label,
+    required this.value,
+    this.valueColor,
+  });
+
+  final String label;
+  final String value;
+  final Color? valueColor;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(minHeight: 44),
+    padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+    decoration: const BoxDecoration(
+      border: Border(bottom: BorderSide(color: AppColors.line)),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: Text(label, style: AppTypography.bodySmall)),
+        const SizedBox(width: AppSpacing.sm),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: AppTypography.labelMedium.copyWith(color: valueColor),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _InlineNotice extends StatelessWidget {
+  const _InlineNotice({required this.icon, required this.message});
+
+  final IconData icon;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(AppSpacing.md),
+    decoration: BoxDecoration(
+      color: AppColors.primaryContainer,
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      border: const Border(
+        left: BorderSide(color: AppColors.primary, width: 3),
+      ),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: AppColors.primary, size: 18),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(child: Text(message, style: AppTypography.bodySmall)),
+      ],
+    ),
+  );
+}
+
+class _SelectableRegisterRow extends StatelessWidget {
+  const _SelectableRegisterRow({
+    required this.selected,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.values,
+    required this.onSelect,
+    required this.onOpen,
+    required this.actionLabel,
+  });
+
+  final bool selected;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final List<String> values;
+  final VoidCallback onSelect;
+  final VoidCallback onOpen;
+  final String actionLabel;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: selected ? AppColors.primaryContainer : Colors.transparent,
+    child: InkWell(
+      onTap: onSelect,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 64),
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: AppColors.line)),
+        ),
+        child: Row(
+          children: [
+            _IconTile(icon),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: _TwoLine(title: title, subtitle: subtitle),
+            ),
+            for (final value in values)
+              Padding(
+                padding: const EdgeInsetsDirectional.only(start: AppSpacing.md),
+                child: Text(value, style: AppTypography.titleSmall),
+              ),
+            IconButton(
+              tooltip: actionLabel,
+              onPressed: onOpen,
+              icon: const Icon(Icons.chevron_right_rounded),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
 class _InvoiceRegister extends StatelessWidget {
   const _InvoiceRegister({
     required this.invoices,
     required this.language,
+    required this.selectedInvoiceId,
+    required this.onSelect,
     required this.onOpen,
   });
   final List<YorksAccountsClientInvoiceSummary> invoices;
   final AppLanguage language;
+  final String? selectedInvoiceId;
+  final ValueChanged<YorksAccountsClientInvoiceSummary> onSelect;
   final Future<bool> Function(String invoiceId) onOpen;
 
   @override
@@ -2884,6 +4042,7 @@ class _InvoiceRegister extends StatelessWidget {
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: DataTable(
+                showCheckboxColumn: false,
                 dataRowMinHeight: 64,
                 dataRowMaxHeight: 72,
                 columns: [
@@ -2920,7 +4079,8 @@ class _InvoiceRegister extends StatelessWidget {
                 rows: [
                   for (final invoice in invoices)
                     DataRow(
-                      onSelectChanged: (_) => onOpen(invoice.invoiceId),
+                      selected: invoice.invoiceId == selectedInvoiceId,
+                      onSelectChanged: (_) => onSelect(invoice),
                       cells: [
                         DataCell(Text(invoice.invoiceReference)),
                         DataCell(
@@ -2973,10 +4133,14 @@ class _SupplierBillRegister extends StatelessWidget {
   const _SupplierBillRegister({
     required this.bills,
     required this.language,
+    required this.selectedBillId,
+    required this.onSelect,
     required this.onOpen,
   });
   final List<YorksAccountsSupplierBill> bills;
   final AppLanguage language;
+  final String? selectedBillId;
+  final ValueChanged<YorksAccountsSupplierBill> onSelect;
   final Future<bool> Function(String supplierBillId) onOpen;
 
   @override
@@ -3014,6 +4178,7 @@ class _SupplierBillRegister extends StatelessWidget {
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: DataTable(
+                showCheckboxColumn: false,
                 dataRowMinHeight: 64,
                 dataRowMaxHeight: 72,
                 columns: [
@@ -3037,7 +4202,8 @@ class _SupplierBillRegister extends StatelessWidget {
                 rows: [
                   for (final bill in bills)
                     DataRow(
-                      onSelectChanged: (_) => onOpen(bill.supplierBillId),
+                      selected: bill.supplierBillId == selectedBillId,
+                      onSelectChanged: (_) => onSelect(bill),
                       cells: [
                         DataCell(Text(bill.supplierInvoiceReference)),
                         DataCell(Text(bill.supplierName)),
@@ -3573,7 +4739,7 @@ class _SupplierRegisterFilterSheetState
   );
 }
 
-class _ProjectAccountsTabs extends StatelessWidget {
+class _ProjectAccountsTabs extends StatefulWidget {
   const _ProjectAccountsTabs({
     required this.tabs,
     required this.selected,
@@ -3586,17 +4752,70 @@ class _ProjectAccountsTabs extends StatelessWidget {
   final ValueChanged<YorksProjectAccountsTab> onSelected;
 
   @override
+  State<_ProjectAccountsTabs> createState() => _ProjectAccountsTabsState();
+}
+
+class _ProjectAccountsTabsState extends State<_ProjectAccountsTabs> {
+  final _selectedKey = GlobalKey();
+  final _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _revealSelectedTab();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ProjectAccountsTabs oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selected != widget.selected ||
+        oldWidget.tabs != widget.tabs) {
+      _revealSelectedTab();
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _revealSelectedTab() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final selectedContext = _selectedKey.currentContext;
+      if (!mounted ||
+          selectedContext == null ||
+          !_scrollController.hasClients) {
+        return;
+      }
+      final selectedObject = selectedContext.findRenderObject();
+      if (selectedObject == null) return;
+      final reduceMotion = MediaQuery.disableAnimationsOf(context);
+      _scrollController.position.ensureVisible(
+        selectedObject,
+        alignment: 0.5,
+        duration: reduceMotion
+            ? Duration.zero
+            : const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
+  @override
   Widget build(BuildContext context) => DecoratedBox(
     decoration: const BoxDecoration(
       border: Border(bottom: BorderSide(color: AppColors.line)),
     ),
     child: SingleChildScrollView(
+      controller: _scrollController,
       scrollDirection: Axis.horizontal,
       child: Row(
         children: [
-          for (final tab in tabs)
+          for (final tab in widget.tabs)
             InkWell(
-              onTap: () => onSelected(tab),
+              key: tab == widget.selected ? _selectedKey : null,
+              onTap: () => widget.onSelected(tab),
               child: Container(
                 constraints: const BoxConstraints(minHeight: 44),
                 margin: const EdgeInsetsDirectional.only(end: 8),
@@ -3605,10 +4824,12 @@ class _ProjectAccountsTabs extends StatelessWidget {
                   vertical: 10,
                 ),
                 decoration: BoxDecoration(
-                  color: tab == selected ? const Color(0xFFEAF3FF) : null,
+                  color: tab == widget.selected
+                      ? const Color(0xFFEAF3FF)
+                      : null,
                   border: Border(
                     bottom: BorderSide(
-                      color: tab == selected
+                      color: tab == widget.selected
                           ? AppColors.blue
                           : Colors.transparent,
                       width: 2,
@@ -3639,18 +4860,18 @@ class _ProjectAccountsTabs extends StatelessWidget {
                           Icons.history_rounded,
                       },
                       size: 17,
-                      color: tab == selected
+                      color: tab == widget.selected
                           ? AppColors.blue
                           : AppColors.inkSecondary,
                     ),
                     const SizedBox(width: 7),
                     Text(
-                      _tabLabel(language, tab),
+                      _tabLabel(widget.language, tab),
                       style: AppTypography.labelMedium.copyWith(
-                        color: tab == selected
+                        color: tab == widget.selected
                             ? AppColors.blue
                             : AppColors.inkSecondary,
-                        fontWeight: tab == selected
+                        fontWeight: tab == widget.selected
                             ? FontWeight.w700
                             : FontWeight.w500,
                       ),
@@ -3665,82 +4886,15 @@ class _ProjectAccountsTabs extends StatelessWidget {
   );
 }
 
-class _ProgressLedgerCard extends StatelessWidget {
-  const _ProgressLedgerCard({
-    required this.entry,
-    required this.language,
-    required this.canViewValues,
-    required this.onAction,
-  });
-  final YorksAccountsProgressEntry entry;
-  final AppLanguage language;
-  final bool canViewValues;
-  final VoidCallback? onAction;
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(AppSpacing.lg),
-    decoration: const BoxDecoration(
-      border: Border(bottom: BorderSide(color: AppColors.line)),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(entry.buildingName ?? '—', style: AppTypography.titleSmall),
-        Text(entry.stageLabel ?? entry.stageKey),
-        const SizedBox(height: AppSpacing.md),
-        _Progress(
-          value: _percentValue(entry.confirmedPercent),
-          label: _percentLabel(entry.confirmedPercent),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Wrap(
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.sm,
-          children: [
-            _Badge(
-              '${_t(language, 'suggested')} '
-              '${_percentLabel(entry.suggestedPercent)}',
-            ),
-            _Badge(_wireLabel(language, entry.reviewStatus.wireValue)),
-          ],
-        ),
-        if (canViewValues) ...[
-          const SizedBox(height: AppSpacing.sm),
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            children: [
-              _Badge(
-                '${_t(language, 'stage_value')}: '
-                '${entry.stageValue == null ? '—' : _money(entry.stageValue!)}',
-              ),
-              _Badge(
-                '${_t(language, 'eligible_amount')}: '
-                '${entry.confirmedEligible == null ? '—' : _money(entry.confirmedEligible!)}',
-              ),
-            ],
-          ),
-        ],
-        if (onAction != null) ...[
-          const SizedBox(height: AppSpacing.md),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: onAction,
-              icon: const Icon(Icons.arrow_forward_rounded),
-              label: Text(_t(language, 'open_action')),
-            ),
-          ),
-        ],
-      ],
-    ),
-  );
-}
-
 class _BillingFormulaStrip extends StatelessWidget {
-  const _BillingFormulaStrip({required this.totals, required this.language});
+  const _BillingFormulaStrip({
+    required this.totals,
+    required this.entries,
+    required this.language,
+  });
 
   final YorksAccountsProgressTotals totals;
+  final List<YorksAccountsProgressEntry> entries;
   final AppLanguage language;
 
   @override
@@ -3748,87 +4902,188 @@ class _BillingFormulaStrip extends StatelessWidget {
     final contractValue = totals.contractValue;
     final eligible = totals.confirmedEligible;
     final available = totals.availableToClaim;
-    final alreadyClaimed = eligible == null || available == null
-        ? null
-        : eligible - available;
-    final items = <(String, YorksAccountsDecimal?)>[
-      (_t(language, 'contract_baseline'), contractValue),
-      (_t(language, 'cumulative_eligible'), eligible),
-      (_t(language, 'already_claimed'), alreadyClaimed),
-      (_t(language, 'available'), available),
-    ];
-    return _Panel(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final compact = constraints.maxWidth < 760;
-          final cards = [
-            for (final item in items)
-              Container(
-                constraints: const BoxConstraints(minWidth: 170),
-                padding: const EdgeInsets.all(AppSpacing.md),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceContainerLow,
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-                  border: Border.all(color: AppColors.line),
-                ),
-                child: _TwoLine(
-                  title: item.$1,
-                  subtitle: item.$2 == null ? '—' : _money(item.$2!),
-                ),
-              ),
-          ];
-          if (compact) {
-            return SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  for (var index = 0; index < cards.length; index++) ...[
-                    cards[index],
-                    if (index != cards.length - 1)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: AppSpacing.sm,
-                        ),
-                        child: Icon(Icons.arrow_forward_rounded, size: 18),
-                      ),
-                  ],
-                ],
-              ),
-            );
-          }
-          return Row(
-            children: [
-              for (var index = 0; index < cards.length; index++) ...[
-                Expanded(child: cards[index]),
-                if (index != cards.length - 1)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-                    child: Icon(Icons.arrow_forward_rounded, size: 18),
-                  ),
-              ],
-            ],
-          );
-        },
+    final pending = entries
+        .where(
+          (entry) => entry.reviewStatus == YorksAccountsReviewStatus.pending,
+        )
+        .length;
+    final evidenceCount = entries.fold<int>(
+      0,
+      (total, entry) => total + entry.evidenceDocumentIds.length,
+    );
+    final items = <(IconData, Color, String, String, String)>[
+      (
+        Icons.description_outlined,
+        const Color(0xFF1766D5),
+        _t(language, 'contract_baseline'),
+        contractValue == null ? '—' : _money(contractValue),
+        _t(language, 'net_active_baseline'),
       ),
+      (
+        Icons.task_alt_rounded,
+        const Color(0xFF0D9D61),
+        _t(language, 'cumulative_eligible'),
+        eligible == null ? '—' : _money(eligible),
+        _t(language, 'confirmed'),
+      ),
+      (
+        Icons.bar_chart_rounded,
+        const Color(0xFF1766D5),
+        _t(language, 'available'),
+        available == null ? '—' : _money(available),
+        _t(language, 'net_subject_to_review'),
+      ),
+      (
+        Icons.rate_review_outlined,
+        const Color(0xFF7C4DDB),
+        _t(language, 'progress_under_review'),
+        '$pending',
+        _t(language, 'billing_stages'),
+      ),
+      (
+        Icons.cloud_upload_outlined,
+        const Color(0xFF1686D9),
+        _t(language, 'evidence_files'),
+        '$evidenceCount',
+        _t(language, 'files'),
+      ),
+    ];
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 1120
+            ? 5
+            : constraints.maxWidth >= 700
+            ? 3
+            : 1;
+        const gap = AppSpacing.sm;
+        final width = columns == 1
+            ? constraints.maxWidth
+            : (constraints.maxWidth - gap * (columns - 1)) / columns;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [
+            for (final item in items)
+              SizedBox(
+                width: width,
+                child: _AccountsMetricCard(
+                  icon: item.$1,
+                  color: item.$2,
+                  title: item.$3,
+                  value: item.$4,
+                  detail: item.$5,
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }
 
-bool _hasAvailableProgressAction(
-  YorksAccountsProgressProjection projection,
-  YorksAccountsProgressEntry entry,
-) {
-  final available = entry.nextActions
-      .where((action) => action.isAvailable)
-      .map((action) => action.code)
-      .toSet();
-  return (projection.commands.allows('suggest_progress') &&
-          available.contains('suggest_progress')) ||
-      (projection.commands.allows('confirm_progress') &&
-          available.contains('confirm_progress')) ||
-      (projection.commands.allows('review_progress') &&
-          available.contains('review_progress'));
+class _AccountsMetricCard extends StatelessWidget {
+  const _AccountsMetricCard({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.value,
+    required this.detail,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String value;
+  final String detail;
+
+  @override
+  Widget build(BuildContext context) => _Panel(
+    padding: const EdgeInsets.all(AppSpacing.md),
+    child: Row(
+      children: [
+        Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(11),
+          ),
+          child: Icon(icon, color: color),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.inkSecondary,
+                ),
+              ),
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.titleMedium.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              Text(
+                detail,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.inkSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _AccountsMetricStrip extends StatelessWidget {
+  const _AccountsMetricStrip({required this.items});
+
+  final List<(IconData, Color, String, String, String)> items;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final columns = constraints.maxWidth >= 1120
+          ? items.length.clamp(1, 5)
+          : constraints.maxWidth >= 700
+          ? 3
+          : 1;
+      const gap = AppSpacing.sm;
+      final width = columns == 1
+          ? constraints.maxWidth
+          : (constraints.maxWidth - gap * (columns - 1)) / columns;
+      return Wrap(
+        spacing: gap,
+        runSpacing: gap,
+        children: [
+          for (final item in items)
+            SizedBox(
+              width: width,
+              child: _AccountsMetricCard(
+                icon: item.$1,
+                color: item.$2,
+                title: item.$3,
+                value: item.$4,
+                detail: item.$5,
+              ),
+            ),
+        ],
+      );
+    },
+  );
 }
 
 class _RegisterList extends StatelessWidget {
@@ -4366,6 +5621,27 @@ IconData _statusIcon(String value) => switch (value) {
   'rejected' => Icons.error_outline_rounded,
   'due_soon' || 'due_today' || 'review' || 'pending' => Icons.schedule_rounded,
   _ => Icons.info_outline_rounded,
+};
+
+Color _statusColor(String value) => switch (value) {
+  'paid' ||
+  'certified' ||
+  'approved' ||
+  'matched' ||
+  'active' ||
+  'cleared' => AppColors.success,
+  'overdue' ||
+  'blocked' ||
+  'cancelled' ||
+  'returned' ||
+  'bounced' ||
+  'rejected' => AppColors.error,
+  'due_soon' ||
+  'due_today' ||
+  'review' ||
+  'pending' ||
+  'deposited' => AppColors.warning,
+  _ => AppColors.primary,
 };
 
 String _tabLabel(AppLanguage language, YorksProjectAccountsTab tab) =>

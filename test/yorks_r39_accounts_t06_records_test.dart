@@ -17,6 +17,35 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('T06 protected record projections', () {
+    test('complete project backup report kinds stay unique and stable', () {
+      expect(
+        YorksAccountsReportKind.values.map((kind) => kind.wireValue).toSet(),
+        hasLength(YorksAccountsReportKind.values.length),
+      );
+      expect(
+        YorksAccountsReportKind.values.map((kind) => kind.wireValue),
+        containsAll([
+          'project_summary',
+          'commercial_baseline',
+          'building_allocations',
+          'stage_allocations',
+          'billing_progress',
+          'progress_history',
+          'client_claims',
+          'claim_lines',
+          'client_invoices',
+          'certifications',
+          'client_receipts',
+          'pdc_register',
+          'pdc_events',
+          'supplier_bills',
+          'supplier_payments',
+          'accounts_documents',
+          'accounts_activity',
+        ]),
+      );
+    });
+
     test('activity filters are exact, bounded and UTC normalized', () {
       final filters = YorksAccountsActivityFilters(
         entityType: ' accounts_client_invoice ',
@@ -166,25 +195,86 @@ void main() {
   });
 
   group('T06 deterministic report artifacts', () {
-    test('XLSX is valid OOXML and neutralizes spreadsheet formulas', () {
+    test('XLSX is styled, print-ready, typed and neutralizes formulas', () {
       final report = YorksAccountsReportProjection.fromRpcJson(_reportJson());
-      final bytes = const YorksAccountsReportService().buildExcel(report);
+      final billing = YorksAccountsReportProjection.fromRpcJson(
+        _billingReportJson(),
+      );
+      final bytes = const YorksAccountsReportService().buildExcel(
+        report,
+        companionReports: [billing],
+      );
       final archive = ZipDecoder().decodeBytes(bytes);
       final sheet = archive.findFile('xl/worksheets/sheet1.xml');
+      final billingSheet = archive.findFile('xl/worksheets/sheet2.xml');
+      final workbook = archive.findFile('xl/workbook.xml');
 
       expect(bytes.take(2), [0x50, 0x4b]);
       expect(sheet, isNotNull);
-      expect(
-        String.fromCharCodes(sheet!.content as List<int>),
-        contains("'=1+1"),
+      expect(billingSheet, isNotNull);
+      final summaryXml = String.fromCharCodes(sheet!.content as List<int>);
+      final billingXml = String.fromCharCodes(
+        billingSheet!.content as List<int>,
       );
+      final workbookXml = String.fromCharCodes(workbook!.content as List<int>);
+      expect(summaryXml, contains("'=1+1"));
+      expect(summaryXml, contains('showGridLines="0"'));
+      expect(summaryXml, contains('ySplit="6"'));
+      expect(summaryXml, contains('orientation="landscape"'));
+      expect(billingXml, contains('<c r="C7" s="8"><v>0.1</v></c>'));
+      expect(workbookXml, contains('name="Project Summary"'));
+      expect(workbookXml, contains('name="Billing Progress"'));
     });
 
     test('PDF uses the same protected structured report model', () async {
       final report = YorksAccountsReportProjection.fromRpcJson(_reportJson());
-      final bytes = await const YorksAccountsReportService().buildPdf(report);
+      final wideRegister = YorksAccountsReportProjection.fromRpcJson(
+        _wideReportJson(),
+      );
+      final bytes = await const YorksAccountsReportService().buildPdf(
+        report,
+        companionReports: [wideRegister],
+      );
       expect(String.fromCharCodes(bytes.take(4)), '%PDF');
     });
+
+    test(
+      'complete workbook keeps every authorized register in its own tab',
+      () {
+        final service = const YorksAccountsReportService();
+        final report = YorksAccountsReportProjection.fromRpcJson(_reportJson());
+        final projectKinds = YorksAccountsReportKind.values
+            .where(
+              (kind) =>
+                  kind != YorksAccountsReportKind.portfolio &&
+                  kind != YorksAccountsReportKind.projectSummary,
+            )
+            .toList(growable: false);
+        final bytes = service.buildExcel(
+          report,
+          companionReports: [
+            for (final kind in projectKinds) _emptyReport(kind),
+          ],
+        );
+        final archive = ZipDecoder().decodeBytes(bytes);
+        final worksheets = archive.files
+            .where((file) => file.name.startsWith('xl/worksheets/sheet'))
+            .toList(growable: false);
+
+        expect(worksheets, hasLength(17));
+        expect(
+          service.excelFileName(report, completeProjectBackup: true),
+          'Yorks_YRA-001_Accounts_Backup_2026-08-26.xlsx',
+        );
+        final workbook = archive.findFile('xl/workbook.xml');
+        final workbookXml = String.fromCharCodes(
+          workbook!.content as List<int>,
+        );
+        expect(workbookXml, contains('name="Commercial Baseline"'));
+        expect(workbookXml, contains('name="Accounts Documents"'));
+        expect(workbookXml, contains('name="Accounts Activity"'));
+      },
+    );
   });
 }
 
@@ -236,7 +326,7 @@ Map<String, dynamic> _activityJson() => {
 };
 
 Map<String, dynamic> _reportJson() => {
-  'schema_version': 6,
+  'schema_version': 7,
   'report_kind': 'project_summary',
   'project_id': 'project-1',
   'project_reference': 'YRA-001',
@@ -251,6 +341,57 @@ Map<String, dynamic> _reportJson() => {
     ['YRA-001', '=1+1'],
   ],
 };
+
+Map<String, dynamic> _billingReportJson() => {
+  'schema_version': 7,
+  'report_kind': 'billing_progress',
+  'project_id': 'project-1',
+  'project_reference': 'YRA-001',
+  'project_name': 'Project One',
+  'currency': 'AED',
+  'access_context': 'accountant',
+  'generated_at': '2026-08-26T10:00:00Z',
+  'generated_by_auth_user_id': 'actor-1',
+  'generated_by_display_name': 'Accounts User',
+  'columns': [
+    'Building',
+    'Stage',
+    'Suggested %',
+    'Confirmed %',
+    'Evidence',
+    'Updated',
+  ],
+  'rows': [
+    [
+      'DF1W-132/33kV Building',
+      'Design',
+      '10',
+      '10',
+      'Approved progress evidence',
+      '2026-08-26T10:00:00Z',
+    ],
+  ],
+};
+
+Map<String, dynamic> _wideReportJson() => {
+  ..._billingReportJson(),
+  'report_kind': 'client_invoices',
+  'columns': [for (var index = 1; index <= 20; index++) 'Column $index'],
+  'rows': [
+    [
+      for (var index = 1; index <= 20; index++)
+        index == 20 ? List<String>.filled(2100, 'x').join() : 'Value $index',
+    ],
+  ],
+};
+
+YorksAccountsReportProjection _emptyReport(YorksAccountsReportKind kind) =>
+    YorksAccountsReportProjection.fromRpcJson({
+      ..._reportJson(),
+      'report_kind': kind.wireValue,
+      'columns': ['Reference'],
+      'rows': <List<String>>[],
+    });
 
 Matcher _domainCode(YorksV1DomainErrorCode code) =>
     isA<YorksV1DomainException>().having((error) => error.code, 'code', code);

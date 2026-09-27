@@ -96,13 +96,41 @@ void main() {
 
   test('taxonomy stays bounded, stable, and unique', () {
     final names = AnalyticsEvent.values.map((event) => event.wireName).toList();
-    expect(names, hasLength(71));
+    expect(names, hasLength(77));
     expect(names.toSet(), hasLength(names.length));
     expect(names, everyElement(matches(RegExp(r'^[a-z0-9]+(?: [a-z0-9]+)*$'))));
     expect(names, isNot(contains('material_request_opened')));
     expect(names, contains('material request opened'));
     expect(names, contains('reliability error occurred'));
+    expect(names, contains('accounts building group toggled'));
   });
+
+  test(
+    'Accounts analytics keep commercial identifiers and values out',
+    () async {
+      analytics.capture(
+        AnalyticsEvent.accountsRecordOpened,
+        properties: const {
+          AnalyticsProperty.objectType: 'billing_stage',
+          AnalyticsProperty.source: 'building_workbench',
+          AnalyticsProperty.recordState: 'pending',
+          AnalyticsProperty.outcome: 'YRA-322 AED 17,192,000',
+        },
+      );
+      await analytics.drain();
+
+      final event = sink.events.single;
+      expect(event.name, 'accounts record opened');
+      expect(event.properties['object_type'], 'billing_stage');
+      expect(event.properties['source'], 'building_workbench');
+      expect(event.properties['record_state'], 'pending');
+      expect(event.properties, isNot(contains('outcome')));
+      expect(
+        event.properties.values.whereType<String>(),
+        isNot(contains('YRA-322 AED 17,192,000')),
+      );
+    },
+  );
 
   test(
     'identity uses UUID plus role only and reset follows sign out',

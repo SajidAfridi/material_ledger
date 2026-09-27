@@ -107,6 +107,12 @@ All events below are centrally defined in `analytics_event.dart`.
 | `project access changed` | Access command outcome | Assignment/revocation returns | `action_type`, `success` | Project repository; no user/project ID |
 | `project updated` | Update success | Update RPC succeeds | common | Project repository |
 | `project update failed` | Update failure | Validation/RPC failure | `error_category` | Project repository |
+| `accounts workspace viewed` | Project Accounts adoption | Protected project Accounts workspace loads | `source`, `entry_point` | UI shell; no project reference or ID |
+| `accounts tab selected` | Accounts navigation usefulness | User selects a project Accounts tab | categorical `source`, `entry_point` | UI shell; no record or project identifiers |
+| `accounts building group toggled` | Expandable workbench usability | User expands or collapses a building group | `action_type`, `item_count`, `source` | Billing workbench; no building name or ID |
+| `accounts record opened` | Detail-view usefulness | User selects a billing stage, claim, invoice or supplier bill | `object_type`, optional `record_state`, `source` | UI surface; no references, IDs, supplier names or amounts |
+| `accounts filter changed` | Register findability | A protected Accounts register filter changes | categorical `list_filter`, `source` | UI surface; never search text or selected value |
+| `accounts report requested` | Export-format usefulness | Excel, PDF or print is requested | `file_type`, `object_type`, `source` | Report action; no project ID, report rows or commercial values |
 | `attachment upload started` | Upload intent | Before authorized upload | type/size buckets, `object_type` | Documents repository; no filename |
 | `attachment uploaded` | Upload completion | Storage finalize and reload succeed | type/size buckets, duration via operation | Documents repository |
 | `attachment upload failed` | Upload failure | Upload/finalize fails | buckets, `error_category` | Documents repository |

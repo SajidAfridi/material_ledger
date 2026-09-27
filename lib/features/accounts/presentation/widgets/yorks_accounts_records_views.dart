@@ -6,11 +6,13 @@ import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../core/constants/constants.dart';
+import '../../../../shared/models/analytics_event.dart';
 import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/yorks_v1_accounts_strings.dart';
 import '../../../../shared/models/yorks_v1_document.dart';
 import '../../../../shared/models/yorks_v1_domain_error.dart';
 import '../../../../shared/providers/yorks_v1_document_file_service_provider.dart';
+import '../../../../shared/services/analytics_service.dart';
 import '../../application/accounts_controller.dart';
 import '../../application/accounts_records_providers.dart';
 import '../../data/accounts_report_service.dart';
@@ -424,6 +426,7 @@ class YorksAccountsReportActions extends ConsumerStatefulWidget {
     this.projectId,
     this.compact = false,
     this.overviewToolbar = false,
+    this.bundledKinds = const [],
   });
 
   final YorksAccountsReportKind kind;
@@ -431,6 +434,7 @@ class YorksAccountsReportActions extends ConsumerStatefulWidget {
   final AppLanguage language;
   final bool compact;
   final bool overviewToolbar;
+  final List<YorksAccountsReportKind> bundledKinds;
 
   @override
   ConsumerState<YorksAccountsReportActions> createState() =>
@@ -442,19 +446,42 @@ class _YorksAccountsReportActionsState
   bool _busy = false;
   String? _message;
 
-  Future<YorksAccountsReportProjection?> _report() async {
+  Future<List<YorksAccountsReportProjection>?> _reports() async {
     setState(() {
       _busy = true;
       _message = _text(widget.language, 'preparing_report');
     });
     try {
-      return await ref
-          .read(yorksAccountsRecordsRepositoryProvider)
-          .getReport(
-            widget.kind,
+      final repository = ref.read(yorksAccountsRecordsRepositoryProvider);
+      final uniqueKinds = <YorksAccountsReportKind>[];
+      for (final kind in [widget.kind, ...widget.bundledKinds]) {
+        if (!uniqueKinds.contains(kind)) uniqueKinds.add(kind);
+      }
+      final reports =
+          <YorksAccountsReportKind, YorksAccountsReportProjection>{};
+      if (uniqueKinds.contains(YorksAccountsReportKind.accountsActivity)) {
+        reports[YorksAccountsReportKind.accountsActivity] = await repository
+            .getReport(
+              YorksAccountsReportKind.accountsActivity,
+              projectId: widget.projectId,
+              idempotencyKey: const Uuid().v4(),
+            );
+      }
+      final remainingKinds = uniqueKinds
+          .where((kind) => kind != YorksAccountsReportKind.accountsActivity)
+          .toList(growable: false);
+      final remainingReports = await Future.wait([
+        for (final kind in remainingKinds)
+          repository.getReport(
+            kind,
             projectId: widget.projectId,
             idempotencyKey: const Uuid().v4(),
-          );
+          ),
+      ]);
+      for (var index = 0; index < remainingKinds.length; index++) {
+        reports[remainingKinds[index]] = remainingReports[index];
+      }
+      return [for (final kind in uniqueKinds) reports[kind]!];
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -467,15 +494,21 @@ class _YorksAccountsReportActionsState
   }
 
   Future<void> _excel() async {
-    final report = await _report();
-    if (report == null) return;
+    _trackRequest('xlsx');
+    final reports = await _reports();
+    if (reports == null) return;
+    final report = reports.first;
+    final companions = reports.skip(1).toList(growable: false);
     try {
       final service = ref.read(yorksAccountsReportServiceProvider);
       final saved = await ref
           .read(yorksV1DocumentFileServiceProvider)
           .saveDocument(
-            bytes: service.buildExcel(report),
-            fileName: service.excelFileName(report),
+            bytes: service.buildExcel(report, companionReports: companions),
+            fileName: service.excelFileName(
+              report,
+              completeProjectBackup: companions.isNotEmpty,
+            ),
             mimeType: YorksAccountsReportService.xlsxMimeType,
           );
       if (!mounted) return;
@@ -492,12 +525,15 @@ class _YorksAccountsReportActionsState
   }
 
   Future<void> _pdf({required bool print}) async {
-    final report = await _report();
-    if (report == null) return;
+    _trackRequest(print ? 'print' : 'pdf');
+    final reports = await _reports();
+    if (reports == null) return;
+    final report = reports.first;
+    final companions = reports.skip(1).toList(growable: false);
     try {
       final service = ref.read(yorksAccountsReportServiceProvider);
       if (print) {
-        await service.printPdf(report);
+        await service.printPdf(report, companionReports: companions);
         if (!mounted) return;
         setState(() {
           _busy = false;
@@ -508,8 +544,11 @@ class _YorksAccountsReportActionsState
       final saved = await ref
           .read(yorksV1DocumentFileServiceProvider)
           .saveDocument(
-            bytes: await service.buildPdf(report),
-            fileName: service.pdfFileName(report),
+            bytes: await service.buildPdf(report, companionReports: companions),
+            fileName: service.pdfFileName(
+              report,
+              completeProjectBackup: companions.isNotEmpty,
+            ),
             mimeType: YorksAccountsReportService.pdfMimeType,
           );
       if (!mounted) return;
@@ -531,6 +570,23 @@ class _YorksAccountsReportActionsState
       _busy = false;
       _message = _text(widget.language, 'report_failed');
     });
+  }
+
+  void _trackRequest(String format) {
+    ref
+        .read(analyticsServiceProvider)
+        .capture(
+          AnalyticsEvent.accountsReportRequested,
+          properties: {
+            AnalyticsProperty.fileType: format,
+            AnalyticsProperty.objectType: widget.bundledKinds.isEmpty
+                ? widget.kind.name
+                : 'projectAccountsBackup',
+            AnalyticsProperty.source: widget.projectId == null
+                ? 'accounts_office'
+                : 'project_accounts',
+          },
+        );
   }
 
   @override

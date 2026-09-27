@@ -27,6 +27,10 @@ void main() {
     expect(history.takePrevious('/yorks/rentals'), '/yorks/overview');
     expect(history.state.locations, ['/yorks/overview']);
     expect(history.state.canGoBack('/yorks/overview'), isFalse);
+    expect(history.state.canGoForward('/yorks/overview'), isTrue);
+    expect(history.takeNext('/yorks/overview'), '/yorks/rentals');
+    expect(history.state.locations, ['/yorks/overview', '/yorks/rentals']);
+    expect(history.state.forwardLocations, isEmpty);
   });
 
   test('Back skips duplicates and strips transient notification metadata', () {
@@ -56,8 +60,55 @@ void main() {
     expect(history.state.locations.last, '/yorks/projects/39');
   });
 
+  test('repeated Back and Forward keep a coherent two-way history', () {
+    final history = YorksNavigationHistoryNotifier();
+    history.record('/yorks/overview');
+    history.record('/yorks/projects');
+    history.record('/yorks/projects/project-1/accounts/overview');
+
+    expect(
+      history.takePrevious('/yorks/projects/project-1/accounts/overview'),
+      '/yorks/projects',
+    );
+    expect(history.state.locations, ['/yorks/overview', '/yorks/projects']);
+    expect(history.state.forwardLocations, [
+      '/yorks/projects/project-1/accounts/overview',
+    ]);
+
+    expect(history.takePrevious('/yorks/projects'), '/yorks/overview');
+    expect(history.state.locations, ['/yorks/overview']);
+    expect(history.state.forwardLocations, [
+      '/yorks/projects/project-1/accounts/overview',
+      '/yorks/projects',
+    ]);
+
+    expect(history.takeNext('/yorks/overview'), '/yorks/projects');
+    expect(history.state.locations, ['/yorks/overview', '/yorks/projects']);
+    expect(history.state.forwardLocations, [
+      '/yorks/projects/project-1/accounts/overview',
+    ]);
+
+    expect(
+      history.takeNext('/yorks/projects'),
+      '/yorks/projects/project-1/accounts/overview',
+    );
+    expect(history.state.forwardLocations, isEmpty);
+  });
+
+  test('a new navigation after Back clears the stale Forward branch', () {
+    final history = YorksNavigationHistoryNotifier();
+    history.record('/yorks/overview');
+    history.record('/yorks/rentals');
+    expect(history.takePrevious('/yorks/rentals'), '/yorks/overview');
+
+    history.record('/yorks/projects');
+
+    expect(history.state.locations, ['/yorks/overview', '/yorks/projects']);
+    expect(history.state.forwardLocations, isEmpty);
+  });
+
   testWidgets(
-    'desktop button and system Back return Rentals to the prior Overview',
+    'desktop Back, Forward and system Back preserve the workspace journey',
     (tester) async {
       tester.view.physicalSize = const Size(1366, 768);
       tester.view.devicePixelRatio = 1;
@@ -116,11 +167,102 @@ void main() {
       await tester.pumpAndSettle();
       expect(router.routeInformationProvider.value.uri.path, '/');
 
-      router.go(RoutePaths.rentals);
+      final forward = find.byKey(const ValueKey('yorks-workspace-forward'));
+      expect(tester.widget<IconButton>(forward).onPressed, isNotNull);
+      await tester.tap(forward);
+      await tester.pumpAndSettle();
+      expect(
+        router.routeInformationProvider.value.uri.path,
+        RoutePaths.rentals,
+      );
+
       await tester.pumpAndSettle();
       expect(await tester.binding.handlePopRoute(), isTrue);
       await tester.pumpAndSettle();
       expect(router.routeInformationProvider.value.uri.path, '/');
+      expect(tester.widget<IconButton>(forward).onPressed, isNotNull);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'project Accounts keeps Projects selected and supports Back and Forward',
+    (tester) async {
+      tester.view.physicalSize = const Size(1366, 768);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      SharedPreferences.setMockInitialValues({});
+      final preferences = await SharedPreferences.getInstance();
+      const projectId = 'project-1';
+      final projectPath = RoutePaths.yorksV1ProjectPath(projectId);
+      final accountsPath = RoutePaths.yorksV1ProjectAccountsOverviewPath(
+        projectId,
+      );
+      final router = GoRouter(
+        initialLocation: projectPath,
+        routes: [
+          GoRoute(
+            path: projectPath,
+            builder: (_, _) => const YorksV1WorkspaceShell(
+              child: Scaffold(body: Text('Project overview content')),
+            ),
+          ),
+          GoRoute(
+            path: accountsPath,
+            builder: (_, _) => const YorksV1WorkspaceShell(
+              child: Scaffold(body: Text('Project Accounts content')),
+            ),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1CurrentRoleProvider.overrideWithValue(YorksV1Role.admin),
+            yorksV1FeatureFlagsProvider.overrideWithValue(
+              const YorksV1FeatureFlags(
+                foundation: true,
+                projects: true,
+                boq: true,
+                excel: true,
+                requests: true,
+                arrangement: true,
+                logistics: true,
+                returnsDocuments: true,
+                documents: true,
+                accounts: true,
+              ),
+            ),
+          ],
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      router.go(accountsPath);
+      await tester.pumpAndSettle();
+      expect(find.text('Project Accounts content'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is Semantics &&
+              widget.properties.label ==
+                  YorksV1ShellStrings.projects.active(AppLanguage.english) &&
+              widget.properties.selected == true,
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('yorks-workspace-back')));
+      await tester.pumpAndSettle();
+      expect(router.routeInformationProvider.value.uri.path, projectPath);
+
+      await tester.tap(find.byKey(const ValueKey('yorks-workspace-forward')));
+      await tester.pumpAndSettle();
+      expect(router.routeInformationProvider.value.uri.path, accountsPath);
       expect(tester.takeException(), isNull);
     },
   );
