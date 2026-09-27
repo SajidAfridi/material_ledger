@@ -274,12 +274,51 @@ select ok(
   (select payload->>'report_kind'='project_summary'
       and payload->>'project_reference'='R39-T06-001'
       and payload->>'currency'='AED'
-      and jsonb_array_length(payload->'columns')=7
+      and jsonb_array_length(payload->'columns')=13
       and jsonb_array_length(payload->'rows')=1
     from v1_r39_t06_results where result_key='export')
   and (select (payload->>'captured')::boolean
     from v1_r39_t06_results where result_key='export_audit'),
   'Export projection has one structured source model and records an attributable audit event'
+);
+
+select ok(
+  (
+    select bool_and(
+      payload->>'report_kind'=kind
+      and payload->>'project_reference'='R39-T06-001'
+      and jsonb_typeof(payload->'columns')='array'
+      and jsonb_array_length(payload->'columns')>0
+      and jsonb_typeof(payload->'rows')='array'
+      and not exists (
+        select 1
+        from jsonb_array_elements(payload->'rows') row_value
+        where jsonb_array_length(row_value)
+          <> jsonb_array_length(payload->'columns')
+      )
+    )
+    from unnest(array[
+      'commercial_baseline','building_allocations','stage_allocations',
+      'billing_progress','progress_history','client_claims','claim_lines',
+      'client_invoices','certifications','client_receipts','pdc_register',
+      'pdc_events','supplier_bills','supplier_payments','accounts_documents',
+      'accounts_activity'
+    ]) kind
+    cross join lateral (
+      select public.v1_get_accounts_export(
+        kind,'39610000-0000-4000-8000-000000000001',gen_random_uuid()
+      ) payload
+    ) report
+  ),
+  'Complete project backup exposes every authorized Accounts register with a stable tabular shape'
+);
+
+select throws_ok(
+  $$select public.v1_get_accounts_export(
+    'unsupported','39610000-0000-4000-8000-000000000001',gen_random_uuid()
+  )$$,
+  '22023','R39_ACCOUNTS_EXPORT_KIND_INVALID',
+  'Unknown export kinds fail closed'
 );
 
 select set_config(

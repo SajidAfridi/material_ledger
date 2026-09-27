@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../app/router.dart';
+import '../../../../app/yorks_navigation_history.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_language.dart';
@@ -3938,9 +3939,26 @@ class _YorksV1ProjectWorkspaceScreenState
               onBack:
                   !_showMobileDetails &&
                       _tab != YorksV1ProjectWorkspaceTab.overview
-                  ? () => setState(
-                      () => _tab = YorksV1ProjectWorkspaceTab.overview,
-                    )
+                  ? () {
+                      final projectPath = RoutePaths.yorksV1ProjectPath(
+                        selectedProject.project.id,
+                      );
+                      final currentLocation = GoRouterState.of(
+                        context,
+                      ).uri.toString();
+                      if (Uri.parse(currentLocation).path == projectPath) {
+                        setState(
+                          () => _tab = YorksV1ProjectWorkspaceTab.overview,
+                        );
+                        return;
+                      }
+                      yorksNavigateBack(
+                        context,
+                        ref,
+                        currentLocation,
+                        fallback: projectPath,
+                      );
+                    }
                   : null,
               child: workspace,
             );

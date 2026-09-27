@@ -61,6 +61,10 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     final navigationHistory = ref.watch(yorksNavigationHistoryProvider);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!context.mounted) return;
+      // GoRouter's imperative push can intentionally keep the browser URL at
+      // the parent route. ModalRoute is the reliable authority for which
+      // animated shell page is actually current.
+      if (!(ModalRoute.of(context)?.isCurrent ?? true)) return;
       ref.read(yorksNavigationHistoryProvider.notifier).record(currentLocation);
     });
     final isAccountant = role == YorksV1Role.accountant;
@@ -157,6 +161,13 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     );
     final canPopNatively = Navigator.maybeOf(context)?.canPop() ?? false;
     final canUseWorkspaceHistory = navigationHistory.canGoBack(currentLocation);
+    final canUseWorkspaceForward = navigationHistory.canGoForward(
+      currentLocation,
+    );
+    final navigationFallback = _workspaceNavigationFallback(
+      location,
+      current?.path,
+    );
 
     return YorksWorkspaceZoomHost(
       key: ValueKey(user?.id),
@@ -172,7 +183,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
             context,
             ref,
             currentLocation,
-            fallback: current?.path ?? RoutePaths.engineerHome,
+            fallback: navigationFallback,
           );
         },
         child: CallbackShortcuts(
@@ -230,8 +241,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
                               context,
                               ref,
                               currentLocation,
-                              fallback:
-                                  current?.path ?? RoutePaths.engineerHome,
+                              fallback: navigationFallback,
                             ),
                           ),
                         Expanded(
@@ -318,6 +328,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
                                 ) ||
                                 (current?.path != null &&
                                     location != current!.path),
+                            showForward: canUseWorkspaceForward,
                             onToggleSidebar: () async {
                               final focused =
                                   FocusManager.instance.primaryFocus;
@@ -340,8 +351,12 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
                               context,
                               ref,
                               currentLocation,
-                              fallback:
-                                  current?.path ?? RoutePaths.engineerHome,
+                              fallback: navigationFallback,
+                            ),
+                            onForward: () => yorksNavigateForward(
+                              context,
+                              ref,
+                              currentLocation,
                             ),
                           ),
                           Expanded(
@@ -387,6 +402,20 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     if (segments[1] == 'material-requests') return true;
     if (segments[1] != 'projects' || segments.length < 3) return false;
     return segments.last != 'edit';
+  }
+
+  String _workspaceNavigationFallback(
+    String location,
+    String? currentDestinationPath,
+  ) {
+    final segments = Uri(path: location).pathSegments;
+    if (segments.length >= 3 &&
+        segments[0] == 'yorks' &&
+        segments[1] == 'projects') {
+      if (segments.length == 3) return RoutePaths.yorksV1Projects;
+      return RoutePaths.yorksV1ProjectPath(segments[2]);
+    }
+    return currentDestinationPath ?? RoutePaths.engineerHome;
   }
 
   List<_YorksDestination> _mobileDestinationsFor(
@@ -996,14 +1025,20 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     List<_YorksDestination> destinations,
     String location,
   ) {
+    // Every route below a concrete project, including its protected Accounts
+    // workspace, is project context. Global Accounts is a separate portfolio
+    // destination and must never steal the selected sidebar state.
+    if (location.startsWith('${RoutePaths.yorksV1Projects}/')) {
+      for (final destination in destinations) {
+        if (destination.path == RoutePaths.yorksV1Projects) return destination;
+      }
+    }
     if (location.startsWith('${RoutePaths.yorksV1Accounts}/')) {
       for (final destination in destinations) {
         if (destination.path == location) return destination;
       }
     }
-    if (location == RoutePaths.yorksV1Accounts ||
-        (location.startsWith('/yorks/projects/') &&
-            location.contains('/accounts'))) {
+    if (location == RoutePaths.yorksV1Accounts) {
       for (final destination in destinations) {
         if (destination.path == RoutePaths.yorksV1Accounts) return destination;
       }
@@ -1013,8 +1048,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
       if (path == null) continue;
       if (location == path ||
           (path == RoutePaths.yorksV1Accounts &&
-              (location == RoutePaths.yorksV1Accounts ||
-                  location.contains('/accounts'))) ||
+              location.startsWith('${RoutePaths.yorksV1Accounts}/')) ||
           (path == RoutePaths.yorksV1Projects &&
               location == RoutePaths.engineerCreateProject) ||
           (path == RoutePaths.yorksV1MaterialRequests &&
@@ -1408,8 +1442,10 @@ class _YorksWorkspaceTopBar extends ConsumerWidget {
     required this.unreadChat,
     required this.sidebarExpanded,
     required this.showBack,
+    required this.showForward,
     required this.onToggleSidebar,
     required this.onBack,
+    required this.onForward,
   });
 
   final List<TranslatableString> breadcrumbs;
@@ -1420,8 +1456,10 @@ class _YorksWorkspaceTopBar extends ConsumerWidget {
   final int unreadChat;
   final bool sidebarExpanded;
   final bool showBack;
+  final bool showForward;
   final VoidCallback onToggleSidebar;
   final VoidCallback onBack;
+  final VoidCallback onForward;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1464,6 +1502,12 @@ class _YorksWorkspaceTopBar extends ConsumerWidget {
               tooltip: MaterialLocalizations.of(context).backButtonTooltip,
               onPressed: showBack ? onBack : null,
               icon: const Icon(Icons.arrow_back_rounded),
+            ),
+            IconButton(
+              key: const ValueKey('yorks-workspace-forward'),
+              tooltip: AppStrings.next.active(language),
+              onPressed: showForward ? onForward : null,
+              icon: const Icon(Icons.arrow_forward_rounded),
             ),
             const SizedBox(width: AppSpacing.md),
             Expanded(
