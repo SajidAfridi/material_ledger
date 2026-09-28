@@ -3,6 +3,42 @@ import 'app_language.dart';
 /// Localized copy for the normalized R39 Accounts workspace.
 abstract final class YorksV1AccountsStrings {
   static const Map<String, Map<String, String>> _copy = {
+    'reconcile_progress': {
+      'en': 'Check original save',
+      'ar': 'التحقق من الحفظ الأصلي',
+      'ur': 'اصل محفوظ عمل چیک کریں',
+      'hi': 'मूल सेव की जाँच करें',
+    },
+    'progress_pending_help': {
+      'en':
+          'The previous action may have saved. Check that original action before making another change. Its percentage, evidence and reason will not be replaced.',
+      'ar':
+          'ربما تم حفظ الإجراء السابق. تحقق من الإجراء الأصلي قبل إجراء تغيير آخر. لن يتم استبدال النسبة أو الأدلة أو السبب.',
+      'ur':
+          'پچھلا عمل محفوظ ہو سکتا ہے۔ نئی تبدیلی سے پہلے اصل عمل چیک کریں۔ اس کی شرح، ثبوت اور وجہ تبدیل نہیں ہوں گے۔',
+      'hi':
+          'पिछला कार्य सेव हो सकता है। बदलाव से पहले मूल कार्य जाँचें। उसका प्रतिशत, साक्ष्य और कारण नहीं बदले जाएँगे।',
+    },
+    'suggestion_not_confirmation': {
+      'en':
+          'A suggestion does not change confirmed progress or claimable value. Confirmation and any required review are separate actions.',
+      'ar':
+          'لا يغير الاقتراح التقدم المؤكد أو القيمة القابلة للمطالبة. التأكيد وأي مراجعة مطلوبة إجراءان منفصلان.',
+      'ur':
+          'تجویز سے تصدیق شدہ پیشرفت یا قابل کلیم رقم نہیں بدلتی۔ تصدیق اور مطلوبہ جائزہ الگ اعمال ہیں۔',
+      'hi':
+          'सुझाव से पुष्टि की गई प्रगति या दावा योग्य मूल्य नहीं बदलता। पुष्टि और आवश्यक समीक्षा अलग कार्य हैं।',
+    },
+    'progress_evidence_invalid': {
+      'en':
+          'Evidence is missing or no longer eligible. Check its project, access and finalized document status before trying again.',
+      'ar':
+          'الأدلة مفقودة أو لم تعد مؤهلة. تحقق من المشروع والصلاحية وحالة اكتمال المستند قبل المحاولة مجدداً.',
+      'ur':
+          'ثبوت موجود نہیں یا اب اہل نہیں۔ دوبارہ کوشش سے پہلے پراجیکٹ، رسائی اور دستاویز کی حتمی حالت چیک کریں۔',
+      'hi':
+          'साक्ष्य उपलब्ध या पात्र नहीं है। फिर प्रयास करने से पहले प्रोजेक्ट, पहुँच और दस्तावेज़ की अंतिम स्थिति जाँचें।',
+    },
     'accounts': {
       'en': 'Accounts',
       'ar': 'الحسابات',

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/yorks_v1_accounts_strings.dart';
+import '../../../../shared/models/yorks_v1_domain_error.dart';
 import '../../application/accounts_controller.dart';
 import '../../application/accounts_providers.dart';
 import '../../domain/accounts_decimal.dart';
@@ -60,6 +61,7 @@ class _ProgressActionSheetState extends ConsumerState<_ProgressActionSheet> {
   late final TextEditingController _reasonController;
   late _ProgressAction _action;
   String? _localError;
+  bool _authorityLost = false;
 
   List<_ProgressAction> get _availableActions {
     final actions = <_ProgressAction>[];
@@ -128,6 +130,20 @@ class _ProgressActionSheetState extends ConsumerState<_ProgressActionSheet> {
   };
 
   Future<void> _submit() async {
+    final currentState = ref.read(
+      yorksAccountsProjectControllerProvider(widget.projectId),
+    );
+    if (currentState.isMutating) return;
+    if (currentState.hasPendingCommand) {
+      final result = await ref
+          .read(
+            yorksAccountsProjectControllerProvider(widget.projectId).notifier,
+          )
+          .reconcilePendingCommand();
+      if (!mounted) return;
+      if (result != null) Navigator.of(context).pop(true);
+      return;
+    }
     if (!_formKey.currentState!.validate()) return;
     setState(() => _localError = null);
     final controller = ref.read(
@@ -178,7 +194,12 @@ class _ProgressActionSheetState extends ConsumerState<_ProgressActionSheet> {
     final state = ref.read(
       yorksAccountsProjectControllerProvider(widget.projectId),
     );
-    setState(() => _localError = _stateError(state.status));
+    setState(
+      () =>
+          _localError = state.error?.serverMessage?.contains('EVIDENCE') == true
+          ? _text('progress_evidence_invalid')
+          : _stateError(state.status),
+    );
   }
 
   String _stateError(YorksAccountsViewStatus status) => switch (status) {
@@ -197,12 +218,36 @@ class _ProgressActionSheetState extends ConsumerState<_ProgressActionSheet> {
       yorksAccountsProjectControllerProvider(widget.projectId),
     );
     final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+    final denied =
+        _authorityLost ||
+        state.status == YorksAccountsViewStatus.forbidden ||
+        state.status == YorksAccountsViewStatus.sessionExpired ||
+        state.status == YorksAccountsViewStatus.unavailable;
+    // A sheet must not continue rendering its opening snapshot after access
+    // has been revoked. The provider purges the protected projection too.
+    ref.listen<YorksAccountsProjectState>(
+      yorksAccountsProjectControllerProvider(widget.projectId),
+      (previous, next) {
+        if ((previous != null &&
+                previous.status != YorksAccountsViewStatus.idle &&
+                next.status == YorksAccountsViewStatus.idle) ||
+            next.error?.code == YorksV1DomainErrorCode.unauthorized ||
+            next.error?.code == YorksV1DomainErrorCode.unauthenticated ||
+            next.error?.code == YorksV1DomainErrorCode.featureDisabled) {
+          _percentController.clear();
+          _evidenceController.clear();
+          _documentIdsController.clear();
+          _reasonController.clear();
+          setState(() => _authorityLost = true);
+        }
+      },
+    );
     return Align(
       alignment: Alignment.bottomCenter,
       child: Container(
         constraints: BoxConstraints(
           maxWidth: 720,
-          maxHeight: MediaQuery.sizeOf(context).height * .92,
+          maxHeight: (MediaQuery.sizeOf(context).height - keyboard) * .92,
         ),
         margin: EdgeInsets.only(bottom: keyboard),
         decoration: const BoxDecoration(
@@ -211,7 +256,31 @@ class _ProgressActionSheetState extends ConsumerState<_ProgressActionSheet> {
             top: Radius.circular(AppSpacing.radiusXl),
           ),
         ),
-        child: actions.isEmpty
+        child: denied
+            ? _UnavailableBody(
+                title: _authorityLost
+                    ? _text('forbidden')
+                    : _stateError(state.status),
+                closeLabel: _text('close'),
+              )
+            : state.hasPendingCommand
+            ? Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _SheetHeader(
+                    title: _text('uncertain_commit'),
+                    subtitle: _text('progress_pending_help'),
+                    closeLabel: _text('close'),
+                  ),
+                  _SheetFooter(
+                    cancelLabel: _text('close'),
+                    submitLabel: _text('reconcile_progress'),
+                    isBusy: state.isMutating,
+                    onSubmit: _submit,
+                  ),
+                ],
+              )
+            : actions.isEmpty
             ? _UnavailableBody(
                 title: _text('no_available_action'),
                 closeLabel: _text('close'),
@@ -233,6 +302,10 @@ class _ProgressActionSheetState extends ConsumerState<_ProgressActionSheet> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
+                            if (_action == _ProgressAction.suggest) ...[
+                              Text(_text('suggestion_not_confirmation')),
+                              const SizedBox(height: AppSpacing.md),
+                            ],
                             DropdownButtonFormField<_ProgressAction>(
                               initialValue: _action,
                               decoration: InputDecoration(

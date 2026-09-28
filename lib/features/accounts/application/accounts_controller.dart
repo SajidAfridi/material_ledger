@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../shared/models/yorks_v1_domain_error.dart';
@@ -27,6 +29,7 @@ final class YorksAccountsProjectState {
     this.revisionHistory,
     this.error,
     this.isMutating = false,
+    this.hasPendingCommand = false,
   });
 
   final YorksAccountsViewStatus status;
@@ -35,6 +38,7 @@ final class YorksAccountsProjectState {
   final YorksAccountsProgressRevisionProjection? revisionHistory;
   final YorksV1DomainException? error;
   final bool isMutating;
+  final bool hasPendingCommand;
 
   bool get hasProtectedValues =>
       baseline?.capabilities.canViewValues == true ||
@@ -47,6 +51,7 @@ final class YorksAccountsProjectState {
     YorksAccountsProgressRevisionProjection? revisionHistory,
     YorksV1DomainException? error,
     bool? isMutating,
+    bool? hasPendingCommand,
     bool clearBaseline = false,
     bool clearProgress = false,
     bool clearRevisionHistory = false,
@@ -61,6 +66,7 @@ final class YorksAccountsProjectState {
           : revisionHistory ?? this.revisionHistory,
       error: clearError ? null : error ?? this.error,
       isMutating: isMutating ?? this.isMutating,
+      hasPendingCommand: hasPendingCommand ?? this.hasPendingCommand,
     );
   }
 
@@ -75,6 +81,7 @@ final class YorksAccountsProjectState {
       revisionHistory: null,
       error: error,
       isMutating: false,
+      hasPendingCommand: hasPendingCommand,
     );
   }
 }
@@ -99,6 +106,8 @@ final class YorksAccountsProjectController
   final String _projectId;
   final YorksAccountsRepository _repository;
   final YorksV1CriticalCommandKeyStore _commandKeys;
+  Future<YorksAccountsCommandResult?>? _inFlight;
+  _PendingAccountsCommand? _pendingCommand;
 
   Future<bool> load({
     String? buildingScopeId,
@@ -131,9 +140,12 @@ final class YorksAccountsProjectController
         progress = progress.withoutProtectedValues();
       }
       state = YorksAccountsProjectState(
-        status: YorksAccountsViewStatus.success,
+        status: _pendingCommand == null
+            ? YorksAccountsViewStatus.success
+            : YorksAccountsViewStatus.uncertain,
         baseline: baseline,
         progress: progress,
+        hasPendingCommand: _pendingCommand != null,
       );
       return true;
     } on YorksV1DomainException catch (error) {
@@ -263,7 +275,8 @@ final class YorksAccountsProjectController
   /// refresh revokes protected access. Provider recreation on role changes also
   /// starts from an empty state, so commercial data cannot cross identities.
   void purgeProtectedValues() {
-    state = state.withoutProtectedValues();
+    _pendingCommand = null;
+    state = state.withoutProtectedValues().copyWith(hasPendingCommand: false);
   }
 
   bool _matchesProject(String inputProjectId) =>
@@ -277,32 +290,79 @@ final class YorksAccountsProjectController
     return Future<YorksAccountsCommandResult?>.value();
   }
 
+  /// Replays the exact unresolved intent, never values from a reopened editor.
+  Future<YorksAccountsCommandResult?> reconcilePendingCommand() {
+    final pending = _pendingCommand;
+    if (pending == null) return Future.value();
+    return _runCommand(
+      operation: pending.operation,
+      entityId: pending.entityId,
+      payload: pending.payload,
+      invoke: pending.invoke,
+    );
+  }
+
   Future<YorksAccountsCommandResult?> _runCommand({
     required String operation,
     required String entityId,
     required Map<String, Object?> payload,
     required Future<YorksAccountsCommandResult> Function(String key) invoke,
-  }) async {
+  }) {
+    // Set the single-flight guard before the first asynchronous key-store call.
+    // A second click must not race acquire/confirm or generate a second key.
+    if (_inFlight != null) return Future.value();
+    final pending = _pendingCommand;
+    if (pending != null && !pending.matches(operation, entityId, payload)) {
+      return Future.value();
+    }
+    final intent =
+        pending ??
+        _PendingAccountsCommand(
+          operation: operation,
+          entityId: entityId,
+          payload: payload,
+          invoke: invoke,
+        );
+    final future = _executeCommand(intent);
+    _inFlight = future;
+    return future.whenComplete(() => _inFlight = null);
+  }
+
+  Future<YorksAccountsCommandResult?> _executeCommand(
+    _PendingAccountsCommand intent,
+  ) async {
     state = state.copyWith(isMutating: true, clearError: true);
     try {
       final key = await _commandKeys.acquire(
-        operation: operation,
-        entityId: entityId,
-        payload: payload,
+        operation: intent.operation,
+        entityId: intent.entityId,
+        payload: intent.payload,
       );
-      final result = await invoke(key);
+      final result = await intent.invoke(key);
       await _commandKeys.confirm(
-        operation: operation,
-        entityId: entityId,
+        operation: intent.operation,
+        entityId: intent.entityId,
         idempotencyKey: key,
       );
-      state = state.copyWith(isMutating: false, clearError: true);
+      _pendingCommand = null;
+      state = state.copyWith(
+        isMutating: false,
+        hasPendingCommand: false,
+        clearError: true,
+      );
       await load();
       return result;
     } on YorksV1DomainException catch (error) {
+      if (error.code == YorksV1DomainErrorCode.backendUnavailable ||
+          error.code == YorksV1DomainErrorCode.unexpectedResponse) {
+        _pendingCommand = intent;
+      } else if (error.code != YorksV1DomainErrorCode.offline) {
+        _pendingCommand = null;
+      }
       _setFailure(error, commandMayHaveCommitted: true);
       return null;
     } catch (error) {
+      _pendingCommand = intent;
       _setFailure(
         YorksV1DomainException(
           YorksV1DomainErrorCode.backendUnavailable,
@@ -326,7 +386,8 @@ final class YorksAccountsProjectController
       YorksV1DomainErrorCode.conflict => YorksAccountsViewStatus.conflict,
       YorksV1DomainErrorCode.featureDisabled =>
         YorksAccountsViewStatus.unavailable,
-      YorksV1DomainErrorCode.backendUnavailable when commandMayHaveCommitted =>
+      YorksV1DomainErrorCode.backendUnavailable ||
+      YorksV1DomainErrorCode.unexpectedResponse when commandMayHaveCommitted =>
         YorksAccountsViewStatus.uncertain,
       _ => YorksAccountsViewStatus.failure,
     };
@@ -335,9 +396,40 @@ final class YorksAccountsProjectController
         status == YorksAccountsViewStatus.unavailable) {
       // These failures may mean the entire project/view scope was revoked, so
       // even non-money project and evidence metadata must leave memory.
+      _pendingCommand = null;
       state = YorksAccountsProjectState(status: status, error: error);
       return;
     }
-    state = state.copyWith(status: status, error: error, isMutating: false);
+    state = state.copyWith(
+      status: status,
+      error: error,
+      isMutating: false,
+      hasPendingCommand: _pendingCommand != null,
+    );
   }
+}
+
+final class _PendingAccountsCommand {
+  _PendingAccountsCommand({
+    required this.operation,
+    required this.entityId,
+    required Map<String, Object?> payload,
+    required this.invoke,
+  }) : payload = Map.unmodifiable(payload),
+       fingerprint = jsonEncode(payload);
+
+  final String operation;
+  final String entityId;
+  final Map<String, Object?> payload;
+  final String fingerprint;
+  final Future<YorksAccountsCommandResult> Function(String key) invoke;
+
+  bool matches(
+    String operation,
+    String entityId,
+    Map<String, Object?> payload,
+  ) =>
+      this.operation == operation &&
+      this.entityId == entityId &&
+      fingerprint == jsonEncode(payload);
 }
