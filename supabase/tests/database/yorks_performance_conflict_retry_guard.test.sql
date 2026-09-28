@@ -12,8 +12,13 @@ select ok(
   position('v1_raise_version_conflict' in pg_get_functiondef(
     'public.v1_sync_material_request_private_draft(jsonb,uuid)'::regprocedure)) > 0
   and position('v1_raise_version_conflict' in pg_get_functiondef(
-    'public.v1_update_material_request_for_approval(jsonb,uuid)'::regprocedure)) > 0,
-  'Both measured remaining conflict paths use the non-retryable envelope'
+    'public.v1_update_material_request_for_approval(jsonb,uuid)'::regprocedure)) > 0
+  and position('v1_raise_version_conflict' in pg_get_functiondef(
+    'public.v1_save_material_request_draft(jsonb)'::regprocedure)) > 0
+  and position('raise exception ''V1_MATERIAL_REQUEST_VERSION_CONFLICT'' using errcode = ''40001''' in
+    pg_get_functiondef(
+      'public.v1_save_material_request_draft(jsonb)'::regprocedure)) = 0,
+  'Every measured Material Request conflict path uses the non-retryable envelope'
 );
 
 create temporary table conflict_results (sqlstate text, message text, detail text);

@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(14);
+select plan(17);
 
 select ok(
   has_function_privilege(
@@ -111,12 +111,43 @@ select is(
   'A same-key replay returns the original committed record version'
 );
 
+select set_config('request.method', 'POST', true);
+select throws_ok(
+  $$select public.v1_save_material_request_draft_idempotent(
+    (select payload from v1_mr_reliability_payloads),
+    '94000000-0000-4000-8000-000000000006'::uuid
+  )$$,
+  'PGRST',
+  jsonb_build_object(
+    'code', '40001',
+    'message', 'V1_MATERIAL_REQUEST_VERSION_CONFLICT',
+    'details', null,
+    'hint', null
+  )::text,
+  'A stale REST draft save returns one bounded conflict instead of a serialization retry'
+);
+select set_config('request.method', '', true);
+select throws_ok(
+  $$select public.v1_save_material_request_draft(
+    (select payload from v1_mr_reliability_payloads)
+  )$$,
+  '40001',
+  'V1_MATERIAL_REQUEST_VERSION_CONFLICT',
+  'A direct SQL stale draft save retains the established conflict contract'
+);
+
 set local role postgres;
 select is(
   (select record_version from public.v1_material_requests
     where id = '92000000-0000-4000-8000-000000000001'::uuid),
   1,
   'A same-key replay does not apply the draft mutation twice'
+);
+select is(
+  (select count(*) from public.v1_idempotency_keys
+   where idempotency_key = '94000000-0000-4000-8000-000000000006'::uuid),
+  0::bigint,
+  'The bounded stale REST save leaves no partial idempotency receipt'
 );
 set local role authenticated;
 
