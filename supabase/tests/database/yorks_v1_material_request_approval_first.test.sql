@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(59);
+select plan(66);
 
 select ok(
   (select relrowsecurity from pg_class
@@ -506,6 +506,39 @@ select ok(
   'Approval preserves exact role and transfers ownership to Procurement'
 );
 
+create temporary table v1_af_arrangement_chat_before as
+select
+  conversation.id as conversation_id,
+  (
+    select jsonb_agg(
+      jsonb_build_object(
+        'auth_user_id', member.auth_user_id,
+        'member_role', member.member_role,
+        'joined_at', member.joined_at,
+        'left_at', member.left_at,
+        'preferences_updated_at', member.preferences_updated_at
+      ) order by member.auth_user_id
+    )
+    from public.v1_chat_members member
+    where member.conversation_id = conversation.id
+  ) as member_snapshot,
+  (
+    select count(*)
+    from public.v1_idempotency_keys idempotency
+    where idempotency.command_name = 'v1_create_chat_conversation'
+  ) as chat_create_idempotency_count
+from public.v1_chat_conversations conversation
+where conversation.kind = 'material_request'
+  and conversation.material_request_id =
+    'af100000-0000-4000-8000-000000000001'::uuid;
+grant select on table v1_af_arrangement_chat_before to authenticated;
+
+select is(
+  (select count(*) from v1_af_arrangement_chat_before),
+  1::bigint,
+  'Approval has already established one canonical request discussion'
+);
+
 set local role authenticated;
 select set_config(
   'request.jwt.claims',
@@ -554,6 +587,64 @@ select lives_ok(
 );
 
 set local role postgres;
+select is(
+  (
+    select count(*)
+    from public.v1_idempotency_keys idempotency
+    where idempotency.command_name = 'v1_create_chat_conversation'
+  ),
+  (select chat_create_idempotency_count
+   from v1_af_arrangement_chat_before),
+  'Arrangement audit reuses the discussion without a chat-create command'
+);
+select is(
+  (
+    select jsonb_agg(
+      jsonb_build_object(
+        'auth_user_id', member.auth_user_id,
+        'member_role', member.member_role,
+        'joined_at', member.joined_at,
+        'left_at', member.left_at,
+        'preferences_updated_at', member.preferences_updated_at
+      ) order by member.auth_user_id
+    )
+    from public.v1_chat_members member
+    where member.conversation_id = (
+      select conversation_id from v1_af_arrangement_chat_before
+    )
+  ),
+  (select member_snapshot from v1_af_arrangement_chat_before),
+  'Arrangement fast path does not rewrite unchanged member rows'
+);
+select is(
+  (
+    select count(*)
+    from public.v1_chat_messages message
+    join public.v1_audit_events audit
+      on audit.id = message.source_audit_event_id
+    where message.conversation_id = (
+      select conversation_id from v1_af_arrangement_chat_before
+    )
+      and message.system_event_code = 'arrangement_started'
+      and audit.event_type = 'arrangement_begun'
+  ),
+  1::bigint,
+  'Arrangement audit still appends exactly one linked system event'
+);
+select ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.v1_chat_audit_event_bridge()',
+    'execute'
+  )
+  and (
+    select proconfig @> array['search_path=""']
+    from pg_proc
+    where oid = 'public.v1_chat_audit_event_bridge()'::regprocedure
+  ),
+  'Arrangement chat bridge remains private with an empty search path'
+);
+
 create temporary table v1_af_arrangement as
 select arrangement.id as arrangement_id, line_record.id as arrangement_line_id
 from public.v1_procurement_arrangements arrangement
@@ -562,6 +653,26 @@ join public.v1_procurement_arrangement_lines line_record
 where arrangement.request_id = 'af100000-0000-4000-8000-000000000001'::uuid
   and arrangement.status = 'working';
 grant select on table v1_af_arrangement to authenticated;
+
+-- Exercise both sides of the set-wise drift guard before the next
+-- arrangement event: a still-eligible global Engineer needs reactivation,
+-- while an Accounts-only user must be archived from the discussion.
+update public.v1_chat_members member
+set left_at = clock_timestamp()
+where member.conversation_id = (
+    select conversation_id from v1_af_arrangement_chat_before
+  )
+  and member.auth_user_id =
+    '10000000-0000-4000-8000-000000000009'::uuid;
+insert into public.v1_chat_members (
+  conversation_id, auth_user_id, member_role
+) values (
+  (select conversation_id from v1_af_arrangement_chat_before),
+  '10000000-0000-4000-8000-000000000013'::uuid,
+  'member'
+)
+on conflict (conversation_id, auth_user_id) do update
+set left_at = null;
 
 set local role authenticated;
 select lives_ok(
@@ -583,6 +694,32 @@ select lives_ok(
 );
 
 set local role postgres;
+select ok(
+  exists (
+    select 1
+    from public.v1_chat_members member
+    where member.conversation_id = (
+        select conversation_id from v1_af_arrangement_chat_before
+      )
+      and member.auth_user_id =
+        '10000000-0000-4000-8000-000000000009'::uuid
+      and member.left_at is null
+  ),
+  'Arrangement membership drift reactivates an eligible global Engineer'
+);
+select ok(
+  exists (
+    select 1
+    from public.v1_chat_members member
+    where member.conversation_id = (
+        select conversation_id from v1_af_arrangement_chat_before
+      )
+      and member.auth_user_id =
+        '10000000-0000-4000-8000-000000000013'::uuid
+      and member.left_at is not null
+  ),
+  'Arrangement membership drift archives an ineligible Accounts-only user'
+);
 select ok(
   (select state = 'approved' and record_version = 7
    from public.v1_material_requests
