@@ -1,0 +1,4 @@
+Production project: czykuksmlwswjsgotrpo
+Read-only download on 2026-09-29.
+Deployed send-push/index.ts is byte-identical to repository source.
+SHA256: 43fe0018bc9c5f5bc2dd136ffcfe464d185f03466ebf6a4be1aa1f274e04f1f6

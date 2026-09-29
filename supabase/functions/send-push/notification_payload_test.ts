@@ -9,6 +9,7 @@ import {
 } from "./notification_payload.ts";
 
 const claim = (requestId?: string | null): PushClaim => ({
+  claimId: "00000000-0000-4000-8000-000000000001",
   notificationId: "11000000-0000-4000-8000-000000000001",
   recipientAuthUserId: "12000000-0000-4000-8000-000000000001",
   eventCode: "material_request_submitted",

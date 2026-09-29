@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(7);
+select plan(8);
 
 select has_function(
   'public',
@@ -81,6 +81,17 @@ insert into public.v1_notifications (
   'material_request_cancelled', 'material_request',
   '9b000000-0000-4000-8000-000000000004'
 );
+
+select is(
+  (select public.v1_push_backend_health() ->> 'operatorPaused'),
+  'true',
+  'Push remains paused until sender rollout'
+);
+
+update public.v1_push_transport_control set operator_paused = false where id;
+update public.v1_notification_push_outbox
+set dispatch_lease_until = clock_timestamp() + interval '2 minutes'
+where notification_id = '9a000000-0000-4000-8000-000000000004';
 
 select is(
   (

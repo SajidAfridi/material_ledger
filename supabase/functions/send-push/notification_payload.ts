@@ -1,4 +1,5 @@
 export type PushClaim = {
+  claimId: string;
   notificationId: string;
   recipientAuthUserId: string;
   eventCode: string;

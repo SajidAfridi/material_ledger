@@ -94,6 +94,7 @@ explicit V7-to-V1 conflict resolution.
 | [`MOBILE_UI_IMPLEMENTATION_GUIDE.md`](MOBILE_UI_IMPLEMENTATION_GUIDE.md) | Mobile-only authority split, guard, state/permission checklist and evidence workflow |
 | [`MOBILE_UI_SCREEN_LEDGER.md`](MOBILE_UI_SCREEN_LEDGER.md) | Delivery state for all 52 mobile design references |
 | [`FIREBASE_MESSAGING_SETUP.md`](FIREBASE_MESSAGING_SETUP.md) | Firebase Cloud Messaging client, web worker and operator credential setup |
+| [`PUSH_P0_IMPLEMENTATION_20260929.md`](PUSH_P0_IMPLEMENTATION_20260929.md) | P0 bounded push retry, claim fencing, circuit, health projection, mock evidence and controlled rollout |
 | [`evidence/mobile-batch-02/README.md`](evidence/mobile-batch-02/README.md) | Verified local evidence index for mobile references 12–21 |
 | [`evidence/r38-configuration-20260814/README.md`](evidence/r38-configuration-20260814/README.md) | R38 Configuration Centre security, behavior and responsive visual evidence |
 | [`evidence/r38-5-team-chat-20260814/README.md`](evidence/r38-5-team-chat-20260814/README.md) | R38.5 Team Chat desktop, tablet and mobile visual/security evidence |

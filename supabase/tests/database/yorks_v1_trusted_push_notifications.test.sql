@@ -338,6 +338,11 @@ select is(
   'No-device delivery becomes pending after recipient registers a device'
 );
 
+update public.v1_push_transport_control set operator_paused = false where id;
+update public.v1_notification_push_outbox
+set dispatch_lease_until = clock_timestamp() + interval '2 minutes'
+where notification_id = '91000000-0000-4000-8000-000000000001';
+
 select is(
   (public.v1_claim_notification_push(
     '91000000-0000-4000-8000-000000000001'
@@ -348,7 +353,10 @@ select is(
 
 select lives_ok(
   $$select public.v1_finish_notification_push(
-    '91000000-0000-4000-8000-000000000001', 'sent', 2, null
+    '91000000-0000-4000-8000-000000000001',
+    (select claim_id from public.v1_notification_push_outbox
+     where notification_id = '91000000-0000-4000-8000-000000000001'),
+    'sent', 2, null, null
   )$$,
   'Service records the transport result'
 );
