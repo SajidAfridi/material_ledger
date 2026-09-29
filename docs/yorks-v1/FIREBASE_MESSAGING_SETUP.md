@@ -1,5 +1,11 @@
 # Yorks Firebase Cloud Messaging setup
 
+> The existing trusted-delivery and rollback description below documents the
+> deployed pre-P0 sender. The [P0 release candidate](PUSH_P0_IMPLEMENTATION_20260929.md)
+> adds bounded retries, claim fencing and a circuit. It is not yet deployed;
+> follow its rollout/rollback steps once accepted. In particular, removing
+> `FCM_SERVICE_ACCOUNT_JSON` is not a safe way to contain the current storm.
+
 Firebase is **push transport only**. Supabase Auth, RLS, records and audit
 remain authoritative. The app uses the registered Yorks Firebase project
 `yorks-48c40` for Android (`com.yorks.app`), iOS (`com.yorks.app`) and web.
