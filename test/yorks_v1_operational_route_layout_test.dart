@@ -758,7 +758,10 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.text('Yorks Tower HVAC'), findsOneWidget);
-        expect(find.text('BOQ GROUPS'), findsOneWidget);
+        expect(
+          find.text(size.width < 600 ? 'BOQ GROUPS' : 'BOQ Groups'),
+          findsOneWidget,
+        );
         expect(tester.takeException(), isNull, reason: 'viewport $size');
       }
     },

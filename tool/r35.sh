@@ -44,6 +44,7 @@ operator_posthog_project_token="${POSTHOG_PROJECT_TOKEN:-}"
 operator_posthog_host="${POSTHOG_HOST:-}"
 operator_posthog_environment="${POSTHOG_ENV:-}"
 operator_posthog_debug="${POSTHOG_DEBUG:-}"
+operator_posthog_test_user_ids="${POSTHOG_TEST_USER_IDS:-}"
 
 # Configuration is deliberately explicit. A missing file is acceptable only
 # when CI/operator environment variables already provide the complete pair.
@@ -69,6 +70,8 @@ posthog_project_token="${operator_posthog_project_token:-${POSTHOG_PROJECT_TOKEN
 posthog_host="${operator_posthog_host:-${POSTHOG_HOST:-https://us.i.posthog.com}}"
 posthog_environment="${operator_posthog_environment:-${POSTHOG_ENV:-${r35_environment:-production}}}"
 posthog_debug="${operator_posthog_debug:-${POSTHOG_DEBUG:-false}}"
+posthog_test_user_ids="${operator_posthog_test_user_ids:-${POSTHOG_TEST_USER_IDS:-}}"
+posthog_test_user_hashes=""
 
 # A developer's ignored production file must not silently enable Accounts in a
 # CI build. An explicit process-level value still wins for a deliberate CI
@@ -208,6 +211,21 @@ if r35_revision="$(git -C "$r35_source_root" rev-parse --verify HEAD 2>/dev/null
   fi
 fi
 
+# UUID allowlists are transformed before Flutter sees command-line arguments.
+# Keep raw test account identifiers out of public build assets and process args.
+if [[ -n "$posthog_test_user_ids" ]]; then
+  IFS=',' read -r -a posthog_test_ids <<< "$posthog_test_user_ids"
+  for posthog_test_id in "${posthog_test_ids[@]}"; do
+    if [[ ! "$posthog_test_id" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$ ]]; then
+      echo "POSTHOG_TEST_USER_IDS must contain comma-separated Auth UUIDs." >&2
+      exit 64
+    fi
+    normalized_posthog_test_id="$(printf '%s' "$posthog_test_id" | tr '[:upper:]' '[:lower:]')"
+    posthog_test_hash="$(printf '%s' "$normalized_posthog_test_id" | shasum -a 256 | awk '{print $1}')"
+    posthog_test_user_hashes="${posthog_test_user_hashes:+${posthog_test_user_hashes},}${posthog_test_hash}"
+  done
+fi
+
 r35_defines=(
   "--dart-define=YORKS_RELEASE_ID=${r35_release_id}"
   "--dart-define=SUPABASE_URL=${supabase_url}"
@@ -232,6 +250,7 @@ r35_defines=(
   "--dart-define=POSTHOG_HOST=${posthog_host}"
   "--dart-define=POSTHOG_ENV=${posthog_environment}"
   "--dart-define=POSTHOG_DEBUG=${posthog_debug}"
+  "--dart-define=POSTHOG_TEST_USER_HASHES=${posthog_test_user_hashes}"
   '--dart-define=YORKS_R38_TEAM_CHAT=true'
   '--dart-define=YORKS_R38_9_INVENTORY_SUPPLIERS=true'
   '--dart-define=use_arabic=true'
