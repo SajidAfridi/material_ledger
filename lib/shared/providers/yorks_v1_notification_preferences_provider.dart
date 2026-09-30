@@ -28,6 +28,11 @@ final yorksV1NotificationPreferencesProvider =
         repository: sessionId == null || authUserId == null ? null : repository,
       );
       unawaited(notifier.refresh());
+      final timer = Timer.periodic(
+        const Duration(seconds: 30),
+        (_) => unawaited(notifier.refresh()),
+      );
+      ref.onDispose(timer.cancel);
       return notifier;
     });
 
@@ -36,7 +41,7 @@ final yorksV1ForegroundAlertsEnabledProvider = Provider<bool>((ref) {
           .watch(yorksV1NotificationPreferencesProvider)
           .valueOrNull
           ?.foregroundAlertsEnabled ??
-      true;
+      false;
 });
 
 final yorksV1NotificationSoundEnabledProvider = Provider<bool>((ref) {
@@ -44,7 +49,7 @@ final yorksV1NotificationSoundEnabledProvider = Provider<bool>((ref) {
           .watch(yorksV1NotificationPreferencesProvider)
           .valueOrNull
           ?.soundEnabled ??
-      true;
+      false;
 });
 
 class YorksV1NotificationPreferencesNotifier
@@ -69,8 +74,11 @@ class YorksV1NotificationPreferencesNotifier
     final previous = state.valueOrNull;
     if (previous == null) state = const AsyncLoading();
     try {
-      state = AsyncData(await repository.loadMine());
+      final result = await repository.loadMine();
+      if (!mounted) return;
+      state = AsyncData(result);
     } catch (error, stackTrace) {
+      if (!mounted) return;
       state = previous == null
           ? AsyncError(error, stackTrace)
           : AsyncValue<YorksV1NotificationPreferences>.error(

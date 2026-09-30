@@ -10,6 +10,7 @@ import { sendFcmRequest } from "./fcm_failure.mjs";
 import {
   isTeamChatEvent,
   normalizedUnreadCount,
+  remainingLifetime,
   type PushClaim,
   routeFor,
   safePushCopy,
@@ -181,6 +182,10 @@ export async function handlePush(
     return json({ error: "invalid claim" }, 500);
   }
 
+  if (remainingLifetime(claim.expiresAt) === 0) {
+    await finish("terminal", 0, "NOTIFICATION_EXPIRED");
+    return json({ok: true, expired: true});
+  }
   const { data: registeredRows, error: tokenError } = await admin
     .from("v1_push_device_tokens")
     .select("token, platform, web_origin, installation_id, retired_at")
@@ -291,9 +296,17 @@ export async function handlePush(
         continue;
       }
       if (gate !== "ready") return json({ error: "invalid device claim" }, 503);
+      const ttl = remainingLifetime(claim.expiresAt);
+      if (ttl === 0) {
+        await finish("terminal", deliveredCount, "NOTIFICATION_EXPIRED");
+        return json({ok: true, expired: true});
+      }
       externalSendStarted = true;
       const isWeb = row.platform === "web";
+      const collapseKey = `${surface}:${claim.chatConversationId || claim.requestId || claim.entityId}`;
       const data = {
+        collapseKey,
+        expiresAt: claim.expiresAt!,
         notificationId: claim.notificationId,
         eventCode: claim.eventCode,
         surface,
@@ -319,13 +332,13 @@ export async function handlePush(
               ...(isWeb
                 ? {
                   webpush: {
-                    headers: { Urgency: "high", TTL: "86400" },
+                    headers: { Urgency: isTeamChatEvent(claim.eventCode) ? "high" : "normal", TTL: String(ttl) },
                     notification: {
                       title: copy.title,
                       body: copy.body,
                       icon: "/icons/Icon-192.png",
                       badge: "/icons/Icon-192.png",
-                      tag: claim.notificationId,
+                      tag: collapseKey,
                       // A retry of the same durable outbox item replaces the
                       // existing OS notification without sounding a second time.
                       renotify: false,
@@ -340,9 +353,10 @@ export async function handlePush(
                   notification: { title: copy.title, body: copy.body },
                   android: {
                     priority: "high",
+                    ttl: `${ttl}s`,
                     notification: {
                       channel_id: "yorks_push",
-                      tag: claim.notificationId,
+                      tag: collapseKey,
                       sound: "default",
                       default_vibrate_timings: true,
                       notification_priority: "PRIORITY_HIGH",
@@ -351,6 +365,7 @@ export async function handlePush(
                   },
                   apns: {
                     headers: {
+                      "apns-expiration": String(Math.floor(Date.parse(claim.expiresAt!) / 1000)),
                       "apns-collapse-id": claim.notificationId,
                       "apns-priority": "10",
                       "apns-push-type": "alert",

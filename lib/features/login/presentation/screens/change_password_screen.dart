@@ -35,6 +35,9 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
 
   Future<void> _save() async {
     if (_busy || !(_formKey.currentState?.validate() ?? false)) return;
+    final returnTo = safeReturnLocation(
+      GoRouterState.of(context).uri.queryParameters['returnTo'],
+    );
     final user = ref.read(currentUserProvider);
     if (user == null) return;
     setState(() => _busy = true);
@@ -59,7 +62,7 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
     if (!mounted) return;
     setState(() => _busy = false);
     AppFeedback.confirm();
-    context.go(RoutePaths.engineerHome);
+    context.go(returnTo ?? RoutePaths.engineerHome);
   }
 
   @override

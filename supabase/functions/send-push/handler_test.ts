@@ -34,6 +34,7 @@ function harness(
       if (name === "v1_claim_notification_push") {
         data = {
           claimId: id,
+          expiresAt: new Date(Date.now() + 3600000).toISOString(),
           notificationId: id,
           recipientAuthUserId: id,
           eventCode: "material_request_submitted",

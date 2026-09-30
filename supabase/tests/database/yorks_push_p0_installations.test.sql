@@ -1,14 +1,16 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path=public,extensions;
-select plan(11);
+select plan(14);
+insert into auth.sessions(id,user_id,created_at,updated_at)
+values('b3000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000003',now(),now());
 insert into public.v1_notifications(id,recipient_auth_user_id,event_code,entity_type,entity_id)
 values('9f100000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000003',
 'material_request_submitted','material_request','9f100000-0000-4000-8000-000000000002');
 update public.v1_notification_push_outbox set status='no_devices'
 where notification_id='9f100000-0000-4000-8000-000000000001';
 set local role authenticated;
-select set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000003","role":"authenticated","app_metadata":{"role":"procurement","app_user_id":"usr-local-procurement"}}',true);
+select set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000003","role":"authenticated","session_id":"b3000000-0000-4000-8000-000000000001","app_metadata":{"role":"procurement","app_user_id":"usr-local-procurement"}}',true);
 select throws_ok($$select public.v1_register_push_installation('fake-token-preview-00000000','web','https://yorks-random-preview.vercel.app','9f100000-0000-4000-8000-000000000003')$$,'22023','V1_PUSH_ORIGIN_NOT_ALLOWED','Preview origin cannot enroll');
 select is(public.v1_register_push_installation('fake-token-canonical-old-00000','web','https://yorks-r35.vercel.app','9f100000-0000-4000-8000-000000000003'),true,'Canonical installation enrolls');
 select is(public.v1_register_push_installation('fake-token-canonical-new-00000','web','https://yorks-r35.vercel.app','9f100000-0000-4000-8000-000000000003'),true,'Same installation rotates');
@@ -37,7 +39,18 @@ update installation_claim set id='9f100000-0000-4000-8000-000000000009',
 claim=(public.v1_claim_notification_push('9f100000-0000-4000-8000-000000000009')->>'claimId')::uuid;
 select is(public.v1_begin_push_device(id,claim,encode(extensions.digest('fake-token-canonical-old-00000','sha256'),'hex')),
 'not_owned','Rotated token cannot receive new events') from installation_claim;
+delete from auth.sessions where id='b3000000-0000-4000-8000-000000000001';
+select is(public.v1_begin_push_device(id,claim,encode(extensions.digest('fake-token-canonical-new-00000','sha256'),'hex')),
+'not_owned','Remote logout blocks a previously enrolled web token') from installation_claim;
+set local role authenticated;
+select throws_ok($$select public.v1_register_push_installation('fake-token-canonical-new-00000','web','https://yorks-r35.vercel.app','9f100000-0000-4000-8000-000000000003')$$,
+'42501','V1_PUSH_SESSION_REQUIRED','Revoked-session JWT cannot enroll again');
+set local role postgres;
+insert into auth.sessions(id,user_id,created_at,updated_at)
+values('b3000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000003',now(),now());
 select is(public.v1_begin_push_device(id,claim,encode(extensions.digest('fake-token-canonical-new-00000','sha256'),'hex')),
 'ready','Current canonical installation receives new events') from installation_claim;
+select ok((select auth_session_id='b3000000-0000-4000-8000-000000000001' from public.v1_push_device_tokens where token='fake-token-canonical-new-00000'),'Registration is session-bound');
+
 select * from finish();
 rollback;

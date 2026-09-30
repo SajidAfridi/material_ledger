@@ -1,5 +1,7 @@
+import { moduleEvents } from "./module_catalogue.ts";
 export type PushClaim = {
   claimId: string;
+  expiresAt?: string;
   notificationId: string;
   recipientAuthUserId: string;
   eventCode: string;
@@ -32,6 +34,8 @@ export function normalizedUnreadCount(value: unknown): number {
 }
 
 export function safePushCopy(eventCode: string): PushCopy {
+  const module = moduleEvents[eventCode];
+  if (module) return {title: module.title.en, body: module.body.en, type: "info"};
   switch (eventCode) {
     case "company_material_request_approval_requested":
       return {
@@ -293,6 +297,15 @@ export function safePushCopy(eventCode: string): PushCopy {
 }
 
 export function routeFor(claim: PushClaim): string {
+  const module = moduleEvents[claim.eventCode];
+  if (module) {
+    if (claim.eventCode.startsWith("accounts_")) {
+      if (!claim.projectId || !/^[0-9a-f-]{36}$/i.test(claim.projectId)) return "/yorks/accounts";
+      const section = module.destination === "invoices" ? "client-invoices" : module.destination;
+      return `/yorks/projects/${claim.projectId}/accounts/${section}`;
+    }
+    return `/yorks/workforce/${module.destination}`;
+  }
   const requestId = claim.requestId;
   if (
     claim.eventCode === "material_request_mentioned" &&
@@ -353,4 +366,10 @@ export function webLinkFor(
   } catch {
     return null;
   }
+}
+
+// Expiry is anchored to the durable event, never extended by a retry.
+export function remainingLifetime(expiresAt: string | undefined, now = Date.now()): number {
+  const expiry = Date.parse(expiresAt ?? "");
+  return Number.isFinite(expiry) ? Math.max(0, Math.min(86400, Math.floor((expiry-now)/1000))) : 0;
 }

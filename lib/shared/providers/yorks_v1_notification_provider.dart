@@ -10,6 +10,39 @@ import '../repositories/yorks_v1_notification_repository.dart';
 import '../sync/authorized_refresh_queue.dart';
 import 'language_provider.dart';
 
+class NotificationHistoryStatus {
+  const NotificationHistoryStatus({
+    this.unreadCount,
+    this.hasMore = false,
+    this.loadingMore = false,
+    this.servicePaused,
+  });
+  final int? unreadCount;
+  final bool hasMore;
+  final bool loadingMore;
+  final bool? servicePaused;
+}
+
+final notificationAttentionSnapshotProvider =
+    StateProvider<AsyncValue<List<YorksV1NotificationRecord>>>((ref) {
+      ref.watch(authSessionProvider);
+      return const AsyncLoading();
+    });
+final notificationAttentionFeedProvider =
+    Provider<AsyncValue<List<YorksV1NotificationRecord>>>((ref) {
+      final repository = ref.watch(yorksV1NotificationRepositoryProvider);
+      if (repository is PagedNotificationRepository) {
+        ref.watch(yorksV1NotificationsProvider);
+        return ref.watch(notificationAttentionSnapshotProvider);
+      }
+      return ref.watch(yorksV1NotificationsProvider);
+    });
+
+final notificationHistoryStatusProvider = StateProvider((ref) {
+  ref.watch(authSessionProvider);
+  return const NotificationHistoryStatus();
+});
+
 final yorksV1NotificationRepositoryProvider =
     Provider<YorksV1NotificationRepository?>((ref) {
       final client = ref.watch(supabaseClientProvider);
@@ -30,6 +63,11 @@ final yorksV1NotificationsProvider =
         client: client,
         repository: repository,
         authUserId: appSessionId == null ? null : authUserId,
+        onAttention: (value) =>
+            ref.read(notificationAttentionSnapshotProvider.notifier).state =
+                AsyncData(value),
+        onHistory: (value) =>
+            ref.read(notificationHistoryStatusProvider.notifier).state = value,
       );
       unawaited(notifier.start());
       return notifier;
@@ -53,6 +91,8 @@ class YorksV1NotificationsNotifier
     required SupabaseClient? client,
     required YorksV1NotificationRepository? repository,
     required String? authUserId,
+    this.onHistory,
+    this.onAttention,
   }) : _client = client,
        _repository = repository,
        _authUserId = authUserId?.trim(),
@@ -61,6 +101,92 @@ class YorksV1NotificationsNotifier
   final SupabaseClient? _client;
   final YorksV1NotificationRepository? _repository;
   final String? _authUserId;
+
+  final void Function(NotificationHistoryStatus)? onHistory;
+  final void Function(List<YorksV1NotificationRecord>)? onAttention;
+  String? _search;
+  Future<void> search(String? value) async {
+    if (_disposed || value == _search) return;
+    _search = value;
+    _queryGeneration++;
+    state = const AsyncLoading();
+    await refresh();
+  }
+
+  NotificationHistoryStatus _history = const NotificationHistoryStatus();
+  bool _unreadOnly = false;
+  bool _urgentOnly = false;
+  int _queryGeneration = 0;
+  void _setHistory(NotificationHistoryStatus value) {
+    _history = value;
+    onHistory?.call(value);
+  }
+
+  Future<void> setUnreadOnly(bool value, {bool urgentOnly = false}) async {
+    if (_disposed || (_unreadOnly == value && _urgentOnly == urgentOnly)) {
+      return;
+    }
+    _urgentOnly = urgentOnly;
+    _unreadOnly = value;
+    _queryGeneration++;
+    state = const AsyncLoading();
+    await refresh();
+  }
+
+  Future<void> loadMore() async {
+    final repository = _repository;
+    if (repository is! PagedNotificationRepository ||
+        !_history.hasMore ||
+        _history.loadingMore) {
+      return;
+    }
+    final rows = state.valueOrNull?.where((n) => !n.isChatTransport).toList();
+    if (rows == null || rows.isEmpty) return;
+    final generation = _queryGeneration;
+    _setHistory(
+      NotificationHistoryStatus(
+        unreadCount: _history.unreadCount,
+        hasMore: true,
+        loadingMore: true,
+      ),
+    );
+    try {
+      final page = await (repository as PagedNotificationRepository).page(
+        before: rows.last,
+        unreadOnly: _unreadOnly,
+        urgentOnly: _urgentOnly,
+        search: _search,
+      );
+      if (_disposed || generation != _queryGeneration) return;
+      final merged = {
+        for (final n in state.valueOrNull ?? <YorksV1NotificationRecord>[])
+          n.id: n,
+      };
+      for (final n in page.records) {
+        merged.putIfAbsent(n.id, () => n);
+      }
+      state = AsyncData(merged.values.toList());
+      _setHistory(
+        NotificationHistoryStatus(
+          unreadCount: page.unreadCount,
+          servicePaused: page.servicePaused,
+          hasMore: page.hasMore,
+        ),
+      );
+    } catch (error, stack) {
+      if (_disposed || generation != _queryGeneration) return;
+      state = AsyncValue<List<YorksV1NotificationRecord>>.error(
+        error,
+        stack,
+      ).copyWithPrevious(state);
+      _setHistory(
+        NotificationHistoryStatus(
+          unreadCount: _history.unreadCount,
+          hasMore: true,
+        ),
+      );
+    }
+  }
 
   RealtimeChannel? _channel;
   StreamSubscription<AuthState>? _authSubscription;
@@ -101,8 +227,29 @@ class YorksV1NotificationsNotifier
     if (repository == null || _disposed) return;
     final previous = state.valueOrNull;
     try {
-      final records = await repository.listMine();
-      if (_disposed) return;
+      final generation = _queryGeneration;
+      final page = repository is PagedNotificationRepository
+          ? await (repository as PagedNotificationRepository).page(
+              unreadOnly: _unreadOnly,
+              urgentOnly: _urgentOnly,
+              search: _search,
+            )
+          : null;
+      final records = page == null
+          ? await repository.listMine()
+          : [
+              ...page.records,
+              ...page.attention.where((n) => n.isChatTransport),
+            ];
+      if (_disposed || generation != _queryGeneration) return;
+      if (page != null) onAttention?.call(page.attention);
+      _setHistory(
+        NotificationHistoryStatus(
+          unreadCount: page?.unreadCount,
+          servicePaused: page?.servicePaused,
+          hasMore: page?.hasMore ?? false,
+        ),
+      );
       // Retain the recipient's protected transport rows in this internal feed
       // so the global alert host can provide a foreground Team Chat tone/toast
       // even before FCM permission is granted. Public notification-centre
@@ -113,9 +260,10 @@ class YorksV1NotificationsNotifier
       if (_disposed) return;
       // Preserve the last authorized list during a temporary network failure;
       // the retry timer/Realtime reconnect will reconcile it.
-      if (previous == null || previous.isEmpty) {
-        state = AsyncError(error, stackTrace);
-      }
+      state = AsyncValue<List<YorksV1NotificationRecord>>.error(
+        error,
+        stackTrace,
+      ).copyWithPrevious(AsyncData(previous ?? const []));
       _startFallback();
     }
   }
@@ -123,49 +271,24 @@ class YorksV1NotificationsNotifier
   Future<void> markSeen(String notificationId) async {
     final repository = _repository;
     if (repository == null) return;
-    final current = state.valueOrNull ?? const <YorksV1NotificationRecord>[];
-    final index = current.indexWhere((item) => item.id == notificationId);
-    if (index < 0) {
-      await repository.markSeen(notificationId);
-      await refresh();
-      return;
-    }
-    if (current[index].seenAt != null) return;
-    final acknowledged = current[index].acknowledgedAt(DateTime.now());
-    state = AsyncData([
-      ...current.take(index),
-      acknowledged,
-      ...current.skip(index + 1),
-    ]);
-    try {
-      await repository.markSeen(notificationId);
-    } catch (_) {
-      if (!_disposed) state = AsyncData(current);
-      rethrow;
-    }
+    // Commit before presenting success. Never restore a whole old snapshot:
+    // a competing refresh may contain newly arrived notifications.
+    await repository.markSeen(notificationId);
+    if (_disposed) return;
+    final now = DateTime.now();
+    state = AsyncData(
+      (state.valueOrNull ?? const <YorksV1NotificationRecord>[])
+          .map((n) => n.id == notificationId ? n.acknowledgedAt(now) : n)
+          .toList(),
+    );
+    await refresh();
   }
 
   Future<void> markAllSeen() async {
     final repository = _repository;
     if (repository == null) return;
-    final current = state.valueOrNull ?? const <YorksV1NotificationRecord>[];
-    if (!current.any((record) => record.seenAt == null)) return;
-    final acknowledgedAt = DateTime.now();
-    state = AsyncData(
-      current
-          .map(
-            (record) => record.seenAt == null
-                ? record.acknowledgedAt(acknowledgedAt)
-                : record,
-          )
-          .toList(growable: false),
-    );
-    try {
-      await repository.markAllSeen();
-    } catch (_) {
-      if (!_disposed) state = AsyncData(current);
-      rethrow;
-    }
+    await repository.markAllSeen();
+    if (!_disposed) await refresh();
   }
 
   Future<bool> _subscribe() async {

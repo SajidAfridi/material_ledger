@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/widgets.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -22,10 +23,13 @@ final pushBridgeProvider = Provider<void>((ref) {
   // Registration is retried below once a user exists, keeping the token
   // strictly owner-bound in Supabase.
   final push = ref.read(pushServiceProvider);
+  if (push is FcmPushService) unawaited(push.initialize());
   final preferences = ref.watch(yorksV1NotificationPreferencesProvider);
   final pushEnabled = preferences.valueOrNull?.pushEnabled;
   final router = ref.watch(appRouterProvider);
   final acknowledgedRouteIds = <String>{};
+  var active = true;
+  ref.onDispose(() => active = false);
 
   void acknowledgeCurrentRoute() {
     if (ref.read(currentUserProvider) == null) return;
@@ -43,13 +47,25 @@ final pushBridgeProvider = Provider<void>((ref) {
         !acknowledgedRouteIds.add(id)) {
       return;
     }
-    unawaited(() async {
-      try {
-        await ref.read(yorksV1NotificationsProvider.notifier).markSeen(id);
-      } catch (_) {
+    final location = router.routeInformationProvider.value.uri;
+    final owner = ref.read(currentUserProvider)?.id;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!active ||
+          owner != ref.read(currentUserProvider)?.id ||
+          router.routeInformationProvider.value.uri != location ||
+          location.path == '/login' ||
+          location.path == '/change-password') {
         acknowledgedRouteIds.remove(id);
+        return;
       }
-    }());
+      unawaited(() async {
+        try {
+          await ref.read(yorksV1NotificationsProvider.notifier).markSeen(id);
+        } catch (_) {
+          acknowledgedRouteIds.remove(id);
+        }
+      }());
+    });
   }
 
   router.routeInformationProvider.addListener(acknowledgeCurrentRoute);

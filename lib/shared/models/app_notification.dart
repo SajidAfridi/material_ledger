@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'app_language.dart';
 
 /// Notification category (drives icon + colour). Kept deliberately small —
 /// these map to the lifecycle events the SRS §4.6 calls for: plan updates,
@@ -40,6 +41,7 @@ class AppNotification {
     required this.titleSecondary,
     required this.timestamp,
     this.body = '',
+    this.urgent = false,
     this.isRead = false,
     this.refId = '',
     this.route = '',
@@ -53,6 +55,8 @@ class AppNotification {
   final String title;
   final String titleSecondary;
   final String body;
+  final bool urgent;
+  bool get isUrgent => urgent || type == NotificationType.stock;
   final DateTime timestamp;
   final bool isRead;
 
@@ -89,6 +93,33 @@ class AppNotification {
     return '${diff.inDays}d ago';
   }
 
+  String relativeTimeFor(AppLanguage language) {
+    if (language == AppLanguage.english) return relativeTime;
+    final diff = DateTime.now().difference(timestamp);
+    if (diff.inMinutes < 1) {
+      return switch (language) {
+        AppLanguage.arabic => 'الآن',
+        AppLanguage.urdu => 'ابھی',
+        _ => 'अभी',
+      };
+    }
+    final amount = diff.inDays > 0
+        ? diff.inDays
+        : diff.inHours > 0
+        ? diff.inHours
+        : diff.inMinutes;
+    final unit = diff.inDays > 0
+        ? 2
+        : diff.inHours > 0
+        ? 1
+        : 0;
+    return switch (language) {
+      AppLanguage.arabic => 'منذ $amount ${['دقيقة', 'ساعة', 'يوم'][unit]}',
+      AppLanguage.urdu => '$amount ${['منٹ', 'گھنٹے', 'دن'][unit]} پہلے',
+      _ => '$amount ${['मिनट', 'घंटे', 'दिन'][unit]} पहले',
+    };
+  }
+
   AppNotification copyWith({bool? isRead}) => AppNotification(
     id: id,
     type: type,
@@ -96,6 +127,7 @@ class AppNotification {
     titleSecondary: titleSecondary,
     timestamp: timestamp,
     body: body,
+    urgent: urgent,
     isRead: isRead ?? this.isRead,
     refId: refId,
     route: route,
@@ -110,6 +142,7 @@ class AppNotification {
     'title': title,
     'titleSecondary': titleSecondary,
     'body': body,
+    'urgent': urgent,
     'timestamp': timestamp.toIso8601String(),
     'isRead': isRead,
     'refId': refId,
@@ -126,6 +159,7 @@ class AppNotification {
         title: json['title'] as String,
         titleSecondary: json['titleSecondary'] as String? ?? '',
         body: json['body'] as String? ?? '',
+        urgent: json['urgent'] == true,
         timestamp: DateTime.parse(json['timestamp'] as String),
         isRead: json['isRead'] as bool? ?? false,
         refId: json['refId'] as String? ?? '',

@@ -2,6 +2,7 @@ import '../../app/router.dart' show RoutePaths;
 import 'app_language.dart';
 import 'app_notification.dart';
 import 'app_strings.dart';
+import 'notification_module_catalogue.dart';
 
 const yorksV1ChatTransportEventCodes = <String>{
   'team_chat_message',
@@ -28,6 +29,7 @@ class YorksV1NotificationRecord {
     this.projectId,
     this.chatConversationId,
     this.seenAt,
+    this.recordLabel,
   });
 
   final String id;
@@ -39,6 +41,7 @@ class YorksV1NotificationRecord {
   final String? chatConversationId;
   final DateTime createdAt;
   final DateTime? seenAt;
+  final String? recordLabel;
 
   /// Chat uses its member read cursor as the authoritative unread state. These
   /// rows remain backend-only inputs to the durable FCM outbox and must never
@@ -57,11 +60,13 @@ class YorksV1NotificationRecord {
         chatConversationId: chatConversationId,
         createdAt: createdAt,
         seenAt: value,
+        recordLabel: recordLabel,
       );
 
   factory YorksV1NotificationRecord.fromRpcJson(Map<String, dynamic> json) {
     return YorksV1NotificationRecord(
       id: json['notification_id'] as String,
+      recordLabel: json['record_label'] as String?,
       eventCode: json['event_code'] as String,
       entityType: json['entity_type'] as String,
       entityId: json['entity_id'] as String,
@@ -86,31 +91,46 @@ class YorksV1NotificationRecord {
         eventCode == 'material_request_mentioned' &&
         entityType == 'chat_message' &&
         resolvedRequestId.isNotEmpty;
-    final resolvedRoute = isMaterialRequestCommentMention
-        ? RoutePaths.yorksV1MaterialRequestPath(
-            resolvedRequestId,
-            commentId: entityId,
-          )
-        : resolvedChatConversationId.isNotEmpty
-        ? RoutePaths.yorksV1TeamChatPath(resolvedChatConversationId)
-        : isMaterialReturn
-        ? RoutePaths.yorksV1MaterialReturnPath(entityId)
-        : isCompanyMaterialRequest
-        ? RoutePaths.yorksV1CompanyMaterialRequestPath(entityId)
-        : resolvedRequestId.isNotEmpty
-        ? RoutePaths.yorksV1MaterialRequestPath(resolvedRequestId)
-        : resolvedProjectId.isNotEmpty &&
-              (entityType == 'project' || entityType == 'project_member')
-        ? RoutePaths.yorksV1ProjectPath(resolvedProjectId)
-        : '';
+    final module = notificationModuleEvents[eventCode];
+    final moduleRoute = module == null
+        ? null
+        : eventCode.startsWith('accounts_')
+        ? (resolvedProjectId.isEmpty
+              ? RoutePaths.yorksV1Accounts
+              : '/yorks/projects/$resolvedProjectId/accounts/${module['destination'] == 'invoices' ? 'client-invoices' : module['destination']}')
+        : '/yorks/workforce/${module['destination']}';
+    final resolvedRoute =
+        moduleRoute ??
+        (isMaterialRequestCommentMention
+            ? RoutePaths.yorksV1MaterialRequestPath(
+                resolvedRequestId,
+                commentId: entityId,
+              )
+            : resolvedChatConversationId.isNotEmpty
+            ? RoutePaths.yorksV1TeamChatPath(resolvedChatConversationId)
+            : isMaterialReturn
+            ? RoutePaths.yorksV1MaterialReturnPath(entityId)
+            : isCompanyMaterialRequest
+            ? RoutePaths.yorksV1CompanyMaterialRequestPath(entityId)
+            : resolvedRequestId.isNotEmpty
+            ? RoutePaths.yorksV1MaterialRequestPath(resolvedRequestId)
+            : resolvedProjectId.isNotEmpty &&
+                  (entityType == 'project' || entityType == 'project_member')
+            ? RoutePaths.yorksV1ProjectPath(resolvedProjectId)
+            : '');
     return AppNotification(
       id: id,
       type: copy.type,
-      title: copy.title(language),
-      titleSecondary: '',
+      title: module == null
+          ? copy.title(language)
+          : moduleNotificationText(eventCode, 'title', language),
+      titleSecondary: recordLabel ?? '',
+      urgent: module?['urgent'] == true,
       body: resolvedRoute.isEmpty
           ? AppStrings.notificationDetailsUnavailable.active(language)
-          : copy.body(language),
+          : module == null
+          ? copy.body(language)
+          : moduleNotificationText(eventCode, 'body', language),
       timestamp: createdAt,
       isRead: seenAt != null,
       refId: isMaterialReturn

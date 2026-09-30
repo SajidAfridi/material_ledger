@@ -18,6 +18,9 @@ import '../providers/yorks_v1_notification_preferences_provider.dart';
 import '../providers/yorks_v1_team_chat_provider.dart';
 import '../services/notification_alert_sound.dart';
 import '../services/push_service.dart';
+import '../services/notification_visibility.dart';
+import '../providers/session_provider.dart';
+import '../models/notification_experience_strings.dart';
 
 /// Turns authorized notification records into immediate foreground feedback.
 ///
@@ -44,6 +47,8 @@ class _NotificationAlertHostState extends ConsumerState<NotificationAlertHost>
   _serverSubscription;
   ProviderSubscription<List<AppNotification>>? _legacySubscription;
   StreamSubscription<PushMessage>? _pushSubscription;
+  ProviderSubscription<Object?>? _accountSubscription;
+  bool _foreground = true;
   bool _serverPrimed = false;
   bool _legacyPrimed = false;
   Future<bool>? _soundPreparation;
@@ -53,7 +58,17 @@ class _NotificationAlertHostState extends ConsumerState<NotificationAlertHost>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _serverSubscription = ref.listenManual(yorksV1NotificationsProvider, (
+    _accountSubscription = ref.listenManual(
+      currentUserProvider.select((user) => user?.id),
+      (_, next) {
+        _serverPrimed = false;
+        _legacyPrimed = false;
+        _knownServerIds.clear();
+        _knownLegacyIds.clear();
+        _alertedIds.clear();
+      },
+    );
+    _serverSubscription = ref.listenManual(notificationAttentionFeedProvider, (
       _,
       next,
     ) {
@@ -70,11 +85,32 @@ class _NotificationAlertHostState extends ConsumerState<NotificationAlertHost>
       final newRecords = records
           .where(
             (record) =>
-                record.seenAt == null && !_knownServerIds.contains(record.id),
+                record.seenAt == null &&
+                !_knownServerIds.contains(record.id) &&
+                DateTime.now().difference(record.createdAt) <
+                    const Duration(minutes: 1),
           )
           .toList(growable: false);
-      _knownServerIds.addAll(records.map((record) => record.id));
+      _knownServerIds
+        ..clear()
+        ..addAll(records.map((record) => record.id));
       final language = ref.read(languageProvider);
+      if (newRecords.length > 1) {
+        _show(
+          AppNotification(
+            id: 'burst-${newRecords.first.id}',
+            type: NotificationType.info,
+            title: NotificationExperienceStrings.updatesWaiting.active(
+              language,
+            ),
+            titleSecondary: '',
+            body: '${newRecords.length}',
+            timestamp: DateTime.now(),
+            route: RoutePaths.notifications,
+          ),
+        );
+        return;
+      }
       for (final record in newRecords.reversed) {
         _show(
           record.toAppNotification(language),
@@ -87,7 +123,9 @@ class _NotificationAlertHostState extends ConsumerState<NotificationAlertHost>
     _legacySubscription = ref.listenManual(notificationsProvider, (_, next) {
       if (!_legacyPrimed) {
         _legacyPrimed = true;
-        _knownLegacyIds.addAll(next.map((notification) => notification.id));
+        _knownLegacyIds
+          ..clear()
+          ..addAll(next.map((notification) => notification.id));
         return;
       }
       final visibleIds = ref
@@ -102,7 +140,9 @@ class _NotificationAlertHostState extends ConsumerState<NotificationAlertHost>
                 !_knownLegacyIds.contains(notification.id),
           )
           .toList(growable: false);
-      _knownLegacyIds.addAll(next.map((notification) => notification.id));
+      _knownLegacyIds
+        ..clear()
+        ..addAll(next.map((notification) => notification.id));
       for (final notification in additions.reversed) {
         _show(notification);
       }
@@ -117,14 +157,27 @@ class _NotificationAlertHostState extends ConsumerState<NotificationAlertHost>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
+    _foreground = state == AppLifecycleState.resumed;
+    if (_foreground) {
+      // Baseline the first resumed fetch so returning does not replay backlog.
+      _serverPrimed = false;
+      _legacyPrimed = false;
+      unawaited(
+        ref.read(yorksV1NotificationPreferencesProvider.notifier).refresh(),
+      );
       // Web Audio contexts and native audio sessions can be suspended while
       // the app is backgrounded. Re-prepare on resume and on the next pointer
       // gesture so a successful first alert does not make later alerts silent.
       unawaited(_prepareSound());
       unawaited(ref.read(yorksV1NotificationsProvider.notifier).refresh());
       _refreshChat();
-      unawaited(ref.read(pushServiceProvider).register());
+      if (ref
+              .read(yorksV1NotificationPreferencesProvider)
+              .valueOrNull
+              ?.pushEnabled ==
+          true) {
+        unawaited(ref.read(pushServiceProvider).register());
+      }
     }
   }
 
@@ -179,7 +232,12 @@ class _NotificationAlertHostState extends ConsumerState<NotificationAlertHost>
     AppNotification notification, {
     IconData icon = Icons.notifications_active_rounded,
   }) {
-    if (!mounted || notification.title.trim().isEmpty) return;
+    if (!mounted ||
+        !_foreground ||
+        !mayPresentNotification ||
+        notification.title.trim().isEmpty) {
+      return;
+    }
     final notificationPath = notification.route.isEmpty
         ? ''
         : Uri.tryParse(notification.route)?.path ?? '';
@@ -192,6 +250,9 @@ class _NotificationAlertHostState extends ConsumerState<NotificationAlertHost>
     if (notification.id.isNotEmpty) {
       if (_alertedIds.contains(notification.id)) return;
       _alertedIds.add(notification.id);
+      while (_alertedIds.length > 500) {
+        _alertedIds.remove(_alertedIds.first);
+      }
     }
     final now = DateTime.now();
     if (ref.read(yorksV1NotificationSoundEnabledProvider) &&
@@ -201,8 +262,14 @@ class _NotificationAlertHostState extends ConsumerState<NotificationAlertHost>
       _lastSoundAt = now;
       unawaited(_playSound());
     }
+    final owner = ref.read(currentUserProvider)?.id;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted ||
+          !_foreground ||
+          !mayPresentNotification ||
+          owner != ref.read(currentUserProvider)?.id) {
+        return;
+      }
       final localNavigator = Navigator.maybeOf(context, rootNavigator: true);
       final routerNavigator = localNavigator == null
           ? ref.read(appRouterProvider).routerDelegate.navigatorKey.currentState
@@ -238,6 +305,7 @@ class _NotificationAlertHostState extends ConsumerState<NotificationAlertHost>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _accountSubscription?.close();
     _serverSubscription?.close();
     _legacySubscription?.close();
     _pushSubscription?.cancel();

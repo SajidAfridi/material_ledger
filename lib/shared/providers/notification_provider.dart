@@ -67,7 +67,11 @@ final visibleNotificationsProvider = Provider<List<AppNotification>>((ref) {
 
 /// Count of unread notifications for the current role (drives the badge dot).
 final unreadNotificationCountProvider = Provider<int>((ref) {
-  return ref.watch(visibleNotificationsProvider).where((n) => !n.isRead).length;
+  final legacy = ref
+      .watch(visibleNotificationsProvider)
+      .where((n) => !n.isServerAuthoritative && !n.isRead)
+      .length;
+  return legacy + ref.watch(yorksV1WorkflowUnreadCountProvider);
 });
 
 /// Server-authoritative workflow unread count used by operating-system
@@ -75,10 +79,11 @@ final unreadNotificationCountProvider = Provider<int>((ref) {
 /// records during rollout, but a device-local compatibility row must never
 /// create a browser-tab, PWA or native application badge on another account.
 final yorksV1WorkflowUnreadCountProvider = Provider<int>((ref) {
-  return ref
-      .watch(yorksV1AppNotificationsProvider)
-      .where((notification) => !notification.isRead)
-      .length;
+  return ref.watch(notificationHistoryStatusProvider).unreadCount ??
+      ref
+          .watch(yorksV1AppNotificationsProvider)
+          .where((notification) => !notification.isRead)
+          .length;
 });
 
 /// Combined unresolved attention for surfaces outside Yorks itself (browser

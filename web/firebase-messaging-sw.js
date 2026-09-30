@@ -22,7 +22,7 @@ function appUrlFor(data) {
     ? '/yorks/team-chat'
     : '/notifications';
   const route = typeof data.route === 'string' && data.route.startsWith('/')
-    && !data.route.startsWith('//')
+    && !data.route.startsWith('//') && !/[\\\x00-\x20]/.test(data.route)
     ? data.route
     : fallbackRoute;
   const target = new URL(route, 'https://yorks.invalid');
@@ -60,6 +60,10 @@ messaging.onBackgroundMessage((payload) => {
   // data-only messages need an explicit fallback notification here. The badge
   // is updated in both paths so installed PWAs remain visible while closed.
   if (payload.notification) return badgeUpdate;
+  // Only durable events may create a fallback. Console/test pings without an
+  // event ID must not create a second, history-less notification surface.
+  if (!/^[0-9a-f-]{36}$/i.test(data.notificationId || '')) return badgeUpdate;
+  if (data.expiresAt && Date.parse(data.expiresAt) <= Date.now()) return badgeUpdate;
   const title = typeof data.title === 'string' && data.title
     ? data.title
     : data.surface === 'team_chat'
@@ -74,7 +78,7 @@ messaging.onBackgroundMessage((payload) => {
       body,
       icon: '/icons/Icon-192.png',
       badge: '/icons/Icon-192.png',
-      tag: data.notificationId || undefined,
+      tag: data.collapseKey || data.notificationId,
       // Replayed delivery of one outbox UUID replaces the existing notification
       // silently; a genuinely new chat message has a new UUID and still alerts.
       renotify: false,
@@ -98,12 +102,13 @@ self.addEventListener('notificationclick', (event) => {
       type: 'window',
       includeUncontrolled: true,
     });
-    for (const windowClient of windows) {
-      if ('focus' in windowClient) {
-        if ('navigate' in windowClient) await windowClient.navigate(appUrl);
-        return windowClient.focus();
-      }
-    }
-    return self.clients.openWindow(appUrl);
+    const target = new URL(appUrl, self.registration.scope);
+    const origin = new URL(self.registration.scope).origin;
+    if (target.origin !== origin) return;
+    // Reuse an exact destination. Do not replace a different tab's draft or
+    // unsaved worksheet merely because it was the first client returned.
+    const existing = windows.find(client => client.url === target.href);
+    if (existing && 'focus' in existing) return existing.focus();
+    return self.clients.openWindow(target.href);
   })());
 });

@@ -308,7 +308,7 @@ void main() {
           entityType: 'chat_message',
           entityId: 'message-1',
           chatConversationId: 'conversation-2',
-          createdAt: DateTime(2026, 8, 20),
+          createdAt: DateTime.now(),
         ),
       );
       await tester.pump();

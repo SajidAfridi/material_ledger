@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
@@ -8,6 +9,7 @@ import '../../core/widgets/widgets.dart';
 import '../models/app_language.dart';
 import '../models/app_notification.dart';
 import '../models/app_strings.dart';
+import '../models/notification_experience_strings.dart';
 import '../providers/language_provider.dart';
 import '../providers/notification_provider.dart';
 import '../providers/yorks_v1_notification_provider.dart';
@@ -25,7 +27,72 @@ class NotificationsScreen extends ConsumerStatefulWidget {
 }
 
 class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
+  final _search = TextEditingController();
+  Timer? _searchDebounce;
   _NotificationFilter _filter = _NotificationFilter.all;
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    _search.dispose();
+    final notifier = ref.read(yorksV1NotificationsProvider.notifier);
+    Future.microtask(() async {
+      await notifier.search(null);
+      await notifier.setUnreadOnly(false);
+    });
+    super.dispose();
+  }
+
+  Widget _searchField(AppLanguage language) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+    child: TextField(
+      controller: _search,
+      maxLength: 120,
+      decoration: InputDecoration(
+        labelText: NotificationExperienceStrings.search.active(language),
+        prefixIcon: const Icon(Icons.search),
+        counterText: '',
+      ),
+      onChanged: (value) {
+        _searchDebounce?.cancel();
+        _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+          if (mounted) {
+            ref
+                .read(yorksV1NotificationsProvider.notifier)
+                .search(value.trim());
+          }
+        });
+      },
+    ),
+  );
+
+  Future<void> _markAll() async {
+    try {
+      await ref.read(notificationActionsProvider).markAllRead();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              NotificationExperienceStrings.readFailed.active(
+                ref.read(languageProvider),
+              ),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  void _selectFilter(_NotificationFilter value) {
+    setState(() => _filter = value);
+    ref
+        .read(yorksV1NotificationsProvider.notifier)
+        .setUnreadOnly(
+          value == _NotificationFilter.unread,
+          urgentOnly: value == _NotificationFilter.urgent,
+        );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -40,11 +107,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       _NotificationFilter.unread =>
         notifications.where((notification) => !notification.isRead).toList(),
       _NotificationFilter.urgent =>
-        notifications
-            .where(
-              (notification) => notification.type == NotificationType.stock,
-            )
-            .toList(),
+        notifications.where((notification) => notification.isUrgent).toList(),
     };
 
     if (mobile) {
@@ -57,12 +120,12 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
               leading: YorksMobileIconButton(
                 icon: Icons.arrow_back_rounded,
                 tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-                onPressed: () => context.pop(),
+                onPressed: () =>
+                    context.canPop() ? context.pop() : context.go('/'),
               ),
               trailing: unread > 0
                   ? TextButton(
-                      onPressed: () =>
-                          ref.read(notificationActionsProvider).markAllRead(),
+                      onPressed: _markAll,
                       child: Text(
                         AppStrings.markAllRead.active(lang),
                         style: AppTypography.labelSmall.copyWith(
@@ -81,7 +144,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                       child: YorksMobilePill(
                         label: filter.label.active(lang),
                         selected: _filter == filter,
-                        onTap: () => setState(() => _filter = filter),
+                        onTap: () => _selectFilter(filter),
                       ),
                     ),
                     if (filter != _NotificationFilter.values.last)
@@ -94,9 +157,11 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
               padding: EdgeInsets.fromLTRB(14, 0, 14, 10),
               child: NotificationDeliveryCard(compact: true),
             ),
+            _searchField(lang),
             Expanded(
               child: _NotificationListState(
                 notifications: visible,
+                filter: _filter,
                 serverState: serverState,
                 language: lang,
                 padding: const EdgeInsets.fromLTRB(14, 4, 14, 24),
@@ -114,8 +179,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
+          tooltip: MaterialLocalizations.of(context).backButtonTooltip,
           icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => context.pop(),
+          onPressed: () => context.canPop() ? context.pop() : context.go('/'),
         ),
         title: Text(
           AppStrings.notifications.active(lang),
@@ -124,8 +190,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         actions: [
           if (unread > 0)
             TextButton(
-              onPressed: () =>
-                  ref.read(notificationActionsProvider).markAllRead(),
+              onPressed: _markAll,
               child: Text(AppStrings.markAllRead.active(lang)),
             ),
         ],
@@ -158,8 +223,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                             ChoiceChip(
                               label: Text(filter.label.active(lang)),
                               selected: _filter == filter,
-                              onSelected: (_) =>
-                                  setState(() => _filter = filter),
+                              onSelected: (_) => _selectFilter(filter),
                             ),
                             if (filter != _NotificationFilter.values.last)
                               const Gap(AppSpacing.sm),
@@ -167,9 +231,11 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                         ],
                       ),
                     ),
+                    _searchField(lang),
                     Expanded(
                       child: _NotificationListState(
                         notifications: visible,
+                        filter: _filter,
                         serverState: serverState,
                         language: lang,
                         padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
@@ -189,12 +255,14 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 class _NotificationListState extends ConsumerWidget {
   const _NotificationListState({
     required this.notifications,
+    required this.filter,
     required this.serverState,
     required this.language,
     required this.padding,
   });
 
   final List<AppNotification> notifications;
+  final _NotificationFilter filter;
   final AsyncValue<Object?> serverState;
   final AppLanguage language;
   final EdgeInsets padding;
@@ -235,18 +303,80 @@ class _NotificationListState extends ConsumerWidget {
         ),
       );
     }
-    if (notifications.isEmpty) return _EmptyState(lang: language);
-    return RefreshIndicator(
-      onRefresh: () =>
-          ref.read(yorksV1NotificationsProvider.notifier).refresh(),
-      child: ListView.separated(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: padding,
-        itemCount: notifications.length,
-        separatorBuilder: (_, _) => const Gap(AppSpacing.listItemGap),
-        itemBuilder: (context, index) =>
-            _NotificationDismissible(notification: notifications[index]),
-      ),
+    final history = ref.watch(notificationHistoryStatusProvider);
+    return Column(
+      children: [
+        if (serverState.hasError)
+          ListTile(
+            title: Text(NotificationExperienceStrings.stale.active(language)),
+            trailing: IconButton(
+              tooltip: AppStrings.retry.active(language),
+              icon: const Icon(Icons.refresh),
+              onPressed: () =>
+                  ref.read(yorksV1NotificationsProvider.notifier).refresh(),
+            ),
+          ),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () =>
+                ref.read(yorksV1NotificationsProvider.notifier).refresh(),
+            child: ListView.separated(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: padding,
+              itemCount:
+                  (notifications.isEmpty ? 1 : notifications.length) +
+                  (history.hasMore ? 1 : 0),
+              separatorBuilder: (_, _) => const Gap(AppSpacing.listItemGap),
+              itemBuilder: (context, index) {
+                if (index ==
+                    (notifications.isEmpty ? 1 : notifications.length)) {
+                  return TextButton(
+                    onPressed: history.loadingMore
+                        ? null
+                        : () => ref
+                              .read(yorksV1NotificationsProvider.notifier)
+                              .loadMore(),
+                    child: Text(
+                      NotificationExperienceStrings.loadMore.active(language),
+                    ),
+                  );
+                }
+                if (notifications.isEmpty) {
+                  return _EmptyState(lang: language, filter: filter);
+                }
+                final item = notifications[index];
+                final newDay =
+                    index == 0 ||
+                    !DateUtils.isSameDay(
+                      notifications[index - 1].timestamp,
+                      item.timestamp,
+                    );
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (newDay)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Semantics(
+                          header: true,
+                          child: Text(
+                            MaterialLocalizations.of(
+                              context,
+                            ).formatFullDate(item.timestamp),
+                            style: AppTypography.labelSmall.copyWith(
+                              color: AppColors.inkSecondary,
+                            ),
+                          ),
+                        ),
+                      ),
+                    _NotificationDismissible(notification: item),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -284,9 +414,23 @@ class _NotificationDismissible extends ConsumerWidget {
         ref.read(notificationActionsProvider).dismiss(notification),
     child: _NotificationCard(
       notification: notification,
-      onTap: () {
-        ref.read(notificationActionsProvider).markRead(notification);
+      onTap: () async {
         if (notification.route.isNotEmpty) context.push(notification.route);
+        try {
+          await ref.read(notificationActionsProvider).markRead(notification);
+        } catch (_) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  NotificationExperienceStrings.readFailed.active(
+                    ref.read(languageProvider),
+                  ),
+                ),
+              ),
+            );
+          }
+        }
       },
     ),
   );
@@ -304,106 +448,113 @@ class _NotificationCard extends ConsumerWidget {
     final language = ref.watch(languageProvider);
     final (icon, color) = _style(notification.type);
     final unread = !notification.isRead;
-    return LedgerCard(
-      onTap: onTap,
-      color: unread
-          ? AppColors.primaryContainer.withValues(alpha: 0.10)
-          : AppColors.surfaceContainerLowest,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
+    return Semantics(
+      label:
+          (unread
+                  ? NotificationExperienceStrings.unread
+                  : NotificationExperienceStrings.read)
+              .active(language),
+      child: LedgerCard(
+        onTap: onTap,
+        color: unread
+            ? AppColors.primaryContainer.withValues(alpha: 0.10)
+            : AppColors.surfaceContainerLowest,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 20, color: color),
             ),
-            child: Icon(icon, size: 20, color: color),
-          ),
-          const Gap(AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        notification.title,
-                        style: AppTypography.bodyLarge.copyWith(
-                          fontWeight: unread
-                              ? FontWeight.w700
-                              : FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    const Gap(AppSpacing.sm),
-                    Text(
-                      notification.relativeTime,
-                      style: AppTypography.labelSmall.copyWith(
-                        color: AppColors.onSurfaceVariant.withValues(
-                          alpha: 0.7,
-                        ),
-                      ),
-                    ),
-                    if (unread) ...[
-                      const Gap(AppSpacing.sm),
-                      Container(
-                        width: 8,
-                        height: 8,
-                        margin: const EdgeInsets.only(top: 5),
-                        decoration: const BoxDecoration(
-                          color: AppColors.primary,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-                if (notification.titleSecondary.isNotEmpty) ...[
-                  const Gap(AppSpacing.xxs),
-                  Text(
-                    notification.titleSecondary,
-                    style: AppTypography.labelSmall.copyWith(
-                      color: AppColors.onSurfaceVariant,
-                    ),
-                    textDirection: TextDirection.rtl,
-                  ),
-                ],
-                if (notification.body.isNotEmpty) ...[
-                  const Gap(AppSpacing.xs),
-                  Text(
-                    notification.body,
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-                if (notification.route.isNotEmpty) ...[
-                  const Gap(AppSpacing.sm),
+            const Gap(AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(
-                        Icons.open_in_new_rounded,
-                        size: 16,
-                        color: AppColors.blue,
+                      Expanded(
+                        child: Text(
+                          notification.title,
+                          style: AppTypography.bodyLarge.copyWith(
+                            fontWeight: unread
+                                ? FontWeight.w700
+                                : FontWeight.w600,
+                          ),
+                        ),
                       ),
-                      const Gap(AppSpacing.xs),
+                      const Gap(AppSpacing.sm),
                       Text(
-                        AppStrings.viewDetails.active(language),
+                        notification.relativeTimeFor(language),
                         style: AppTypography.labelSmall.copyWith(
+                          color: AppColors.inkSecondary,
+                        ),
+                      ),
+                      if (unread) ...[
+                        const Gap(AppSpacing.sm),
+                        Container(
+                          width: 8,
+                          height: 8,
+                          margin: const EdgeInsets.only(top: 5),
+                          decoration: const BoxDecoration(
+                            color: AppColors.primary,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  if (notification.titleSecondary.isNotEmpty) ...[
+                    const Gap(AppSpacing.xxs),
+                    Text(
+                      notification.titleSecondary,
+                      style: AppTypography.labelSmall.copyWith(
+                        color: AppColors.inkSecondary,
+                      ),
+                      textDirection: notification.isServerAuthoritative
+                          ? null
+                          : TextDirection.rtl,
+                    ),
+                  ],
+                  if (notification.body.isNotEmpty) ...[
+                    const Gap(AppSpacing.xs),
+                    Text(
+                      notification.body,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.inkSecondary,
+                      ),
+                    ),
+                  ],
+                  if (notification.route.isNotEmpty) ...[
+                    const Gap(AppSpacing.sm),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.open_in_new_rounded,
+                          size: 16,
                           color: AppColors.blue,
                         ),
-                      ),
-                    ],
-                  ),
+                        const Gap(AppSpacing.xs),
+                        Text(
+                          AppStrings.viewDetails.active(language),
+                          style: AppTypography.labelSmall.copyWith(
+                            color: AppColors.blue,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -425,7 +576,11 @@ class _NotificationCard extends ConsumerWidget {
 
 // ─── Empty state ─────────────────────────────────────────────────
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.lang});
+  const _EmptyState({
+    required this.lang,
+    this.filter = _NotificationFilter.all,
+  });
+  final _NotificationFilter filter;
 
   final AppLanguage lang;
 
@@ -444,9 +599,15 @@ class _EmptyState extends StatelessWidget {
             ),
             const Gap(AppSpacing.lg),
             Text(
-              AppStrings.allCaughtUp.active(lang),
+              (switch (filter) {
+                _NotificationFilter.all => AppStrings.allCaughtUp,
+                _NotificationFilter.unread =>
+                  NotificationExperienceStrings.noUnread,
+                _NotificationFilter.urgent =>
+                  NotificationExperienceStrings.noUrgent,
+              }).active(lang),
               style: AppTypography.titleMedium.copyWith(
-                color: AppColors.onSurfaceVariant,
+                color: AppColors.inkSecondary,
               ),
               textAlign: TextAlign.center,
             ),

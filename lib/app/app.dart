@@ -85,7 +85,15 @@ void _invalidateYorksV1ProtectedProjectionCaches(Ref ref) {
 
 /// Provider for the app router — lives here so the incremental
 /// compiler always sees it in the same unit as [MaterialLedgerApp].
+class _RouterLocationMemory {
+  String? location;
+}
+
+final _routerLocationMemoryProvider = Provider(
+  (ref) => _RouterLocationMemory(),
+);
 final appRouterProvider = Provider<GoRouter>((ref) {
+  final memory = ref.read(_routerLocationMemoryProvider);
   final isOnboarded = ref.watch(onboardingCompleteProvider);
   final isLoggedIn = ref.watch(isLoggedInProvider);
   final role = ref.watch(currentRoleProvider);
@@ -173,6 +181,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   ref.onDispose(refresh.dispose);
 
   final router = createAppRouter(
+    restoredLocation: memory.location,
     isOnboarded: isOnboarded,
     isLoggedIn: isLoggedIn,
     role: role,
@@ -213,7 +222,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     rolePermissions: () => ref.read(rolePermissionsProvider),
     refreshListenable: refresh,
   );
-  ref.onDispose(router.dispose);
+  void rememberLocation() {
+    memory.location = router.routeInformationProvider.value.uri.toString();
+  }
+
+  router.routeInformationProvider.addListener(rememberLocation);
+  ref.onDispose(() {
+    rememberLocation();
+    router.routeInformationProvider.removeListener(rememberLocation);
+    router.dispose();
+  });
   return router;
 });
 

@@ -42,8 +42,26 @@ abstract final class YorksAppToast {
     if (overlay == null) return;
 
     late final OverlayEntry entry;
+    var hovering = false;
+    var focused = false;
+    void updateTimer() {
+      if (!identical(_entry, entry)) return;
+      _dismissTimer?.cancel();
+      if (!hovering && !focused) {
+        _dismissTimer = Timer(duration, () => _remove(entry));
+      }
+    }
+
     entry = OverlayEntry(
       builder: (overlayContext) => _YorksAppToastSurface(
+        onHover: (value) {
+          hovering = value;
+          updateTimer();
+        },
+        onFocus: (value) {
+          focused = value;
+          updateTimer();
+        },
         title: title,
         message: message,
         tone: tone,
@@ -93,6 +111,8 @@ class _YorksAppToastSurface extends StatelessWidget {
     required this.onAction,
     required this.onDismiss,
     required this.maxWidth,
+    required this.onHover,
+    required this.onFocus,
   });
 
   final String title;
@@ -103,6 +123,8 @@ class _YorksAppToastSurface extends StatelessWidget {
   final VoidCallback? onAction;
   final VoidCallback? onDismiss;
   final double? maxWidth;
+  final ValueChanged<bool> onHover;
+  final ValueChanged<bool> onFocus;
 
   @override
   Widget build(BuildContext context) => Positioned.fill(
@@ -123,7 +145,6 @@ class _YorksAppToastSurface extends StatelessWidget {
           final toast = Semantics(
             container: true,
             liveRegion: true,
-            label: message == null ? title : '$title. $message',
             child: SizedBox(
               width: desiredWidth,
               child: _YorksAppToastCard(
@@ -148,11 +169,18 @@ class _YorksAppToastSurface extends StatelessWidget {
               alignment: AlignmentDirectional.bottomEnd,
               child: onDismiss == null
                   ? IgnorePointer(child: toast)
-                  : Dismissible(
-                      key: UniqueKey(),
-                      direction: DismissDirection.horizontal,
-                      onDismissed: (_) => onDismiss!(),
-                      child: toast,
+                  : Focus(
+                      onFocusChange: onFocus,
+                      child: MouseRegion(
+                        onEnter: (_) => onHover(true),
+                        onExit: (_) => onHover(false),
+                        child: Dismissible(
+                          key: UniqueKey(),
+                          direction: DismissDirection.horizontal,
+                          onDismissed: (_) => onDismiss!(),
+                          child: toast,
+                        ),
+                      ),
                     ),
             ),
           );

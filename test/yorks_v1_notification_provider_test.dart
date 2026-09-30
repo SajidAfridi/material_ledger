@@ -11,7 +11,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test(
-    'single acknowledgement is optimistic and survives a second device',
+    'single acknowledgement waits for server and survives a second device',
     () async {
       final gate = Completer<void>();
       final repository = _FakeNotificationRepository([
@@ -22,7 +22,7 @@ void main() {
       await notifier.start();
 
       final acknowledgement = notifier.markSeen(repository.records.single.id);
-      expect(notifier.state.valueOrNull!.single.seenAt, isNotNull);
+      expect(notifier.state.valueOrNull!.single.seenAt, isNull);
       expect(repository.markSeenCalls, 1);
 
       gate.complete();
@@ -34,6 +34,24 @@ void main() {
     },
   );
 
+  test('failed acknowledgement preserves a concurrent new record', () async {
+    final gate = Completer<void>();
+    final repository = _FakeNotificationRepository([
+      _record('old'),
+    ], markGate: gate);
+    final notifier = _notifier(repository);
+    addTearDown(notifier.dispose);
+    await notifier.start();
+    final pending = notifier.markSeen('old');
+    final failure = expectLater(pending, throwsStateError);
+    repository.records.insert(0, _record('new'));
+    await notifier.refresh();
+    gate.completeError(StateError('offline'));
+    await failure;
+    expect(notifier.state.valueOrNull!.map((n) => n.id), ['new', 'old']);
+    expect(notifier.state.valueOrNull!.last.seenAt, isNull);
+  });
+
   test('mark all acknowledges every item with one server command', () async {
     final repository = _FakeNotificationRepository([
       _record('11000000-0000-4000-8000-000000000001'),
@@ -44,11 +62,11 @@ void main() {
     await notifier.start();
 
     final acknowledgement = notifier.markAllSeen();
+    await acknowledgement;
     expect(
       notifier.state.valueOrNull!.every((record) => record.seenAt != null),
       isTrue,
     );
-    await acknowledgement;
     expect(repository.markAllSeenCalls, 1);
     expect(repository.markSeenCalls, 0);
   });

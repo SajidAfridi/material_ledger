@@ -222,3 +222,20 @@ Deno.test("Company Request alerts have meaningful copy and exact protected route
     );
   }
 });
+
+Deno.test("expiry is absolute and malformed/missing expiry fails closed", async () => {
+  const { remainingLifetime } = await import("./notification_payload.ts");
+  const now = Date.parse("2026-09-30T12:00:00Z");
+  assertEquals(remainingLifetime("2026-09-30T12:00:30Z", now),30);
+  assertEquals(remainingLifetime("2026-09-30T11:59:00Z", now),0);
+  assertEquals(remainingLifetime(undefined, now),0);
+  assertEquals(remainingLifetime("invalid", now),0);
+});
+
+Deno.test("module catalogue covers safe copy and guarded routes", async () => {
+  const { moduleEvents } = await import("./module_catalogue.ts");
+  for (const code of Object.keys(moduleEvents)) {
+    assertEquals(safePushCopy(code).title === "Yorks workflow update", false);
+    assertEquals(routeFor({...claim(), eventCode: code}).startsWith("/yorks/"), true);
+  }
+});

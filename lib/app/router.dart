@@ -997,7 +997,47 @@ bool _canOpenAccountsPortfolio(YorksV1Role role) =>
 
 /// Creates the app [GoRouter].
 /// [isOnboarded], [isLoggedIn], [role] and [user] drive redirect / access logic.
+/// Only internal, absolute paths can survive authentication redirects.
+String? safeReturnLocation(String? value) {
+  if (value == null ||
+      value.isEmpty ||
+      value.contains('\\') ||
+      value.contains(RegExp(r'[\x00-\x20]'))) {
+    return null;
+  }
+  final uri = Uri.tryParse(value);
+  if (uri == null ||
+      uri.hasScheme ||
+      uri.hasAuthority ||
+      !value.startsWith('/') ||
+      value.startsWith('//')) {
+    return null;
+  }
+  if ([
+    RoutePaths.login,
+    RoutePaths.changePassword,
+    RoutePaths.splash,
+    RoutePaths.languageSelection,
+    RoutePaths.maintenance,
+    RoutePaths.updateRequired,
+  ].contains(uri.path)) {
+    return null;
+  }
+  return uri.toString();
+}
+
+String guardedReturnLocation(String gate, Uri current) {
+  final target =
+      safeReturnLocation(current.queryParameters['returnTo']) ??
+      safeReturnLocation(current.toString());
+  return Uri(
+    path: gate,
+    queryParameters: target == null ? null : {'returnTo': target},
+  ).toString();
+}
+
 GoRouter createAppRouter({
+  String? restoredLocation,
   required bool isOnboarded,
   required bool isLoggedIn,
   required UserRole role,
@@ -1040,7 +1080,8 @@ GoRouter createAppRouter({
       ? RoutePaths.yorksV1Accounts
       : RoutePaths.engineerHome;
   return GoRouter(
-    initialLocation: initialLocation,
+    initialLocation: restoredLocation ?? initialLocation,
+    overridePlatformDefaultLocation: restoredLocation != null,
     refreshListenable: refreshListenable,
     redirect: (context, state) {
       final path = state.uri.path;
@@ -1070,18 +1111,27 @@ GoRouter createAppRouter({
 
       // Onboarded but not logged in -> login only.
       if (!isLoggedIn) {
-        return path == RoutePaths.login ? null : RoutePaths.login;
+        return path == RoutePaths.login
+            ? null
+            : guardedReturnLocation(RoutePaths.login, state.uri);
       }
 
       // Evicted mid-session: the account was deactivated, demoted-then-removed,
       // or a re-seed dropped the id → straight back to login (no stale session).
       if (user == null || !user.active) {
-        return path == RoutePaths.login ? null : RoutePaths.login;
+        return path == RoutePaths.login
+            ? null
+            : guardedReturnLocation(RoutePaths.login, state.uri);
       }
 
       // Logged-in users shouldn't sit on onboarding/login. Accountant lands
       // directly in the normalized, capability-guarded Accounts workspace.
-      if (path == RoutePaths.languageSelection || path == RoutePaths.login) {
+      if ((path == RoutePaths.languageSelection || path == RoutePaths.login) &&
+          !user.mustChangePassword) {
+        final target = safeReturnLocation(
+          state.uri.queryParameters['returnTo'],
+        );
+        if (target != null) return target;
         if (yorksV1AccountsEnabled && yorksV1Role == YorksV1Role.accountant) {
           return RoutePaths.yorksV1Accounts;
         }
@@ -1093,10 +1143,11 @@ GoRouter createAppRouter({
       if (user.mustChangePassword) {
         return path == RoutePaths.changePassword
             ? null
-            : RoutePaths.changePassword;
+            : guardedReturnLocation(RoutePaths.changePassword, state.uri);
       }
       if (path == RoutePaths.changePassword) {
-        return RoutePaths.engineerHome; // nothing to change → leave
+        return safeReturnLocation(state.uri.queryParameters['returnTo']) ??
+            RoutePaths.engineerHome; // password gate cleared
       }
 
       // An already-authenticated Accountant may revisit the root route from a
