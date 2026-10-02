@@ -285,6 +285,7 @@ case "$command" in
       exit 65
     fi
     flutter build web --release "${r35_defines[@]}" "$@"
+    ./tool/compact_web_javascript.sh build/web/main.dart.js
     dart run tool/verify_startup_performance.dart build/web
     ;;
   build-apk)

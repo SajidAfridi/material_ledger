@@ -4,7 +4,12 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../shared/models/app_user.dart';
+import '../shared/models/app_language.dart';
+import '../shared/providers/language_provider.dart';
 import '../shared/providers/session_provider.dart';
+import '../shared/providers/yorks_v1_material_request_provider.dart';
+import '../shared/providers/yorks_v1_company_material_request_provider.dart';
+import '../shared/providers/yorks_v1_logistics_provider.dart';
 import '../shared/providers/yorks_v1_notification_provider.dart';
 import '../shared/providers/yorks_v1_notification_preferences_provider.dart';
 import '../shared/services/push_service.dart';
@@ -60,6 +65,36 @@ final pushBridgeProvider = Provider<void>((ref) {
       }
       unawaited(() async {
         try {
+          // A route redirect or loading/error screen is not a successful open.
+          // Await the destination's protected data loader before acknowledging.
+          final segments = location.pathSegments;
+          if (segments.length == 4 &&
+              segments.take(3).join('/') == 'yorks/material-requests/company') {
+            await ref.read(
+              yorksV1CompanyMaterialRequestProvider(segments.last).future,
+            );
+          } else if (segments.length == 3 &&
+              segments.take(2).join('/') == 'yorks/material-requests') {
+            await ref.read(
+              yorksV1MaterialRequestDetailProvider(segments.last).future,
+            );
+          } else if (segments.length == 3 &&
+              segments.take(2).join('/') == 'yorks/returns') {
+            await ref.read(
+              yorksV1ProjectMaterialReturnProvider(segments.last).future,
+            );
+          } else {
+            // Other destinations retain unread state until their explicit
+            // acknowledgement/read cursor succeeds. Never infer read from URL.
+            acknowledgedRouteIds.remove(id);
+            return;
+          }
+          if (!active ||
+              owner != ref.read(currentUserProvider)?.id ||
+              router.routeInformationProvider.value.uri != location) {
+            acknowledgedRouteIds.remove(id);
+            return;
+          }
           await ref.read(yorksV1NotificationsProvider.notifier).markSeen(id);
         } catch (_) {
           acknowledgedRouteIds.remove(id);
@@ -88,6 +123,11 @@ final pushBridgeProvider = Provider<void>((ref) {
     if (pushEnabled == true) unawaited(push.register());
     acknowledgeCurrentRoute();
   }, fireImmediately: true);
+  if (push is FcmPushService) {
+    ref.listen<AppLanguage>(languageProvider, (previous, next) {
+      if (previous != next && pushEnabled == true) unawaited(push.register());
+    });
+  }
 });
 
 /// Live, non-sensitive health of this installation's push transport.

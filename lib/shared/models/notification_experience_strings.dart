@@ -1,6 +1,32 @@
 import 'app_strings.dart';
+import 'app_language.dart';
 
 abstract final class NotificationExperienceStrings {
+  static const mainSiteAlerts = TranslatableString(
+    en: 'Device alerts are available on the main Yorks site. Your notification history remains available here.',
+    ar: 'تنبيهات الجهاز متاحة على موقع يوركس الرئيسي. يبقى سجل إشعاراتك متاحًا هنا.',
+    ur: 'ڈیوائس الرٹس یورکس کی مرکزی ویب سائٹ پر دستیاب ہیں۔ آپ کی نوٹیفکیشن ہسٹری یہاں دستیاب رہے گی۔',
+    hi: 'डिवाइस अलर्ट मुख्य यॉर्क्स साइट पर उपलब्ध हैं। आपकी सूचना सूची यहाँ उपलब्ध रहेगी।',
+  );
+  static String updateCount(int count, AppLanguage language) =>
+      TranslatableString(
+        en: '$count new updates. Open to review them.',
+        ar: '$count تحديثات جديدة. افتح لمراجعتها.',
+        ur: '$count نئی اپ ڈیٹس۔ دیکھنے کے لیے کھولیں۔',
+        hi: '$count नए अपडेट। समीक्षा के लिए खोलें।',
+      ).active(language);
+
+  static String mixedUpdateCount(
+    int workflowCount,
+    int chatCount,
+    AppLanguage language,
+  ) => TranslatableString(
+    en: 'Workflow updates: $workflowCount · Team Chat updates: $chatCount.',
+    ar: 'تحديثات سير العمل: $workflowCount · تحديثات محادثة الفريق: $chatCount.',
+    ur: 'ورک فلو اپ ڈیٹس: $workflowCount · ٹیم چیٹ اپ ڈیٹس: $chatCount۔',
+    hi: 'कार्यप्रवाह अपडेट: $workflowCount · टीम चैट अपडेट: $chatCount।',
+  ).active(language);
+
   static const search = TranslatableString(
     en: 'Search event or request reference',
     ar: 'ابحث عن الحدث أو مرجع الطلب',

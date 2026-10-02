@@ -997,8 +997,7 @@ bool _canOpenAccountsPortfolio(YorksV1Role role) =>
 
 /// Creates the app [GoRouter].
 /// [isOnboarded], [isLoggedIn], [role] and [user] drive redirect / access logic.
-/// Only internal, absolute paths can survive authentication redirects.
-String? safeReturnLocation(String? value) {
+String? _safeInternalLocation(String? value) {
   if (value == null ||
       value.isEmpty ||
       value.contains('\\') ||
@@ -1013,6 +1012,14 @@ String? safeReturnLocation(String? value) {
       value.startsWith('//')) {
     return null;
   }
+  return uri.toString();
+}
+
+/// Only internal, absolute paths can survive authentication redirects.
+String? safeReturnLocation(String? value) {
+  final location = _safeInternalLocation(value);
+  if (location == null) return null;
+  final uri = Uri.parse(location);
   if ([
     RoutePaths.login,
     RoutePaths.changePassword,
@@ -1023,7 +1030,28 @@ String? safeReturnLocation(String? value) {
   ].contains(uri.path)) {
     return null;
   }
-  return uri.toString();
+  return location;
+}
+
+/// Capture the useful browser / platform destination before a bootstrap
+/// Navigator or an asynchronous Auth restoration can publish a fallback '/'.
+/// Hash URLs are the web release's current strategy; path URLs remain valid
+/// when a platform or a future release supplies those instead. Existing gate
+/// URLs retain their validated returnTo intent through the ordinary guards.
+String? initialAppLocation({Uri? browserUri, String? platformLocation}) {
+  if (browserUri != null) {
+    final fragment = _safeInternalLocation(browserUri.fragment);
+    if (fragment != null) return fragment == '/' ? null : fragment;
+    final path = _safeInternalLocation(
+      Uri(
+        path: browserUri.path,
+        query: browserUri.hasQuery ? browserUri.query : null,
+      ).toString(),
+    );
+    if (path != null && path != '/') return path;
+  }
+  final platform = _safeInternalLocation(platformLocation);
+  return platform == '/' ? null : platform;
 }
 
 String guardedReturnLocation(String gate, Uri current) {
@@ -1094,19 +1122,24 @@ GoRouter createAppRouter({
       if (gate == AppGate.updateRequired) {
         return path == RoutePaths.updateRequired
             ? null
-            : RoutePaths.updateRequired;
+            : guardedReturnLocation(RoutePaths.updateRequired, state.uri);
       }
       if (gate == AppGate.maintenance) {
-        return path == RoutePaths.maintenance ? null : RoutePaths.maintenance;
+        return path == RoutePaths.maintenance
+            ? null
+            : guardedReturnLocation(RoutePaths.maintenance, state.uri);
       }
       // Gate cleared but still sitting on a gate screen → move on.
       if (path == RoutePaths.updateRequired || path == RoutePaths.maintenance) {
-        return RoutePaths.engineerHome;
+        return safeReturnLocation(state.uri.queryParameters['returnTo']) ??
+            RoutePaths.engineerHome;
       }
 
       // Force onboarding first (language selection).
       if (!isOnboarded) {
-        return path == RoutePaths.languageSelection ? null : RoutePaths.splash;
+        return path == RoutePaths.languageSelection
+            ? null
+            : guardedReturnLocation(RoutePaths.splash, state.uri);
       }
 
       // Onboarded but not logged in -> login only.
@@ -1938,7 +1971,10 @@ GoRouter createAppRouter({
           path: RoutePaths.yorksV1WorkforceAttendance,
           pageBuilder: (context, state) => _yorksV1Slide(
             state.pageKey,
-            const YorksWorkforceDailyAttendanceScreen(),
+            YorksWorkforceDailyAttendanceScreen(
+              initialTeamId: state.uri.queryParameters['team_id'],
+              initialWorkDate: state.uri.queryParameters['date'],
+            ),
           ),
         ),
       if (yorksV1WorkforceEnabled)
@@ -1946,7 +1982,9 @@ GoRouter createAppRouter({
           path: RoutePaths.yorksV1WorkforceTimesheets,
           pageBuilder: (context, state) => _yorksV1Slide(
             state.pageKey,
-            const YorksWorkforceTimesheetsScreen(),
+            YorksWorkforceTimesheetsScreen(
+              initialPeriodId: state.uri.queryParameters['period_id'],
+            ),
           ),
         ),
       GoRoute(

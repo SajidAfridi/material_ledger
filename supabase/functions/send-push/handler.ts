@@ -9,9 +9,10 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { sendFcmRequest } from "./fcm_failure.mjs";
 import {
   isTeamChatEvent,
+  normalizedPushLanguage,
   normalizedUnreadCount,
-  remainingLifetime,
   type PushClaim,
+  remainingLifetime,
   routeFor,
   safePushCopy,
   webLinkFor,
@@ -184,11 +185,13 @@ export async function handlePush(
 
   if (remainingLifetime(claim.expiresAt) === 0) {
     await finish("terminal", 0, "NOTIFICATION_EXPIRED");
-    return json({ok: true, expired: true});
+    return json({ ok: true, expired: true });
   }
   const { data: registeredRows, error: tokenError } = await admin
     .from("v1_push_device_tokens")
-    .select("token, platform, web_origin, installation_id, retired_at")
+    .select(
+      "token, platform, web_origin, installation_id, retired_at, notification_language",
+    )
     .eq("auth_user_id", claim.recipientAuthUserId);
   if (tokenError) {
     await finish("retryable", 0, "TOKEN_LOOKUP_FAILED");
@@ -238,7 +241,6 @@ export async function handlePush(
     const accessToken = await dependencies.getFcmAccessToken(serviceAccount);
     const sendUrl =
       `https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`;
-    const copy = safePushCopy(claim.eventCode);
     const surface = isTeamChatEvent(claim.eventCode) ? "team_chat" : "workflow";
     const route = routeFor(claim);
     const unreadCount = normalizedUnreadCount(claim.unreadCount);
@@ -263,6 +265,8 @@ export async function handlePush(
     let retryDelay = 0;
     for (const row of tokenRows) {
       const token = row.token as string;
+      const language = normalizedPushLanguage(row.notification_language);
+      const copy = safePushCopy(claim.eventCode, language);
       const tokenHash = Array.from(
         new Uint8Array(
           await crypto.subtle.digest(
@@ -299,11 +303,13 @@ export async function handlePush(
       const ttl = remainingLifetime(claim.expiresAt);
       if (ttl === 0) {
         await finish("terminal", deliveredCount, "NOTIFICATION_EXPIRED");
-        return json({ok: true, expired: true});
+        return json({ ok: true, expired: true });
       }
       externalSendStarted = true;
       const isWeb = row.platform === "web";
-      const collapseKey = `${surface}:${claim.chatConversationId || claim.requestId || claim.entityId}`;
+      const collapseKey = `${surface}:${
+        claim.chatConversationId || claim.requestId || claim.entityId
+      }`;
       const data = {
         collapseKey,
         expiresAt: claim.expiresAt!,
@@ -313,6 +319,7 @@ export async function handlePush(
         type: copy.type,
         title: copy.title,
         body: copy.body,
+        language,
         refId: claim.requestId ?? claim.entityId,
         route,
         unreadCount: String(unreadCount),
@@ -332,10 +339,19 @@ export async function handlePush(
               ...(isWeb
                 ? {
                   webpush: {
-                    headers: { Urgency: isTeamChatEvent(claim.eventCode) ? "high" : "normal", TTL: String(ttl) },
+                    headers: {
+                      Urgency: isTeamChatEvent(claim.eventCode)
+                        ? "high"
+                        : "normal",
+                      TTL: String(ttl),
+                    },
                     notification: {
                       title: copy.title,
                       body: copy.body,
+                      lang: language,
+                      dir: language === "ar" || language === "ur"
+                        ? "rtl"
+                        : "ltr",
                       icon: "/icons/Icon-192.png",
                       badge: "/icons/Icon-192.png",
                       tag: collapseKey,
@@ -365,7 +381,9 @@ export async function handlePush(
                   },
                   apns: {
                     headers: {
-                      "apns-expiration": String(Math.floor(Date.parse(claim.expiresAt!) / 1000)),
+                      "apns-expiration": String(
+                        Math.floor(Date.parse(claim.expiresAt!) / 1000),
+                      ),
                       "apns-collapse-id": claim.notificationId,
                       "apns-priority": "10",
                       "apns-push-type": "alert",

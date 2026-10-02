@@ -4,11 +4,14 @@ import 'dart:math' as math;
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/constants.dart';
 import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/yorks_v1_workforce_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
+import '../../../../shared/providers/yorks_v1_identity_provider.dart';
+import '../../../../shared/providers/yorks_v1_notification_provider.dart';
 import '../../../../shared/providers/yorks_v1_document_file_service_provider.dart';
 import '../../application/workforce_collaboration_controller.dart';
 import '../../application/workforce_monthly_period_controller.dart';
@@ -24,7 +27,9 @@ import 'yorks_workforce_reports_panel.dart';
 
 /// Guarded monthly workspace with the T07 review and approval lifecycle.
 class YorksWorkforceTimesheetsScreen extends ConsumerStatefulWidget {
-  const YorksWorkforceTimesheetsScreen({super.key});
+  const YorksWorkforceTimesheetsScreen({super.key, this.initialPeriodId});
+
+  final String? initialPeriodId;
 
   @override
   ConsumerState<YorksWorkforceTimesheetsScreen> createState() =>
@@ -36,17 +41,80 @@ class _YorksWorkforceTimesheetsScreenState
   final _searchController = TextEditingController();
   Timer? _searchTimer;
   bool _initialLoadScheduled = false;
+  bool _targetAttempted = false;
+  bool _openingTarget = false;
   String? _scheduledReviewContext;
   String? _scheduledCollaborationContext;
+  String? _openedNotificationLocation;
+  RouteInformationProvider? _notificationRouteInformation;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final information = GoRouter.maybeOf(context)?.routeInformationProvider;
+    if (!identical(information, _notificationRouteInformation)) {
+      _notificationRouteInformation?.removeListener(
+        _scheduleNotificationTarget,
+      );
+      _notificationRouteInformation = information;
+      information?.addListener(_scheduleNotificationTarget);
+    }
+    _notificationPageUri();
+    if (_openedNotificationLocation != null) _scheduleNotificationTarget();
+  }
+
+  Uri? _notificationPageUri() =>
+      GoRouter.maybeOf(context) == null ? null : GoRouterState.of(context).uri;
+
+  void _scheduleNotificationTarget() {
+    if (ModalRoute.of(context)?.isCurrent == false) return;
+    final uri = _notificationPageUri();
+    if (uri == null || uri.path != '/yorks/workforce/timesheets') return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          _notificationPageUri() != uri ||
+          uri.queryParameters['period_id'] != widget.initialPeriodId ||
+          _openedNotificationLocation == uri.toString()) {
+        return;
+      }
+      setState(() {
+        _targetAttempted = false;
+        _scheduledReviewContext = null;
+      });
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant YorksWorkforceTimesheetsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialPeriodId != widget.initialPeriodId) {
+      _targetAttempted = false;
+      _scheduledReviewContext = null;
+    }
+  }
 
   @override
   void dispose() {
+    _notificationRouteInformation?.removeListener(_scheduleNotificationTarget);
     _searchTimer?.cancel();
     _searchController.dispose();
     super.dispose();
   }
 
   void _scheduleInitialLoad(YorksWorkforceMonthlyState state) {
+    if (widget.initialPeriodId != null && !_targetAttempted) {
+      _targetAttempted = true;
+      _openingTarget = true;
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _openNotificationPeriod(),
+      );
+      return;
+    }
+    if (_openingTarget ||
+        (widget.initialPeriodId != null &&
+            state.status == YorksWorkforceMonthlyStatus.idle)) {
+      return;
+    }
     if (state.status != YorksWorkforceMonthlyStatus.idle) {
       _initialLoadScheduled = false;
       return;
@@ -57,6 +125,62 @@ class _YorksWorkforceTimesheetsScreenState
       if (!mounted) return;
       ref.read(yorksWorkforceMonthlyControllerProvider.notifier).initialize();
     });
+  }
+
+  Future<void> _openNotificationPeriod() async {
+    if (!mounted || ModalRoute.of(context)?.isCurrent == false) return;
+    final periodId = widget.initialPeriodId;
+    final uri = _notificationPageUri();
+    _openedNotificationLocation = uri?.toString();
+    final owner = ref.read(yorksV1AuthUserIdProvider);
+    bool stillCurrent() =>
+        mounted &&
+        widget.initialPeriodId == periodId &&
+        ref.read(yorksV1AuthUserIdProvider) == owner &&
+        _notificationPageUri() == uri &&
+        ModalRoute.of(context)?.isCurrent != false;
+    final review = ref.read(yorksWorkforceReviewControllerProvider.notifier);
+    final loaded = await review.load(periodId: periodId);
+    if (!stillCurrent()) return;
+    final lifecycle = ref
+        .read(yorksWorkforceReviewControllerProvider)
+        .lifecycle;
+    if (loaded && lifecycle != null && lifecycle.periodId == periodId) {
+      final monthly = ref.read(
+        yorksWorkforceMonthlyControllerProvider.notifier,
+      );
+      final teamsLoaded = await monthly.loadTeams(
+        periodMonth: lifecycle.periodMonth,
+      );
+      if (!stillCurrent()) return;
+      final periodLoaded =
+          teamsLoaded && await monthly.changeTeam(lifecycle.teamId);
+      if (!stillCurrent()) return;
+      final projection = ref
+          .read(yorksWorkforceMonthlyControllerProvider)
+          .projection;
+      if (periodLoaded && projection?.period?.id == periodId) {
+        _scheduledReviewContext = periodId;
+        final notificationId = uri?.queryParameters['notificationId'];
+        if (owner != null &&
+            notificationId != null &&
+            RegExp(
+              r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+              caseSensitive: false,
+            ).hasMatch(notificationId)) {
+          await WidgetsBinding.instance.endOfFrame;
+          if (!stillCurrent()) return;
+          try {
+            await ref
+                .read(yorksV1NotificationsProvider.notifier)
+                .markSeen(notificationId);
+          } catch (_) {
+            // A failed acknowledgement retains the authoritative unread state.
+          }
+        }
+      }
+    }
+    if (mounted) setState(() => _openingTarget = false);
   }
 
   void _onSearchChanged(String value) {
@@ -73,6 +197,10 @@ class _YorksWorkforceTimesheetsScreenState
   }
 
   void _scheduleReviewLoad(YorksWorkforceMonthlyState monthly) {
+    if (_openingTarget ||
+        (widget.initialPeriodId != null && monthly.projection == null)) {
+      return;
+    }
     final periodId = monthly.projection?.period?.id;
     final context = periodId ?? 'queue';
     if (_scheduledReviewContext == context) return;
@@ -149,6 +277,11 @@ class _YorksWorkforceTimesheetsScreenState
       ),
       onLoadMoreIssues: controller.loadMoreIssues,
       onReviewRetry: () {
+        if (widget.initialPeriodId != null && state.projection == null) {
+          _openingTarget = true;
+          unawaited(_openNotificationPeriod());
+          return;
+        }
         _scheduledReviewContext = null;
         reviewController.load(periodId: state.projection?.period?.id);
       },

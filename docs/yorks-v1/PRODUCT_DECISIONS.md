@@ -1649,8 +1649,9 @@ fact does not change the decision that T14 remains not performed/not passed.
 The following product-owner decisions are frozen for the P06 pre-production
 profile hardening on 5 September 2026:
 
-- the bell and existing notification centre remain the single durable inbox
-  for authorized workflow and Team Chat history. **My Yorks -> Notifications**
+- the bell and existing notification centre remain the durable inbox for
+  authorized workflow history. Team Chat retains its own history and unread
+  cursor, as specified by the 14 August clarification above. **My Yorks -> Notifications**
   opens personal delivery controls; it does not create a second inbox or allow
   required in-app history to be hidden or deleted;
 - optional controls are push delivery, workflow push, Team Chat push,

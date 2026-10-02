@@ -43,7 +43,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
       if (!ref.read(onboardingCompleteProvider)) {
         unawaited(ref.read(onboardingCompleteProvider.notifier).complete());
       }
-      context.go(RoutePaths.login);
+      context.go(
+        guardedReturnLocation(RoutePaths.login, GoRouterState.of(context).uri),
+      );
     });
   }
 

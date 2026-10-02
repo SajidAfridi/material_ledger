@@ -5,13 +5,20 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   test('Flutter paints before preferences or Supabase initialization', () {
     final source = File('lib/main.dart').readAsStringSync();
-    final firstRunApp = source.indexOf(
-      'runApp(_RuntimeBootstrapHost(observability: observability))',
+    final firstRunApp = source.indexOf('runApp(');
+    final launchIntent = source.indexOf(
+      'final initialLocation = captureAppLaunchLocation()',
     );
     final preferences = source.indexOf('SharedPreferences.getInstance()');
     final supabase = source.indexOf('await Supabase.initialize(');
 
     expect(firstRunApp, greaterThanOrEqualTo(0));
+    expect(launchIntent, greaterThanOrEqualTo(0));
+    expect(launchIntent, lessThan(firstRunApp));
+    expect(
+      source,
+      contains('appLaunchLocationProvider.overrideWithValue(initialLocation)'),
+    );
     expect(firstRunApp, lessThan(preferences));
     expect(firstRunApp, lessThan(supabase));
   });

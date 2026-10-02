@@ -1,4 +1,9 @@
 begin;
+-- Isolate transport behavior for synthetic entity IDs. Real entity access,
+-- revocation and action-state checks run in yorks_push_entity_access.test.sql.
+create or replace function public.v1_push_notification_entity_allowed(n public.v1_notifications)
+returns boolean language sql stable security definer set search_path='' as $$select true$$;
+
 create extension if not exists pgtap with schema extensions;
 set local search_path=public,extensions;
 select plan(14);

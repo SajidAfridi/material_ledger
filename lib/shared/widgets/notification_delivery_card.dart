@@ -12,6 +12,7 @@ import '../models/app_strings.dart';
 import '../models/notification_experience_strings.dart';
 import '../models/yorks_v1_notification_preferences_strings.dart';
 import '../providers/language_provider.dart';
+import '../providers/session_provider.dart';
 import '../providers/yorks_v1_notification_provider.dart';
 import '../providers/yorks_v1_notification_preferences_provider.dart';
 import '../services/notification_alert_sound.dart';
@@ -142,19 +143,25 @@ class _NotificationDeliveryCardState
   }
 
   Future<void> _enable() async {
+    if (_working) return;
+    final owner = ref.read(currentUserProvider)?.id;
     setState(() => _working = true);
-    final enabling = ref.read(pushServiceProvider).enable();
-    final soundReady = await prepareNotificationAlertSound().timeout(
-      const Duration(seconds: 2),
-      onTimeout: () => false,
-    );
-    final status = await enabling;
-    if (soundReady &&
-        status.isAllowed &&
-        ref.read(yorksV1NotificationSoundEnabledProvider)) {
-      await playNotificationAlertSound();
+    try {
+      final enabling = ref.read(pushServiceProvider).enable();
+      final soundReady = await prepareNotificationAlertSound().timeout(
+        const Duration(seconds: 2),
+        onTimeout: () => false,
+      );
+      final status = await enabling;
+      if (!mounted || ref.read(currentUserProvider)?.id != owner) return;
+      if (soundReady &&
+          status.isAllowed &&
+          ref.read(yorksV1NotificationSoundEnabledProvider)) {
+        await playNotificationAlertSound();
+      }
+    } finally {
+      if (mounted) setState(() => _working = false);
     }
-    if (mounted) setState(() => _working = false);
   }
 
   _DeliveryPresentation _presentation(
@@ -200,7 +207,9 @@ class _NotificationDeliveryCardState
           icon: Icons.notifications_outlined,
           color: AppColors.muted,
           title: AppStrings.alertsUnavailable.active(language),
-          body: NotificationExperienceStrings.installWebApp.active(language),
+          body: status.errorCode == 'WEB_ORIGIN_NOT_ENROLLED'
+              ? NotificationExperienceStrings.mainSiteAlerts.active(language)
+              : NotificationExperienceStrings.installWebApp.active(language),
         );
       case PushAuthorizationState.error:
         return _DeliveryPresentation(

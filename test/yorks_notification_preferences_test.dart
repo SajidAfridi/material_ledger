@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -85,6 +87,243 @@ void main() {
     },
   );
 
+  test(
+    'a read started before saving cannot restore old enabled delivery',
+    () async {
+      final repository = _ControlledPreferencesRepository();
+      final notifier = YorksV1NotificationPreferencesNotifier(
+        repository: repository,
+      );
+      addTearDown(notifier.dispose);
+      await notifier.refresh();
+      final oldRead = Completer<YorksV1NotificationPreferences>();
+      repository.read = () => oldRead.future;
+      final refresh = notifier.refresh();
+      await notifier.save(
+        notifier.state.requireValue.copyWith(pushEnabled: false),
+      );
+      oldRead.complete(_enabledPreferences);
+      await refresh;
+      expect(notifier.state.requireValue.revision, 4);
+      expect(notifier.state.requireValue.pushEnabled, isFalse);
+    },
+  );
+
+  test('an obsolete read failure cannot replace a confirmed save', () async {
+    final repository = _ControlledPreferencesRepository();
+    final notifier = YorksV1NotificationPreferencesNotifier(
+      repository: repository,
+    );
+    addTearDown(notifier.dispose);
+    await notifier.refresh();
+    final oldRead = Completer<YorksV1NotificationPreferences>();
+    repository.read = () => oldRead.future;
+    final refresh = notifier.refresh();
+    await notifier.save(
+      notifier.state.requireValue.copyWith(pushEnabled: false),
+    );
+    oldRead.completeError(StateError('old network request failed'));
+    await refresh;
+    expect(notifier.state.hasError, isFalse);
+    expect(notifier.state.requireValue.pushEnabled, isFalse);
+  });
+
+  test('refreshes coalesce and wait for the same protected read', () async {
+    final repository = _ControlledPreferencesRepository();
+    final read = Completer<YorksV1NotificationPreferences>();
+    repository.read = () => read.future;
+    final notifier = YorksV1NotificationPreferencesNotifier(
+      repository: repository,
+    );
+    addTearDown(notifier.dispose);
+    final first = notifier.refresh();
+    final second = notifier.refresh();
+    expect(identical(first, second), isTrue);
+    expect(repository.readCalls, 1);
+    read.complete(_enabledPreferences);
+    await Future.wait([first, second]);
+    expect(notifier.state.requireValue.revision, 3);
+  });
+
+  test(
+    'polling cannot read during a save or adopt a lower revision afterward',
+    () async {
+      final repository = _ControlledPreferencesRepository();
+      final notifier = YorksV1NotificationPreferencesNotifier(
+        repository: repository,
+      );
+      addTearDown(notifier.dispose);
+      await notifier.refresh();
+      final response = Completer<YorksV1NotificationPreferences>();
+      repository.write = (desired, _) => response.future;
+      final saving = notifier.save(
+        notifier.state.requireValue.copyWith(pushEnabled: false),
+      );
+      await notifier.refresh();
+      expect(repository.readCalls, 1);
+      response.complete(
+        _enabledPreferences.copyWith(revision: 4, pushEnabled: false),
+      );
+      await saving;
+      await notifier.refresh();
+      expect(repository.readCalls, 2);
+      expect(notifier.state.requireValue.revision, 4);
+      expect(notifier.state.requireValue.pushEnabled, isFalse);
+    },
+  );
+
+  test(
+    'late save completion after account disposal is rejected without a state write',
+    () async {
+      final repository = _ControlledPreferencesRepository();
+      final notifier = YorksV1NotificationPreferencesNotifier(
+        repository: repository,
+      );
+      await notifier.refresh();
+      final response = Completer<YorksV1NotificationPreferences>();
+      repository.write = (desired, _) => response.future;
+      final saving = notifier.save(
+        notifier.state.requireValue.copyWith(pushEnabled: false),
+      );
+      final rejected = expectLater(
+        saving,
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'reason',
+            'NOTIFICATION_PREFERENCES_UNAVAILABLE',
+          ),
+        ),
+      );
+      notifier.dispose();
+      response.complete(
+        _enabledPreferences.copyWith(revision: 4, pushEnabled: false),
+      );
+      await rejected;
+    },
+  );
+
+  test('a disposed pending save preserves its original server error', () async {
+    final repository = _ControlledPreferencesRepository();
+    final notifier = YorksV1NotificationPreferencesNotifier(
+      repository: repository,
+    );
+    await notifier.refresh();
+    final response = Completer<YorksV1NotificationPreferences>();
+    repository.write = (desired, _) => response.future;
+    final saving = notifier.save(
+      notifier.state.requireValue.copyWith(pushEnabled: false),
+    );
+    final serverError = StateError('server rejected the old account choice');
+    final rejected = expectLater(saving, throwsA(same(serverError)));
+    notifier.dispose();
+    response.completeError(serverError);
+    await rejected;
+  });
+
+  test(
+    'an obsolete read finishing cannot release a newer coalesced read',
+    () async {
+      final repository = _ControlledPreferencesRepository();
+      final notifier = YorksV1NotificationPreferencesNotifier(
+        repository: repository,
+      );
+      addTearDown(notifier.dispose);
+      await notifier.refresh();
+      final oldRead = Completer<YorksV1NotificationPreferences>();
+      repository.read = () => oldRead.future;
+      final obsolete = notifier.refresh();
+      await notifier.save(
+        notifier.state.requireValue.copyWith(pushEnabled: false),
+      );
+      final newRead = Completer<YorksV1NotificationPreferences>();
+      repository.read = () => newRead.future;
+      final current = notifier.refresh();
+      oldRead.complete(_enabledPreferences);
+      await obsolete;
+      final duplicate = notifier.refresh();
+      expect(identical(current, duplicate), isTrue);
+      expect(repository.readCalls, 3);
+      newRead.complete(
+        _enabledPreferences.copyWith(revision: 4, pushEnabled: false),
+      );
+      await Future.wait([current, duplicate]);
+      expect(notifier.state.requireValue.pushEnabled, isFalse);
+    },
+  );
+
+  test(
+    'late read failure after account disposal does not write state or escape',
+    () async {
+      final repository = _ControlledPreferencesRepository();
+      final read = Completer<YorksV1NotificationPreferences>();
+      repository.read = () => read.future;
+      final notifier = YorksV1NotificationPreferencesNotifier(
+        repository: repository,
+      );
+      final refreshing = notifier.refresh();
+      notifier.dispose();
+      read.completeError(StateError('old account read failed'));
+      await refreshing;
+    },
+  );
+
+  testWidgets('a stalled read times out and a retry can replace it', (
+    tester,
+  ) async {
+    final repository = _ControlledPreferencesRepository();
+    final oldRead = Completer<YorksV1NotificationPreferences>();
+    repository.read = () => oldRead.future;
+    final notifier = YorksV1NotificationPreferencesNotifier(
+      repository: repository,
+      requestTimeout: const Duration(seconds: 1),
+    );
+    addTearDown(notifier.dispose);
+    final refreshing = notifier.refresh();
+    await tester.pump(const Duration(seconds: 1));
+    await refreshing;
+    expect(notifier.state.error, isA<TimeoutException>());
+    repository.read = null;
+    await notifier.refresh();
+    oldRead.complete(
+      _enabledPreferences.copyWith(revision: 99, pushEnabled: false),
+    );
+    await tester.pump();
+    expect(repository.readCalls, 2);
+    expect(notifier.state.requireValue.revision, 3);
+    expect(notifier.state.requireValue.pushEnabled, isTrue);
+  });
+
+  testWidgets('a stalled save times out without blocking a later choice', (
+    tester,
+  ) async {
+    final repository = _ControlledPreferencesRepository();
+    final notifier = YorksV1NotificationPreferencesNotifier(
+      repository: repository,
+      requestTimeout: const Duration(seconds: 1),
+    );
+    addTearDown(notifier.dispose);
+    await notifier.refresh();
+    final oldWrite = Completer<YorksV1NotificationPreferences>();
+    repository.write = (desired, _) => oldWrite.future;
+    final saving = notifier.save(
+      notifier.state.requireValue.copyWith(pushEnabled: false),
+    );
+    final failed = expectLater(saving, throwsA(isA<TimeoutException>()));
+    await tester.pump(const Duration(seconds: 1));
+    await failed;
+    expect(notifier.state.valueOrNull?.revision, 3);
+    repository.write = null;
+    await notifier.save(
+      notifier.state.valueOrNull!.copyWith(pushEnabled: false),
+    );
+    oldWrite.complete(_enabledPreferences.copyWith(revision: 99));
+    await tester.pump();
+    expect(repository.writeCalls, 2);
+    expect(notifier.state.requireValue.revision, 4);
+    expect(notifier.state.requireValue.pushEnabled, isFalse);
+  });
+
   testWidgets('selected language localizes the controls and direction', (
     tester,
   ) async {
@@ -159,5 +398,42 @@ class _NotificationPreferencesRepository
     this.desired = desired;
     this.expectedRevision = expectedRevision;
     return desired.copyWith(revision: expectedRevision + 1);
+  }
+}
+
+const _enabledPreferences = YorksV1NotificationPreferences(
+  revision: 3,
+  pushEnabled: true,
+  workflowPushEnabled: true,
+  teamChatPushEnabled: true,
+  foregroundAlertsEnabled: true,
+  soundEnabled: true,
+);
+
+class _ControlledPreferencesRepository
+    implements YorksV1NotificationPreferencesRepository {
+  int readCalls = 0;
+  int writeCalls = 0;
+  Future<YorksV1NotificationPreferences> Function()? read;
+  Future<YorksV1NotificationPreferences> Function(
+    YorksV1NotificationPreferences,
+    int,
+  )?
+  write;
+
+  @override
+  Future<YorksV1NotificationPreferences> loadMine() {
+    readCalls++;
+    return read?.call() ?? Future.value(_enabledPreferences);
+  }
+
+  @override
+  Future<YorksV1NotificationPreferences> updateMine({
+    required YorksV1NotificationPreferences desired,
+    required int expectedRevision,
+  }) {
+    writeCalls++;
+    return write?.call(desired, expectedRevision) ??
+        Future.value(desired.copyWith(revision: expectedRevision + 1));
   }
 }

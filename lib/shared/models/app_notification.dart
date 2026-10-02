@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'dart:convert';
 import 'app_language.dart';
 
@@ -85,7 +86,7 @@ class AppNotification {
 
   /// Human-readable relative time string.
   String get relativeTime {
-    final diff = DateTime.now().difference(timestamp);
+    final diff = clock.now().difference(timestamp);
     if (diff.inMinutes < 1) return 'Just now';
     if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
     if (diff.inHours < 24) return '${diff.inHours}h ago';
@@ -95,7 +96,7 @@ class AppNotification {
 
   String relativeTimeFor(AppLanguage language) {
     if (language == AppLanguage.english) return relativeTime;
-    final diff = DateTime.now().difference(timestamp);
+    final diff = clock.now().difference(timestamp);
     if (diff.inMinutes < 1) {
       return switch (language) {
         AppLanguage.arabic => 'الآن',

@@ -1,15 +1,16 @@
 # Web notification reliability candidate — 30 September 2026
 
-Status: **incomplete, local candidate; not approved for deployment or transport restart**.
+Status: **web/PWA candidate; staged database, Edge and preview verified; final follow-up validation and production delivery gate pending**.
 
 Branch: `codex/web-notification-reliability`, based on
 `b86ff4362cde5c214aaff2906c05b0adac258074`.
 The primary checkout and its unrelated work were preserved.
 
 This implements part of the 30 September notification audit, prioritizing the
-website and installed PWA. No migration, Edge deployment, web promotion,
-transport restart, backlog replay, or live test notification was performed in
-this implementation run. The designated Owner/Chrome-on-Mac probe remains
+website and installed PWA. The notification-only migration pair and compatible Edge sender are deployed
+to staging. Staging remains paused and all 251 pre-existing outbox rows were
+retained. No production migration, web promotion, transport restart, backlog
+replay, or live test notification was performed. The designated Owner/Chrome-on-Mac probe remains
 authorized but unexecuted. Do not store account credentials in this document.
 
 ## Implemented candidate
@@ -24,8 +25,7 @@ authorized but unexecuted. Do not store account credentials in this document.
   the authenticated session; per-device dispatch rejects a deleted/expired session.
 - Notification expiry enforced at claim/submission with remaining FCM/APNs/web
   lifetimes. Preference changes no longer re-enqueue old suppressed notifications.
-- Accounts/Workforce event copy generated from a shared module catalogue, with
-  four in-app languages and guarded workspace destinations.
+- Accounts/Workforce and existing workflow event copy generated from versioned catalogues, with four in-app/device languages, CI producer coverage and exact protected record destinations. Per-device language updates require the current owner and active Auth session.
 - Search, load-earlier history, stale-data feedback, date grouping, localized
   relative times, unread semantics, delivery-pause messaging, and iOS Home Screen
   guidance. Mark-read waits for the server instead of restoring an obsolete list
@@ -43,22 +43,29 @@ closure or real-device delivery.
 |---|---|
 | Flutter dependency resolution | Completed |
 | Flutter analysis | No issues |
-| Focused notification/routing suite | 72 passed |
-| Full Flutter suite | 1,701 passed, 4 skipped, 275 failed |
+| Focused follow-up suites | Protected acknowledgement, paging, cold startup, worker, language and module navigation checks passed; final lifecycle follow-up running |
+| Full Flutter suite | 2,072 passed, 4 existing skips; no failures |
 | Local Supabase reset | Passed |
-| Full database suite | 116 files, 3,325 assertions passed |
-| Edge tests | 21 passed |
+| Full database suite | 120 files, 3,429 assertions passed after clean reset; digest regression: eight fail against old helper |
+| Edge tests | 28 passed |
 | Push failure classifier tests | 10 passed |
+| Worker / compactor | 26 worker cases and one parse/print contract passed |
 | Whitespace check | Passed |
-| CI web / APK builds | Not run after stop condition |
-| New staging deployment and signed-in browser flow | Not performed |
+| CI web / APK builds | Final CI web passed: 9,638,669 raw / 2,777,365 gzip bytes; APK passed (108.3 MB), CI-only ephemeral signing. This is not a production store signing artifact. |
+| Staging | Forward migration deployed; pause, all 251 notification/outbox rows and 12 token rows retained. Matching final Edge deployed; final worker/preview validation pending |
 | Owner live FCM receipt and tap | Not performed |
 
-The full Flutter suite reports failures in notification snapshots and unrelated
-project, analytics, warehouse, Team Chat, and other screens. Their individual
-causes have not all been established; do not label all failures pre-existing.
-No unrelated goldens were regenerated. The new date headers also require
-deterministic test dates before notification snapshot baselines are accepted.
+An isolated checkout of unchanged production source `b86ff43` reproduced 271
+failures. Regeneration on that unchanged source exposed two non-visual contract
+failures: a stale desktop label assertion and missing release-time hashing of
+test-account IDs. Both are repaired without importing unrelated primary-checkout
+work. 307 baseline PNGs were regenerated; all 21 with >=1% pixel differences
+were inspected side-by-side. Most remaining differences were small text-rendering
+drift. Sampling Flutter 3.47.1 reproduced the same drift, so SDK version alone
+is not established as its cause. Notification dates now use an injected clock.
+The strict golden comparator is unchanged: no tolerance, test deletion or new
+skip was introduced. CI Flutter is pinned to the validated 3.47.5; Linux visual
+parity remains a hosted-CI gate. Review metrics/contact sheets are in local evidence.
 
 Desktop (1366px) and mobile (360px) notification render outputs were inspected:
 the content fits and detail actions are visible. These are Flutter test renders,
@@ -67,50 +74,69 @@ not production browser or physical-device acceptance.
 Local evidence is saved at
 `/Users/eapple/Downloads/yorks-notification-implementation-20260930/`:
 analysis, full/focused Flutter, database reset/test and Edge logs, plus desktop
-and mobile screenshots. The original audit and 74-state matrix remain at
+and mobile screenshots. Chromium may show its own generic notice when malformed/expired external pushes are discarded; a worker cannot promise global OS silence. The Yorks sender only emits durable events, anchors expiry and never replays the historical backlog. No dummy show-and-close notification is used.
+
+The original audit and 74-state matrix remain at
 `/Users/eapple/Downloads/yorks-notification-audit-20260930/`.
 
-## Stop condition and remaining work
+## Authorized follow-up and remaining work
 
-The applicable `AGENTS.md` says: **“Stop and report instead of guessing when …
-tests expose an unrelated existing failure.”** Unrelated-screen failures triggered
-that gate. Rollout and the live probe are held; their absence is not a request
-for the user to repeat already-given deployment or probe authorization.
+The user explicitly authorized repairing the baseline failures after the earlier
+stop report. The full suite is now green. Production deployment and the designated live probe remain authorized. Staging
+database and Edge verification have started; production remains unchanged.
 
-Before considering this candidate complete:
+Completed follow-up: Chat burst destinations; separate bell/history filters;
+loaded-history retention; stale-query fencing; onboarding/maintenance intent;
+serialized account enrollment and persistent offline token-cleanup retry; worker
+click/expiry tests; generated-catalogue CI check; current-entity push checks;
+exact Accounts/Workforce target parameters using existing protected loaders.
 
-1. Triage the full-suite failures under an approved scope, stabilize notification
-   dates, review changed notification snapshots, and run the required web/APK gates.
-2. Correct the current grouped-Chat burst destination: it still points to the
-   workflow inbox, which deliberately excludes Chat. Test Chat-only and mixed
-   bursts. Preserve pause status while loading more history and verify pagination
-   across refreshes; refresh currently resets loaded history to the first page.
-3. Finish exact Accounts/Workforce record destinations. Current mappings open
-   the relevant project tab/workspace. Extend catalogue coverage to all producers
-   and add reproducible generation/CI checks; MR/Chat copy is still separate.
-4. Complete event-specific current-access and actionable-state checks before
-   delivery. The new relevance gate currently covers age, seen state, active
-   profile and preferences, not every revoked entity grant or completed action.
-5. Verify intent preservation through onboarding/maintenance gates, account
-   changes, and deleted/denied entities. Successful-open acknowledgement currently
-   checks stable routing, not confirmed entity rendering.
-6. Add direct registration lifecycle fault-injection tests and worker click tests.
-   Resolve durable retry of offline token cleanup, preference convergence timing,
-   shared bell/history filter state, and device-language push copy.
-7. Apply and validate the additive database/Edge/web candidate in staging, then
-   perform the one fresh designated browser probe: durable history, provider
-   acceptance, OS display, exact tap destination, and read/badge convergence.
-8. Review eligible queue age before any restart, retain dead letters terminal,
-   and validate bounded recovery without replaying accumulated history. Follow
-   with actual browser/PWA device tests for background/closed app, offline,
-   permission revocation, Focus, multiple tabs, and account switching.
+Audit disposition for the current web/PWA scope:
+
+| Audit | Candidate behavior / acceptance boundary |
+|---|---|
+| N01 | Transport remains paused until the designated fresh browser probe succeeds; production rollout and probe are authorized but pending. |
+| N02 | Protected attention projection includes real Chat records without mixing Chat into the workflow inbox. |
+| N03 | Initial browser location is captured before the startup app renders; auth, password, maintenance and account transitions retain only validated internal intent. Successful protected destination loading precedes acknowledgement. |
+| N04 | 58 active SQL producer event codes are covered by generated catalogues, safe copy and destination validation. Exact Accounts and Workforce targets use protected loaders. |
+| N05 | Stable cursor pagination, independent unread totals, server filters, retained loaded history and competing refresh/read tests. |
+| N06 | Silent Darwin initialization is fixed. Native APNs readiness and signed device acceptance remain future native work. |
+| N07 | Bounded initialization/enrollment, permission recheck, preview-origin boundary and installed-web-app guidance. Actual browser settings recovery remains a live-device gate. |
+| N08 | Serialized account/session installation lifecycle, token deletion, persistent offline cleanup and server session revocation gate. Native installation parity remains future work. |
+| N09 | Current entity access and outstanding action rechecked for foreground attention and provider submission. Completed or revoked tasks keep history but lose attention eligibility. |
+| N10 | Absolute expiry and remaining transport lifetime; browser worker rejects expired or unidentifiable fallback events. |
+| N11 | Sanitized service-pause status is separate from device registration; protected health remains table-based. Provider acceptance is not OS-display proof. |
+| N12 | Foreground visibility/focus gate, bounded dedupe, scoped toast dismissal, burst summaries and accessible timing. Physical multi-tab/background acceptance remains pending. |
+| N13 | Conservative unknown preferences, preference-aware enrollment, bounded version-fenced refresh/save, no historical preference replay. |
+| N14 | Server-confirmed ID-scoped acknowledgement; concurrent refresh is retained. Chat read cursor follows protected thread loading. |
+| N15 | Authorized record labels, real urgency, localized event copy, search/date groups and visible detail actions. |
+| N16 | Localized timestamps, read/button semantics, contrast and directional layout; desktop/360px tests. Actual screen-reader certification remains unperformed. |
+| N17 | Loading, stale/error, filter-empty and refresh feedback without claiming cached work is current. |
+| N18 | Web/PWA supported-path focus; native desktop background push is not advertised as implemented. |
+
+The existing full-feature staging size gate now passes after a pinned JavaScript
+parse/print step: 9,637,603 raw / 2,779,234 gzip bytes at the preceding build.
+The original raw/gzip ceilings are unchanged. No identifier mangling or optimizer
+compression is applied, preserving deferred library contracts and licenses.
+Producer inventory, device language and broad current-entity tests are complete.
+Exact attendance routes and lifecycle race fixes pass their final checks. The browser worker handles visible-unfocused delivery and protects unsaved tabs for both normal FCM and fallback taps; 26 worker cases pass.
+
+Remaining release gates are final full checks/builds, the forward staging
+migration and matching Edge/preview, cold/desktop/360px browser acceptance,
+then the compatible production database/Edge/web rollout and one fresh Owner
+Chrome-on-Mac probe. Record durable history, provider acceptance, OS display,
+exact target opening and read/badge convergence separately. Review queue age
+before restart; retain dead letters terminal and do not replay historical jobs.
 
 Native store packaging, native installation identity and APNs readiness remain
 later work per the user's web/PWA priority. No all-OS sign-off is implied.
 
 ## Data preservation and rollback
 
-Migration `20260930140403_web_notification_reliability.sql` is additive: the new
+Migrations `20260930140403_web_notification_reliability.sql` and
+`20261001180000_notification_attention_and_device_language.sql` are additive.
+The initial migration is preserved exactly as applied in staging; later fixes use
+the forward migration. In the initial migration, the new
 session column is nullable; historical notifications, tokens, delivery ledgers,
 and terminal outbox outcomes are retained. Existing web installations must
 re-enroll to supply session binding before becoming eligible under the new gate.
@@ -121,3 +147,12 @@ first and retain the additive schema and delivery history. Do not restore old
 retry functions, broadly replay jobs, remove session checks, or drop the new RPC
 while clients depend on it. Use a reviewed forward correction for database
 behavior; a web rollback alone is not a transport recovery procedure.
+
+## Staging ledger preservation
+
+The generic staging dry run was refused because staging records the setwise
+MR register migration as 20260928160705, while this checkout uses
+20260928144343, and staging lacks the unrelated Accounts export migration.
+No unrelated ledger entries were repaired or overwritten. Only
+20260929150000 and 20260930140403 were applied atomically with their ledger
+entries. The sender was deployed to project iqltcyimlqtcwyzlemwx.

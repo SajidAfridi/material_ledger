@@ -6,9 +6,15 @@ insert into public.v1_notifications(id,recipient_auth_user_id,event_code,entity_
 select ('a3000000-0000-4000-8000-'||lpad(i::text,12,'0'))::uuid,
  '10000000-0000-4000-8000-000000000003','material_request_submitted','material_request',
  'a4000000-0000-4000-8000-000000000001',now() from generate_series(1,10000) i;
+-- History may reference retired entities; fresh Chat attention must resolve a
+-- real conversation and its current unread membership cursor.
+insert into public.v1_chat_conversations(id,kind,title,created_by_auth_user_id,created_by_exact_role)
+values('a5000000-0000-4000-8000-000000000001','group','Paging Chat fixture','10000000-0000-4000-8000-000000000004','admin');
+insert into public.v1_chat_members(conversation_id,auth_user_id)
+values('a5000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000003');
 insert into public.v1_notifications(id,recipient_auth_user_id,event_code,entity_type,entity_id,created_at)
 values('a3000000-0000-4000-8000-000000010001','10000000-0000-4000-8000-000000000003',
- 'team_chat_message','chat_message','a4000000-0000-4000-8000-000000000001',now());
+ 'team_chat_message','chat_conversation','a5000000-0000-4000-8000-000000000001',now());
 set local role authenticated;
 select set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000003","role":"authenticated","app_metadata":{"role":"procurement"}}',true);
 select is(jsonb_array_length(public.v1_notification_page()->'records'),101,'page has one lookahead row at 10k scale');

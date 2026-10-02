@@ -10,6 +10,8 @@ import '../../../../core/constants/constants.dart';
 import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/yorks_v1_workforce_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
+import '../../../../shared/providers/yorks_v1_identity_provider.dart';
+import '../../../../shared/providers/yorks_v1_notification_provider.dart';
 import '../../application/workforce_daily_roster_controller.dart';
 import '../../application/workforce_providers.dart';
 import '../../domain/workforce_attendance_models.dart';
@@ -17,7 +19,14 @@ import '../../domain/workforce_daily_roster_models.dart';
 import '../../domain/workforce_timesheet_models.dart';
 
 class YorksWorkforceDailyAttendanceScreen extends ConsumerStatefulWidget {
-  const YorksWorkforceDailyAttendanceScreen({super.key});
+  const YorksWorkforceDailyAttendanceScreen({
+    super.key,
+    this.initialTeamId,
+    this.initialWorkDate,
+  });
+
+  final String? initialTeamId;
+  final String? initialWorkDate;
 
   @override
   ConsumerState<YorksWorkforceDailyAttendanceScreen> createState() =>
@@ -29,10 +38,72 @@ class _YorksWorkforceDailyAttendanceScreenState
   final _searchController = TextEditingController();
   Timer? _searchTimer;
   bool _loadScheduled = false;
+  bool _targetAttempted = false;
+  bool _openingTarget = false;
+  bool _targetUnavailable = false;
+  int _targetGeneration = 0;
+  String? _openedNotificationLocation;
+  RouteInformationProvider? _notificationRouteInformation;
   String? _activeTabletWorkerId;
+
+  bool get _hasNotificationTarget =>
+      widget.initialTeamId != null || widget.initialWorkDate != null;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final information = GoRouter.maybeOf(context)?.routeInformationProvider;
+    if (!identical(information, _notificationRouteInformation)) {
+      _notificationRouteInformation?.removeListener(
+        _scheduleNotificationTarget,
+      );
+      _notificationRouteInformation = information;
+      information?.addListener(_scheduleNotificationTarget);
+    }
+    _notificationPageUri();
+    if (_openedNotificationLocation != null) _scheduleNotificationTarget();
+  }
+
+  Uri? _notificationPageUri() =>
+      GoRouter.maybeOf(context) == null ? null : GoRouterState.of(context).uri;
+
+  void _resetNotificationTarget() {
+    _targetGeneration++;
+    _targetAttempted = false;
+    _openingTarget = false;
+    _targetUnavailable = false;
+  }
+
+  void _scheduleNotificationTarget() {
+    if (!mounted || ModalRoute.of(context)?.isCurrent == false) return;
+    final uri = _notificationPageUri();
+    if (uri == null || uri.path != '/yorks/workforce/attendance') return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          _notificationPageUri() != uri ||
+          uri.queryParameters['team_id'] != widget.initialTeamId ||
+          uri.queryParameters['date'] != widget.initialWorkDate ||
+          _openedNotificationLocation == uri.toString()) {
+        return;
+      }
+      setState(_resetNotificationTarget);
+    });
+  }
+
+  @override
+  void didUpdateWidget(
+    covariant YorksWorkforceDailyAttendanceScreen oldWidget,
+  ) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialTeamId != widget.initialTeamId ||
+        oldWidget.initialWorkDate != widget.initialWorkDate) {
+      _resetNotificationTarget();
+    }
+  }
 
   @override
   void dispose() {
+    _notificationRouteInformation?.removeListener(_scheduleNotificationTarget);
     _searchTimer?.cancel();
     _searchController.dispose();
     super.dispose();
@@ -42,6 +113,19 @@ class _YorksWorkforceDailyAttendanceScreenState
       YorksV1WorkforceStrings.text(language, key);
 
   void _scheduleInitialLoad(YorksWorkforceDailyRosterState state) {
+    if (_hasNotificationTarget && !_targetAttempted) {
+      _targetAttempted = true;
+      _openingTarget = true;
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _openNotificationRoster(),
+      );
+      return;
+    }
+    if (_openingTarget ||
+        (_hasNotificationTarget &&
+            state.status == YorksWorkforceDailyRosterStatus.idle)) {
+      return;
+    }
     if (state.status != YorksWorkforceDailyRosterStatus.idle) {
       _loadScheduled = false;
       return;
@@ -53,6 +137,90 @@ class _YorksWorkforceDailyAttendanceScreenState
       ref.read(yorksWorkforceDailyRosterControllerProvider.notifier).load();
     });
   }
+
+  Future<void> _openNotificationRoster() async {
+    if (!mounted || ModalRoute.of(context)?.isCurrent == false) return;
+    final teamId = widget.initialTeamId;
+    final workDate = widget.initialWorkDate;
+    final uri = _notificationPageUri();
+    final generation = ++_targetGeneration;
+    final owner = ref.read(yorksV1AuthUserIdProvider);
+    _openedNotificationLocation = uri?.toString();
+    bool stillCurrent() =>
+        mounted &&
+        generation == _targetGeneration &&
+        widget.initialTeamId == teamId &&
+        widget.initialWorkDate == workDate &&
+        ref.read(yorksV1AuthUserIdProvider) == owner &&
+        _notificationPageUri() == uri &&
+        ModalRoute.of(context)?.isCurrent != false;
+    final filters = YorksWorkforceRosterFilters(teamId: teamId);
+    final parsedDate = workDate == null ? null : DateTime.tryParse(workDate);
+    final validDate =
+        workDate != null &&
+        RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(workDate) &&
+        parsedDate != null &&
+        parsedDate.year > 0 &&
+        '${parsedDate.year.toString().padLeft(4, '0')}-'
+                '${parsedDate.month.toString().padLeft(2, '0')}-'
+                '${parsedDate.day.toString().padLeft(2, '0')}' ==
+            workDate;
+    if (teamId == null || !filters.isValid || !validDate) {
+      setState(() {
+        _openingTarget = false;
+        _targetUnavailable = true;
+      });
+      return;
+    }
+    setState(() {
+      _openingTarget = true;
+      _targetUnavailable = false;
+    });
+    try {
+      final loaded = await ref
+          .read(yorksWorkforceDailyRosterControllerProvider.notifier)
+          .load(workDate: workDate, filters: filters);
+      if (!stillCurrent()) return;
+      final state = ref.read(yorksWorkforceDailyRosterControllerProvider);
+      final projection = state.projection;
+      final exactRoster =
+          loaded &&
+          projection != null &&
+          projection.capabilities.canView &&
+          projection.actorAuthUserId == owner &&
+          state.workDate == workDate &&
+          state.filters.teamId == teamId &&
+          projection.workDate == workDate &&
+          projection.filters.teamId == teamId &&
+          projection.selectors.teams.any((team) => team.id == teamId);
+      if (loaded && !exactRoster) {
+        setState(() => _targetUnavailable = true);
+        return;
+      }
+      final notificationId = uri?.queryParameters['notificationId'];
+      if (exactRoster &&
+          owner != null &&
+          notificationId != null &&
+          RegExp(
+            r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+            caseSensitive: false,
+          ).hasMatch(notificationId)) {
+        await WidgetsBinding.instance.endOfFrame;
+        if (!stillCurrent()) return;
+        try {
+          await ref
+              .read(yorksV1NotificationsProvider.notifier)
+              .markSeen(notificationId);
+        } catch (_) {
+          // A failed acknowledgement retains the authoritative unread state.
+        }
+      }
+    } finally {
+      if (stillCurrent()) setState(() => _openingTarget = false);
+    }
+  }
+
+  Future<void> _retryNotificationRoster() => _openNotificationRoster();
 
   void _searchChanged(String value) {
     _searchTimer?.cancel();
@@ -72,7 +240,26 @@ class _YorksWorkforceDailyAttendanceScreenState
   @override
   Widget build(BuildContext context) {
     final language = ref.watch(languageProvider);
-    final state = ref.watch(yorksWorkforceDailyRosterControllerProvider);
+    final controllerState = ref.watch(
+      yorksWorkforceDailyRosterControllerProvider,
+    );
+    final projection = controllerState.projection;
+    final wrongTarget =
+        _hasNotificationTarget &&
+        projection != null &&
+        (projection.workDate != widget.initialWorkDate ||
+            projection.filters.teamId != widget.initialTeamId ||
+            projection.actorAuthUserId != ref.read(yorksV1AuthUserIdProvider));
+    final state = _targetUnavailable || wrongTarget
+        ? controllerState.copyWith(
+            status: controllerState.isBusy
+                ? controllerState.status
+                : YorksWorkforceDailyRosterStatus.unavailable,
+            clearProjection: true,
+            rows: const [],
+            selectedWorkerIds: const {},
+          )
+        : controllerState;
     final controller = ref.read(
       yorksWorkforceDailyRosterControllerProvider.notifier,
     );
@@ -125,7 +312,11 @@ class _YorksWorkforceDailyAttendanceScreenState
                   const LinearProgressIndicator(minHeight: 2),
                 Expanded(
                   child: RefreshIndicator(
-                    onRefresh: () => controller.load(preserveDrafts: true),
+                    onRefresh:
+                        _hasNotificationTarget &&
+                            (state.projection == null || _targetUnavailable)
+                        ? _retryNotificationRoster
+                        : () => controller.load(preserveDrafts: true),
                     child: CustomScrollView(
                       key: const PageStorageKey('workforce-daily-roster'),
                       physics: const AlwaysScrollableScrollPhysics(),
@@ -164,7 +355,10 @@ class _YorksWorkforceDailyAttendanceScreenState
                               _RosterStateBanner(
                                 language: language,
                                 state: state,
-                                onRetry: () => controller.load(),
+                                onRetry: _hasNotificationTarget
+                                    ? () =>
+                                          unawaited(_retryNotificationRoster())
+                                    : () => controller.load(),
                               ),
                               if (state.projection != null) ...[
                                 if (tabletBoundary) ...[

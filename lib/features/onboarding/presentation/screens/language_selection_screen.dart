@@ -108,9 +108,13 @@ class _LanguageSelectionScreenState
   }
 
   Future<void> _onGetStarted() async {
+    final target = guardedReturnLocation(
+      RoutePaths.login,
+      GoRouterState.of(context).uri,
+    );
     await ref.read(onboardingCompleteProvider.notifier).complete();
     if (!mounted) return;
-    context.go(RoutePaths.login);
+    context.go(target);
   }
 
   @override

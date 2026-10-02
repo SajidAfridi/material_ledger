@@ -31,15 +31,15 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   Timer? _searchDebounce;
   _NotificationFilter _filter = _NotificationFilter.all;
 
+  bool get _usesServer => ref.read(supabaseClientProvider) != null;
+  YorksV1NotificationsNotifier get _inbox => _usesServer
+      ? ref.read(notificationInboxProvider.notifier)
+      : ref.read(yorksV1NotificationsProvider.notifier);
+
   @override
   void dispose() {
     _searchDebounce?.cancel();
     _search.dispose();
-    final notifier = ref.read(yorksV1NotificationsProvider.notifier);
-    Future.microtask(() async {
-      await notifier.search(null);
-      await notifier.setUnreadOnly(false);
-    });
     super.dispose();
   }
 
@@ -57,9 +57,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         _searchDebounce?.cancel();
         _searchDebounce = Timer(const Duration(milliseconds: 350), () {
           if (mounted) {
-            ref
-                .read(yorksV1NotificationsProvider.notifier)
-                .search(value.trim());
+            _inbox.search(value.trim());
           }
         });
       },
@@ -69,6 +67,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   Future<void> _markAll() async {
     try {
       await ref.read(notificationActionsProvider).markAllRead();
+      await _inbox.refresh();
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -86,21 +85,32 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 
   void _selectFilter(_NotificationFilter value) {
     setState(() => _filter = value);
-    ref
-        .read(yorksV1NotificationsProvider.notifier)
-        .setUnreadOnly(
-          value == _NotificationFilter.unread,
-          urgentOnly: value == _NotificationFilter.urgent,
-        );
+    _inbox.setUnreadOnly(
+      value == _NotificationFilter.unread,
+      urgentOnly: value == _NotificationFilter.urgent,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final lang = ref.watch(languageProvider);
     // Role-scoped: each role only sees alerts meant for them (admin sees all).
-    final notifications = ref.watch(visibleNotificationsProvider);
+    final global = ref.watch(visibleNotificationsProvider);
+    final inboxState = _usesServer
+        ? ref.watch(notificationInboxProvider)
+        : ref.watch(yorksV1NotificationsProvider);
+    final notifications =
+        !_usesServer
+              ? [...global]
+              : <AppNotification>[
+                  ...?inboxState.valueOrNull
+                      ?.where((n) => !n.isChatTransport)
+                      .map((n) => n.toAppNotification(lang)),
+                  ...global.where((n) => !n.isServerAuthoritative),
+                ]
+          ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
     final unread = ref.watch(unreadNotificationCountProvider);
-    final serverState = ref.watch(yorksV1NotificationsProvider);
+    final serverState = inboxState;
     final mobile = YorksMobileUi.isActive(context);
     final visible = switch (_filter) {
       _NotificationFilter.all => notifications,
@@ -269,6 +279,10 @@ class _NotificationListState extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final usesServer = ref.watch(supabaseClientProvider) != null;
+    final inbox = usesServer
+        ? ref.read(notificationInboxProvider.notifier)
+        : ref.read(yorksV1NotificationsProvider.notifier);
     if (notifications.isEmpty && serverState.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -292,9 +306,7 @@ class _NotificationListState extends ConsumerWidget {
               ),
               const Gap(AppSpacing.md),
               OutlinedButton.icon(
-                onPressed: () => ref
-                    .read(yorksV1NotificationsProvider.notifier)
-                    .refresh(showLoading: true),
+                onPressed: () => inbox.refresh(showLoading: true),
                 icon: const Icon(Icons.refresh_rounded),
                 label: Text(AppStrings.retry.active(language)),
               ),
@@ -303,7 +315,9 @@ class _NotificationListState extends ConsumerWidget {
         ),
       );
     }
-    final history = ref.watch(notificationHistoryStatusProvider);
+    final history = usesServer
+        ? ref.watch(notificationInboxStatusProvider)
+        : ref.watch(notificationHistoryStatusProvider);
     return Column(
       children: [
         if (serverState.hasError)
@@ -312,14 +326,12 @@ class _NotificationListState extends ConsumerWidget {
             trailing: IconButton(
               tooltip: AppStrings.retry.active(language),
               icon: const Icon(Icons.refresh),
-              onPressed: () =>
-                  ref.read(yorksV1NotificationsProvider.notifier).refresh(),
+              onPressed: () => inbox.refresh(),
             ),
           ),
         Expanded(
           child: RefreshIndicator(
-            onRefresh: () =>
-                ref.read(yorksV1NotificationsProvider.notifier).refresh(),
+            onRefresh: () => inbox.refresh(),
             child: ListView.separated(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: padding,
@@ -333,9 +345,7 @@ class _NotificationListState extends ConsumerWidget {
                   return TextButton(
                     onPressed: history.loadingMore
                         ? null
-                        : () => ref
-                              .read(yorksV1NotificationsProvider.notifier)
-                              .loadMore(),
+                        : () => inbox.loadMore(),
                     child: Text(
                       NotificationExperienceStrings.loadMore.active(language),
                     ),
@@ -358,6 +368,7 @@ class _NotificationListState extends ConsumerWidget {
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 8),
                         child: Semantics(
+                          container: true,
                           header: true,
                           child: Text(
                             MaterialLocalizations.of(
@@ -449,11 +460,22 @@ class _NotificationCard extends ConsumerWidget {
     final (icon, color) = _style(notification.type);
     final unread = !notification.isRead;
     return Semantics(
-      label:
-          (unread
-                  ? NotificationExperienceStrings.unread
-                  : NotificationExperienceStrings.read)
-              .active(language),
+      container: true,
+      button: true,
+      onTap: onTap,
+      excludeSemantics: true,
+      label: [
+        (unread
+                ? NotificationExperienceStrings.unread
+                : NotificationExperienceStrings.read)
+            .active(language),
+        notification.title,
+        if (notification.titleSecondary.isNotEmpty) notification.titleSecondary,
+        notification.relativeTimeFor(language),
+        if (notification.body.isNotEmpty) notification.body,
+        if (notification.route.isNotEmpty)
+          AppStrings.viewDetails.active(language),
+      ].join('\n'),
       child: LedgerCard(
         onTap: onTap,
         color: unread

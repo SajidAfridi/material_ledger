@@ -22,6 +22,18 @@ void main() {
         guardedReturnLocation('/change-password', login),
       );
       expect(safeReturnLocation(password.queryParameters['returnTo']), target);
+      var gate = Uri.parse(target);
+      for (final path in [
+        '/maintenance',
+        '/update-required',
+        '/splash',
+        '/language-selection',
+        '/login',
+        '/change-password',
+      ]) {
+        gate = Uri.parse(guardedReturnLocation(path, gate));
+        expect(gate.queryParameters['returnTo'], target);
+      }
       for (final bad in [
         'https://evil.test',
         '//evil.test',
@@ -90,6 +102,29 @@ void main() {
       await expectLater(
         YorksV1SupabaseNotificationRepository(client).page(),
         throwsFormatException,
+      );
+    },
+  );
+
+  test(
+    'server module destination retains exact record and rejects external links',
+    () {
+      const target =
+          '/yorks/projects/ab100000-0000-4000-8000-000000000001/accounts/client-invoices?invoice_id=ab200000-0000-4000-8000-000000000001';
+      final row = {
+        ..._row('module'),
+        'event_code': 'accounts_claim_returned',
+        'module_route': target,
+      };
+      final record = YorksV1NotificationRecord.fromRpcJson(row);
+      expect(record.toAppNotification(AppLanguage.english).route, target);
+      expect(record.acknowledgedAt(DateTime.now()).moduleRoute, target);
+      expect(
+        YorksV1NotificationRecord.fromRpcJson({
+          ...row,
+          'module_route': 'https://evil.test',
+        }).moduleRoute,
+        isNull,
       );
     },
   );

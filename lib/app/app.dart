@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -86,11 +87,23 @@ void _invalidateYorksV1ProtectedProjectionCaches(Ref ref) {
 /// Provider for the app router — lives here so the incremental
 /// compiler always sees it in the same unit as [MaterialLedgerApp].
 class _RouterLocationMemory {
+  _RouterLocationMemory(this.location);
   String? location;
 }
 
+String? captureAppLaunchLocation() => initialAppLocation(
+  browserUri: kIsWeb ? Uri.base : null,
+  platformLocation: WidgetsBinding.instance.platformDispatcher.defaultRouteName,
+);
+
+/// main() overrides this with the location captured before its temporary
+/// startup MaterialApp renders. Direct app mounts retain the platform fallback.
+final appLaunchLocationProvider = Provider<String?>(
+  (ref) => captureAppLaunchLocation(),
+);
+
 final _routerLocationMemoryProvider = Provider(
-  (ref) => _RouterLocationMemory(),
+  (ref) => _RouterLocationMemory(ref.read(appLaunchLocationProvider)),
 );
 final appRouterProvider = Provider<GoRouter>((ref) {
   final memory = ref.read(_routerLocationMemoryProvider);

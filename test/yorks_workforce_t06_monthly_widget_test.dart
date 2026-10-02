@@ -1,9 +1,26 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:material_ledger/core/theme/app_theme.dart';
+import 'package:material_ledger/features/workforce/application/workforce_providers.dart';
+import 'package:material_ledger/features/workforce/application/workforce_review_controller.dart';
+import 'package:material_ledger/features/workforce/application/workforce_collaboration_controller.dart';
+import 'package:material_ledger/features/workforce/data/workforce_repository.dart';
+import 'package:material_ledger/features/workforce/domain/workforce_review_models.dart';
+import 'package:material_ledger/features/workforce/domain/workforce_collaboration_models.dart';
+import 'package:material_ledger/shared/models/yorks_v1_domain_error.dart';
+import 'package:material_ledger/shared/models/yorks_v1_notification.dart';
+import 'package:material_ledger/shared/providers/language_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_notification_provider.dart';
+import 'package:material_ledger/shared/services/yorks_v1_critical_command_key_store.dart';
+import 'package:material_ledger/shared/sync/connectivity_service.dart';
 import 'package:material_ledger/features/workforce/application/workforce_monthly_period_controller.dart';
 import 'package:material_ledger/features/workforce/domain/workforce_monthly_period_models.dart';
 import 'package:material_ledger/features/workforce/presentation/screens/yorks_workforce_timesheets_screen.dart';
@@ -34,6 +51,69 @@ void main() {
       ..addFont(Future.value(ByteData.sublistView(icons)));
     await Future.wait([nexus.load(), arabic.load(), materialIcons.load()]);
   });
+
+  for (final scenario in [
+    'success',
+    'denied',
+    'missing_team',
+    'wrong_period',
+  ]) {
+    testWidgets(
+      'Workforce notification acknowledges only its exact protected period: $scenario',
+      (tester) async {
+        final notifications = _WorkforceNotificationRecorder();
+        final fixture = await _pumpNotificationWorkspace(
+          tester,
+          scenario: scenario,
+          notifications: notifications,
+        );
+        await tester.pumpAndSettle();
+        expect(
+          notifications.seen,
+          scenario == 'success' ? [_notificationId] : isEmpty,
+        );
+        expect(tester.takeException(), isNull);
+        if (scenario == 'success') {
+          unawaited(
+            fixture.router.push(_workforceLocation(_secondNotificationId)),
+          );
+          await tester.pumpAndSettle();
+          expect(notifications.seen, [_notificationId, _secondNotificationId]);
+        }
+      },
+    );
+  }
+
+  for (final interruption in ['route', 'account']) {
+    testWidgets(
+      'Workforce notification retains unread state after $interruption change while loading',
+      (tester) async {
+        final pending = Completer<YorksWorkforceReviewLifecycle>();
+        final actor = StateProvider<String?>((_) => _actorId);
+        final notifications = _WorkforceNotificationRecorder();
+        final fixture = await _pumpNotificationWorkspace(
+          tester,
+          scenario: 'success',
+          notifications: notifications,
+          pendingLifecycle: pending,
+          actorProvider: actor,
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+        if (interruption == 'route') {
+          fixture.router.go('/away');
+        } else {
+          fixture.container.read(actor.notifier).state = 'other-account';
+        }
+        await tester.pump();
+        pending.complete(_notificationLifecycle());
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(notifications.seen, isEmpty);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 
   testWidgets(
     'Monthly view is overflow-free at desktop and compact boundaries in English and Arabic RTL',
@@ -270,9 +350,9 @@ YorksWorkforceMonthlyState _state() {
   );
 }
 
-YorksWorkforceMonthlyProjection _projection() {
+YorksWorkforceMonthlyProjection _projection({String periodId = _periodId}) {
   final period = YorksWorkforceMonthlyPeriod(
-    id: _periodId,
+    id: periodId,
     teamId: _teamId,
     teamName: 'YRA-322 · Nexus 4 Station',
     periodMonth: '2026-08-01',
@@ -431,3 +511,205 @@ Directory _flutterCacheDirectory() {
   }
   throw StateError('Could not locate the Flutter cache from the test runner');
 }
+
+const _notificationId = 'ab400000-0000-4000-8000-000000000003';
+const _secondNotificationId = 'ab400000-0000-4000-8000-000000000004';
+String _workforceLocation(String notificationId) =>
+    '/yorks/workforce/timesheets?period_id=$_periodId&notificationId=$notificationId';
+
+Future<({ProviderContainer container, GoRouter router})>
+_pumpNotificationWorkspace(
+  WidgetTester tester, {
+  required String scenario,
+  required _WorkforceNotificationRecorder notifications,
+  Completer<YorksWorkforceReviewLifecycle>? pendingLifecycle,
+  StateProvider<String?>? actorProvider,
+}) async {
+  tester.view.physicalSize = const Size(390, 844);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+  SharedPreferences.setMockInitialValues({});
+  final preferences = await SharedPreferences.getInstance();
+  final keys = YorksV1CriticalCommandKeyStore(
+    preferences: preferences,
+    actorAuthUserId: _actorId,
+  );
+  final connectivity = DefaultConnectivity();
+  addTearDown(connectivity.dispose);
+  final repository = _NotificationWorkforceRepository(
+    scenario,
+    pendingLifecycle,
+  );
+  final router = GoRouter(
+    initialLocation: _workforceLocation(_notificationId),
+    routes: [
+      GoRoute(
+        path: '/yorks/workforce/timesheets',
+        builder: (_, state) => YorksWorkforceTimesheetsScreen(
+          initialPeriodId: state.uri.queryParameters['period_id'],
+        ),
+      ),
+      GoRoute(
+        path: '/away',
+        builder: (_, _) => const Scaffold(body: Text('Away')),
+      ),
+    ],
+  );
+  addTearDown(router.dispose);
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(preferences),
+        if (actorProvider == null)
+          yorksV1AuthUserIdProvider.overrideWithValue(_actorId)
+        else
+          yorksV1AuthUserIdProvider.overrideWith(
+            (ref) => ref.watch(actorProvider),
+          ),
+        yorksV1NotificationsProvider.overrideWith((_) => notifications),
+        yorksWorkforceMonthlyControllerProvider.overrideWith(
+          (_) => YorksWorkforceMonthlyController(
+            repository: repository,
+            commandKeys: keys,
+            connectivity: connectivity,
+          ),
+        ),
+        yorksWorkforceReviewControllerProvider.overrideWith(
+          (_) => YorksWorkforceReviewController(
+            repository: repository,
+            commandKeys: keys,
+            connectivity: connectivity,
+          ),
+        ),
+        yorksWorkforceCollaborationControllerProvider.overrideWith(
+          (_) => YorksWorkforceCollaborationController(
+            repository: repository,
+            commandKeys: keys,
+            connectivity: connectivity,
+          ),
+        ),
+      ],
+      child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
+    ),
+  );
+  await tester.pump();
+  return (
+    container: ProviderScope.containerOf(
+      tester.element(find.byType(YorksWorkforceTimesheetsScreen)),
+    ),
+    router: router,
+  );
+}
+
+class _WorkforceNotificationRecorder extends YorksV1NotificationsNotifier {
+  _WorkforceNotificationRecorder()
+    : super(client: null, repository: null, authUserId: null) {
+    state = const AsyncData(<YorksV1NotificationRecord>[]);
+  }
+  final seen = <String>[];
+  @override
+  Future<void> markSeen(String notificationId) async =>
+      seen.add(notificationId);
+}
+
+class _NotificationWorkforceRepository
+    implements
+        YorksWorkforceRepository,
+        YorksWorkforceReviewRepository,
+        YorksWorkforceCollaborationRepository {
+  _NotificationWorkforceRepository(this.scenario, this.pendingLifecycle);
+  final String scenario;
+  final Completer<YorksWorkforceReviewLifecycle>? pendingLifecycle;
+  @override
+  Future<YorksWorkforceMonthlyTeamProjection> listMonthlyTeams(
+    YorksWorkforceMonthlyTeamFilters filters,
+  ) async {
+    final fixture = _state().teamProjection!;
+    return scenario == 'missing_team'
+        ? YorksWorkforceMonthlyTeamProjection(
+            schemaVersion: fixture.schemaVersion,
+            authorizationMode: fixture.authorizationMode,
+            actorAuthUserId: fixture.actorAuthUserId,
+            serverTime: fixture.serverTime,
+            filters: filters,
+            totalCount: 0,
+            teams: const [],
+          )
+        : fixture;
+  }
+
+  @override
+  Future<YorksWorkforceMonthlyProjection> getMonthlyPeriod(
+    YorksWorkforceMonthlyFilters filters,
+  ) async => _projection(
+    periodId: scenario == 'wrong_period'
+        ? '61000000-0000-4000-8000-000000000099'
+        : _periodId,
+  );
+  @override
+  Future<YorksWorkforceReviewQueue> listMonthlyApprovalQueue({
+    YorksWorkforceMonthlyPeriodStatus? status,
+    int limit = 50,
+    int offset = 0,
+  }) async => YorksWorkforceReviewQueue.fromRpcJson({
+    'schema_version': 1,
+    'authorization_mode': 'enforced_t07',
+    'status_filter': null,
+    'limit': limit,
+    'offset': offset,
+    'total_count': 0,
+    'items': const [],
+  });
+  @override
+  Future<YorksWorkforceReviewLifecycle> getMonthlyLifecycle(
+    String periodId,
+  ) async {
+    if (scenario == 'denied') {
+      throw const YorksV1DomainException(YorksV1DomainErrorCode.unauthorized);
+    }
+    return pendingLifecycle == null
+        ? _notificationLifecycle()
+        : await pendingLifecycle!.future;
+  }
+
+  @override
+  Future<YorksWorkforceCollaborationProjection> getCollaboration(
+    String periodId,
+  ) async => throw const YorksV1DomainException(
+    YorksV1DomainErrorCode.featureDisabled,
+  );
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+YorksWorkforceReviewLifecycle _notificationLifecycle() =>
+    YorksWorkforceReviewLifecycle.fromRpcJson({
+      'schema_version': 1,
+      'authorization_mode': 'enforced_t07',
+      'period_id': _periodId,
+      'team_id': _teamId,
+      'period_month': '2026-08-01',
+      'status': 'ready_for_review',
+      'record_version': 1,
+      'approval_revision_number': 0,
+      'validation_run_id': _runId,
+      'validation_number': 1,
+      'source_fingerprint': _fingerprint,
+      'current_source_fingerprint': _fingerprint,
+      'is_stale': false,
+      'blocking_issue_count': 0,
+      'warning_issue_count': 0,
+      'submitter_auth_user_id': null,
+      'can_submit': true,
+      'can_return': false,
+      'can_correct': false,
+      'can_verify': false,
+      'can_final_approve': false,
+      'can_request_reopen': false,
+      'can_authorize_reopen': false,
+      'transitions': const [],
+      'corrections': const [],
+      'approved_snapshots': const [],
+      'reopen_requests': const [],
+    });

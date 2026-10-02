@@ -11,6 +11,64 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test(
+    'loaded history survives refresh, insertion, and mark-read across pages',
+    () async {
+      final repository = _PagedRepository(
+        List.generate(240, (i) => _record('$i')),
+      );
+      final notifier = _notifier(repository);
+      addTearDown(notifier.dispose);
+      await notifier.start();
+      expect(notifier.state.valueOrNull, hasLength(100));
+      await notifier.loadMore();
+      expect(notifier.state.valueOrNull, hasLength(200));
+      repository.records.insert(0, _record('new'));
+      await notifier.refresh();
+      expect(notifier.state.valueOrNull, hasLength(200));
+      expect(notifier.state.valueOrNull!.first.id, 'new');
+      await notifier.loadMore();
+      expect(notifier.state.valueOrNull, hasLength(241));
+      expect(
+        notifier.state.valueOrNull!.map((n) => n.id).toSet(),
+        hasLength(241),
+      );
+      await notifier.markSeen('210');
+      expect(
+        notifier.state.valueOrNull!.firstWhere((n) => n.id == '210').seenAt,
+        isNotNull,
+      );
+      expect(notifier.state.valueOrNull, hasLength(241));
+      await notifier.setUnreadOnly(true);
+      expect(notifier.state.valueOrNull, hasLength(100));
+      expect(
+        notifier.state.valueOrNull!.every((n) => n.seenAt == null),
+        isTrue,
+      );
+    },
+  );
+
+  test('loading failure retains service pause and old history', () async {
+    final repository = _PagedRepository(
+      List.generate(240, (i) => _record('$i')),
+    );
+    var history = const NotificationHistoryStatus();
+    final notifier = YorksV1NotificationsNotifier(
+      client: SupabaseClient('https://ci.invalid', 'test'),
+      repository: repository,
+      authUserId: 'owner',
+      onHistory: (value) => history = value,
+    );
+    addTearDown(notifier.dispose);
+    await notifier.start();
+    repository.fail = true;
+    await notifier.loadMore();
+    expect(notifier.state.hasError, isTrue);
+    expect(notifier.state.valueOrNull, hasLength(100));
+    expect(history.servicePaused, isTrue);
+    expect(history.loadingMore, isFalse);
+  });
+
+  test(
     'single acknowledgement waits for server and survives a second device',
     () async {
       final gate = Completer<void>();
@@ -169,5 +227,35 @@ class _FakeNotificationRepository implements YorksV1NotificationRepository {
         if (record.seenAt == null) record.acknowledgedAt(now) else record,
     ];
     return unread;
+  }
+}
+
+class _PagedRepository extends _FakeNotificationRepository
+    implements PagedNotificationRepository {
+  _PagedRepository(super.records);
+  bool fail = false;
+  @override
+  Future<NotificationPage> page({
+    int limit = 100,
+    YorksV1NotificationRecord? before,
+    bool unreadOnly = false,
+    bool urgentOnly = false,
+    String? search,
+  }) async {
+    if (fail) throw StateError('offline');
+    final filtered = records
+        .where((r) => !unreadOnly || r.seenAt == null)
+        .toList();
+    final start = before == null
+        ? 0
+        : filtered.indexWhere((r) => r.id == before.id) + 1;
+    final remaining = filtered.skip(start).toList();
+    return NotificationPage(
+      records: remaining.take(limit).toList(),
+      attention: const [],
+      unreadCount: records.where((r) => r.seenAt == null).length,
+      hasMore: remaining.length > limit,
+      servicePaused: true,
+    );
   }
 }

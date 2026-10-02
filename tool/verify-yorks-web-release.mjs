@@ -6,8 +6,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {promisify} from 'node:util';
 
-const [deployment, directory] = process.argv.slice(2);
+const [deployment, directory, mode] = process.argv.slice(2);
 assert.ok(deployment && directory, 'Usage: node tool/verify-yorks-web-release.mjs URL ARTIFACT_DIR');
+assert.ok(mode === undefined || mode === '--public', 'Only --public is supported');
+const publicArtifact = mode === '--public';
 assert.equal(new URL(deployment).protocol, 'https:');
 const run = promisify(execFile);
 const hash = data => createHash('sha256').update(data).digest('hex');
@@ -21,11 +23,13 @@ const checks = [
   ['/about', 'index.html'],
   ['/profile', 'index.html'],
   ['/notification-preferences', 'index.html'],
+  ['/notifications', 'index.html'],
   ['/yorks/analytics', 'index.html'],
   ['/yorks/workforce', 'index.html'],
   ['/yorks/rentals', 'index.html'],
   ['/yorks/material-requests', 'index.html'],
   ['/yorks/material-requests/company/new', 'index.html'],
+  ['/yorks/returns', 'index.html'],
   ['/yorks/team-chat', 'index.html'],
   ...['main.dart.js', 'flutter_bootstrap.js', 'flutter_service_worker.js', 'firebase-messaging-sw.js', 'manifest.json'].map(file => [`/${file}`, file]),
   ...deferredParts.map(file => [`/${file}`, file]),
@@ -35,7 +39,16 @@ for (let offset = 0; offset < checks.length; offset += 2) {
   await Promise.all(checks.slice(offset, offset + 2).map(async ([route, file]) => {
     const expected = fs.readFileSync(path.join(directory, file));
     let actual;
-    if (expected.length > maxSingleRequestBytes) {
+    if (publicArtifact) {
+      // Public deployments can be checked directly. Protected deployments keep
+      // the authenticated Vercel path; this never changes protection settings.
+      const {stdout} = await run('curl', ['--fail', '--silent', '--show-error',
+        '--compressed', '--retry', '2', '--max-time', '120',
+        new URL(route, deployment).href], {
+        cwd: directory, encoding: 'buffer', maxBuffer: 25 * 1024 * 1024, timeout: 180000,
+      });
+      actual = stdout;
+    } else if (expected.length > maxSingleRequestBytes) {
       const ranges = [];
       for (let start = 0; start < expected.length; start += rangeBytes) {
         ranges.push([start, Math.min(expected.length - 1, start + rangeBytes - 1)]);

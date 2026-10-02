@@ -2,32 +2,44 @@ import { assertEquals } from "jsr:@std/assert@1";
 import { defaultDependencies, handlePush } from "./handler.ts";
 
 const id = "11000000-0000-4000-8000-000000000001";
+type TestMessage = {
+  token: string;
+  data: Record<string, string>;
+  webpush: { notification: Record<string, unknown> };
+};
 function harness(
   tokens = ["device-a", "device-b"],
   origin = "test",
   retiredAt: string | null = null,
+  languages: unknown[] = [],
 ) {
   const ledger = new Map<string, string>();
   const finishes: Record<string, unknown>[] = [];
   const sends: string[] = [];
+  const messages: TestMessage[] = [];
+  let selectedColumns = "";
   let failure: number | null = 503;
   let failRecord = false;
   let configured = true;
   const client = {
     from: () => ({
-      select: () => ({
-        eq: () =>
-          Promise.resolve({
-            data: tokens.map((token) => ({
-              token,
-              platform: "web",
-              web_origin: origin,
-              installation_id: id,
-              retired_at: retiredAt,
-            })),
-            error: null,
-          }),
-      }),
+      select: (columns: string) => {
+        selectedColumns = columns;
+        return ({
+          eq: () =>
+            Promise.resolve({
+              data: tokens.map((token, index) => ({
+                token,
+                platform: "web",
+                web_origin: origin,
+                installation_id: id,
+                retired_at: retiredAt,
+                notification_language: languages[index],
+              })),
+              error: null,
+            }),
+        });
+      },
     }),
     rpc: (name: string, args: Record<string, unknown>) => {
       let data: unknown = true;
@@ -75,7 +87,9 @@ function harness(
       (() => client) as unknown as typeof defaultDependencies.createClient,
     getFcmAccessToken: () => Promise.resolve("fake-access"),
     fetch: ((_url: unknown, init: RequestInit) => {
-      const token = JSON.parse(String(init.body)).message.token;
+      const message = JSON.parse(String(init.body)).message as TestMessage;
+      messages.push(message);
+      const token = message.token;
       sends.push(token);
       if (failure === -1) {
         return Promise.reject(new Error("ambiguous transport"));
@@ -91,6 +105,8 @@ function harness(
     ledger,
     finishes,
     sends,
+    messages,
+    selectedColumns: () => selectedColumns,
     deps,
     setFailure: (value: number | null) => {
       failure = value;
@@ -159,4 +175,43 @@ Deno.test("handler skips preview and retired tokens without sending", async () =
     assertEquals(h.sends, []);
     assertEquals(h.finishes[0].p_status, "no_devices");
   }
+});
+
+Deno.test("handler uses each installation's language without exposing record details", async () => {
+  const h = harness(["device-a", "device-b"], "test", null, ["ar", "hi"]);
+  h.setFailure(null);
+  assertEquals((await h.run()).status, 200);
+  assertEquals(h.selectedColumns().includes("notification_language"), true);
+  assertEquals(h.messages[0].data.title, "طلب مواد جديد");
+  assertEquals(h.messages[1].data.title, "नया सामग्री अनुरोध");
+  assertEquals(h.messages[0].data.language, "ar");
+  assertEquals(h.messages[0].webpush.notification.lang, "ar");
+  assertEquals(h.messages[0].webpush.notification.dir, "rtl");
+  assertEquals(h.messages[1].webpush.notification.dir, "ltr");
+  assertEquals(
+    h.messages[0].webpush.notification.title,
+    h.messages[0].data.title,
+  );
+  assertEquals(
+    h.messages[1].webpush.notification.body,
+    h.messages[1].data.body,
+  );
+  assertEquals(h.messages[0].data.refId, id);
+});
+
+Deno.test("handler supports pre-upgrade installations and malformed language with English fallback", async () => {
+  const h = harness(["device-a", "device-b"], "test", null, [
+    undefined,
+    "xx-private-input",
+  ]);
+  h.setFailure(null);
+  assertEquals((await h.run()).status, 200);
+  assertEquals(h.messages.map((message) => message.data.language), [
+    "en",
+    "en",
+  ]);
+  assertEquals(h.messages.map((message) => message.data.title), [
+    "New material request",
+    "New material request",
+  ]);
 });
