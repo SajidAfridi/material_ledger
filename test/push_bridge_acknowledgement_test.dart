@@ -7,12 +7,16 @@ import 'package:go_router/go_router.dart';
 import 'package:material_ledger/app/app.dart' show appRouterProvider;
 import 'package:material_ledger/app/push_bridge.dart';
 import 'package:material_ledger/shared/models/app_user.dart';
+import 'package:material_ledger/shared/models/app_language.dart';
+import 'package:material_ledger/shared/models/app_notification.dart';
 import 'package:material_ledger/shared/models/user_role.dart';
 import 'package:material_ledger/shared/models/yorks_v1_company_material_request.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_request.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_return_workflow.dart';
 import 'package:material_ledger/shared/models/yorks_v1_notification.dart';
 import 'package:material_ledger/shared/providers/session_provider.dart';
+import 'package:material_ledger/shared/providers/language_provider.dart';
+import 'package:material_ledger/shared/providers/notification_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_company_material_request_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_logistics_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_material_request_provider.dart';
@@ -20,6 +24,11 @@ import 'package:material_ledger/shared/providers/yorks_v1_notification_preferenc
 import 'package:material_ledger/shared/providers/yorks_v1_notification_provider.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_notification_repository.dart';
 import 'package:material_ledger/shared/services/push_service.dart';
+import 'package:material_ledger/shared/screens/notifications_screen.dart';
+import 'package:material_ledger/shared/widgets/notification_alert_host.dart';
+import 'package:material_ledger/shared/widgets/notification_bell.dart';
+import 'package:material_ledger/core/widgets/yorks_app_toast.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 const _notificationId = '21000000-0000-4000-8000-000000000001';
 const _entityId = '22000000-0000-4000-8000-000000000001';
@@ -35,7 +44,203 @@ enum _Destination {
   String get location => '$path?notificationId=$_notificationId';
 }
 
+enum _Source { bell, inbox, toast }
+
 void main() {
+  tearDown(YorksAppToast.dismiss);
+  for (final route in [
+    '',
+    'https://example.invalid/private',
+    '//example.invalid/private',
+    'relative-record',
+    'javascript:alert(1)',
+  ]) {
+    testWidgets('authoritative unsafe target "$route" stays unread', (
+      tester,
+    ) async {
+      final harness = await _Harness.start(
+        tester,
+        _Destination.project,
+        initialLocation: '/elsewhere',
+      );
+      final locations = <String>[];
+      await harness.container
+          .read(notificationActionsProvider)
+          .open(_appNotification(route), navigate: locations.add);
+      await tester.pumpAndSettle();
+      expect(locations, isEmpty);
+      expect(harness.repository.markedIds, isEmpty);
+      expect(harness.unread, isTrue);
+      await harness.close(tester);
+    });
+  }
+  testWidgets('unsupported protected target does not acknowledge on push', (
+    tester,
+  ) async {
+    final harness = await _Harness.start(
+      tester,
+      _Destination.project,
+      initialLocation: '/',
+    );
+    await harness.container
+        .read(notificationActionsProvider)
+        .open(
+          _appNotification('/elsewhere'),
+          navigate: (location) => harness.router.push(location),
+        );
+    await tester.pumpAndSettle();
+    expect(
+      harness.router.state.uri.queryParameters['notificationId'],
+      _notificationId,
+    );
+    expect(harness.repository.markedIds, isEmpty);
+    expect(harness.unread, isTrue);
+    await harness.close(tester);
+  });
+  testWidgets('in-app metadata preserves exact target and replaces stale id', (
+    tester,
+  ) async {
+    final harness = await _Harness.start(
+      tester,
+      _Destination.project,
+      initialLocation: '/',
+    );
+    final locations = <String>[];
+    await harness.container
+        .read(notificationActionsProvider)
+        .open(
+          _appNotification(
+            '${_Destination.project.path}?comment=comment-123&notificationId=stale',
+          ),
+          navigate: locations.add,
+        );
+    expect(locations, hasLength(1));
+    final uri = Uri.parse(locations.single);
+    expect(uri.path, _Destination.project.path);
+    expect(uri.queryParameters['comment'], 'comment-123');
+    expect(uri.queryParameters['notificationId'], _notificationId);
+    expect(harness.repository.markedIds, isEmpty);
+    await harness.close(tester);
+  });
+  testWidgets('invalid row id cannot propagate another acknowledgement id', (
+    tester,
+  ) async {
+    final harness = await _Harness.start(
+      tester,
+      _Destination.project,
+      initialLocation: '/',
+    );
+    final locations = <String>[];
+    await harness.container
+        .read(notificationActionsProvider)
+        .open(
+          _appNotification(
+            '${_Destination.project.path}?comment=comment-123&notificationId=$_notificationId',
+            id: 'synthetic-id',
+          ),
+          navigate: locations.add,
+        );
+    expect(locations, hasLength(1));
+    final uri = Uri.parse(locations.single);
+    expect(uri.path, _Destination.project.path);
+    expect(uri.queryParameters['comment'], 'comment-123');
+    expect(uri.queryParameters.containsKey('notificationId'), isFalse);
+    expect(harness.repository.markedIds, isEmpty);
+    await harness.close(tester);
+  });
+  for (final source in _Source.values) {
+    for (final destination in _Destination.values) {
+      testWidgets(
+        '${source.name} ${destination.name} waits for protected loaded data and preserves Back',
+        (tester) async {
+          final harness = await _Harness.start(
+            tester,
+            destination,
+            source: source,
+          );
+          await harness.open(tester, source);
+          expect(harness.router.state.uri, Uri.parse(destination.location));
+          expect(harness.router.canPop(), isTrue);
+          expect(harness.repository.markedIds, isEmpty);
+          await tester.pump(const Duration(seconds: 1));
+          expect(harness.repository.markedIds, isEmpty);
+          expect(harness.unread, isTrue);
+          harness.complete(destination);
+          await tester.pump();
+          await tester.pump();
+          expect(harness.repository.markedIds, [_notificationId]);
+          expect(harness.unread, isFalse);
+          harness.router.pop();
+          await tester.pumpAndSettle();
+          expect(
+            harness.router.state.uri.path,
+            source == _Source.inbox ? '/notifications' : '/',
+          );
+          expect(harness.repository.markedIds, [_notificationId]);
+          expect(tester.takeException(), isNull);
+          await harness.close(tester);
+        },
+      );
+      testWidgets('${source.name} ${destination.name} denial stays unread', (
+        tester,
+      ) async {
+        final harness = await _Harness.start(
+          tester,
+          destination,
+          source: source,
+        );
+        await harness.open(tester, source);
+        harness.deny(destination);
+        await tester.pump();
+        await tester.pump();
+        expect(harness.repository.markedIds, isEmpty);
+        expect(harness.unread, isTrue);
+        expect(tester.takeException(), isNull);
+        await harness.close(tester);
+      });
+    }
+    for (final nextUser in <String?>['another-owner', null]) {
+      testWidgets(
+        '${source.name} ${nextUser ?? 'logout'} during load keeps old owner unread',
+        (tester) async {
+          final harness = await _Harness.start(
+            tester,
+            _Destination.project,
+            source: source,
+          );
+          await harness.open(tester, source);
+          harness.container.read(_testUserProvider.notifier).state =
+              nextUser == null ? null : _user(nextUser);
+          await tester.pump();
+          harness.complete(_Destination.project);
+          await tester.pump();
+          await tester.pump();
+          expect(harness.repository.markedIds, isEmpty);
+          expect(harness.unread, isTrue);
+          await harness.close(tester);
+        },
+      );
+    }
+    testWidgets('${source.name} Back during protected load keeps it unread', (
+      tester,
+    ) async {
+      final harness = await _Harness.start(
+        tester,
+        _Destination.project,
+        source: source,
+      );
+      await harness.open(tester, source);
+      harness.router.pop();
+      await tester.pumpAndSettle();
+      harness.complete(_Destination.project);
+      await tester.pump();
+      await tester.pump();
+      expect(harness.repository.markedIds, isEmpty);
+      expect(harness.unread, isTrue);
+      await harness.close(tester);
+    });
+  }
+
   for (final destination in _Destination.values) {
     testWidgets(
       '${destination.name} OS tap waits for protected data before marking read',
@@ -147,6 +352,17 @@ void main() {
   }
 }
 
+AppNotification _appNotification(String route, {String id = _notificationId}) =>
+    AppNotification(
+      id: id,
+      type: NotificationType.request,
+      title: 'Material request approval required',
+      titleSecondary: '',
+      timestamp: DateTime.now(),
+      route: route,
+      origin: NotificationOrigin.yorksV1,
+    );
+
 class _Harness {
   _Harness(this.router, this.container, this.notifier, this.repository);
 
@@ -164,12 +380,35 @@ class _Harness {
     WidgetTester tester,
     _Destination destination, {
     String? initialLocation,
+    _Source? source,
   }) async {
+    tester.view.physicalSize = const Size(1000, 760);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    SharedPreferences.setMockInitialValues({});
+    final preferences = await SharedPreferences.getInstance();
     final router = GoRouter(
-      initialLocation: initialLocation ?? destination.location,
+      initialLocation:
+          initialLocation ??
+          (source == null
+              ? destination.location
+              : source == _Source.inbox
+              ? '/notifications'
+              : '/'),
       routes: [
+        GoRoute(
+          path: '/',
+          builder: (_, _) => Scaffold(
+            appBar: AppBar(actions: const [NotificationBell()]),
+            body: const Text('Launch workspace'),
+          ),
+        ),
+        GoRoute(
+          path: '/notifications',
+          builder: (_, _) => const NotificationsScreen(),
+        ),
         for (final path in [
-          '/',
           '/elsewhere',
           '/login',
           '/change-password',
@@ -179,17 +418,46 @@ class _Harness {
       ],
     );
     final repository = _NotificationRepository();
+    repository.record = YorksV1NotificationRecord(
+      id: _notificationId,
+      eventCode: 'material_request_approval_required',
+      entityType: switch (destination) {
+        _Destination.project => 'material_request',
+        _Destination.company => 'company_material_request',
+        _Destination.materialReturn => 'material_return',
+      },
+      entityId: _entityId,
+      requestId: destination == _Destination.project ? _entityId : null,
+      createdAt: DateTime.now(),
+    );
     final notifier = YorksV1NotificationsNotifier(
       client: null,
       repository: repository,
       authUserId: 'owner',
     );
     await notifier.refresh();
+    if (source == _Source.toast) notifier.state = const AsyncData([]);
     late _Harness harness;
     final container = ProviderContainer(
       overrides: [
         appRouterProvider.overrideWithValue(router),
+        sharedPreferencesProvider.overrideWithValue(preferences),
         pushServiceProvider.overrideWithValue(const NoopPushService()),
+        visibleNotificationsProvider.overrideWith(
+          (ref) => [
+            ...?ref
+                .watch(yorksV1NotificationsProvider)
+                .valueOrNull
+                ?.map(
+                  (record) => record.toAppNotification(AppLanguage.english),
+                ),
+          ],
+        ),
+        notificationPresentationAllowedProvider.overrideWithValue(() => true),
+        notificationAlertSoundDriverProvider.overrideWithValue((
+          prepare: () async => false,
+          play: () async {},
+        )),
         currentUserProvider.overrideWith((ref) => ref.watch(_testUserProvider)),
         yorksV1NotificationPreferencesProvider.overrideWith(
           (_) => YorksV1NotificationPreferencesNotifier(repository: null),
@@ -218,13 +486,37 @@ class _Harness {
         child: Consumer(
           builder: (_, ref, _) {
             ref.watch(pushBridgeProvider);
-            return MaterialApp.router(routerConfig: router);
+            return MaterialApp.router(
+              routerConfig: router,
+              builder: (_, child) => source == _Source.toast
+                  ? NotificationAlertHost(child: child!)
+                  : child!,
+            );
           },
         ),
       ),
     );
     await tester.pump();
     return harness;
+  }
+
+  Future<void> open(WidgetTester tester, _Source source) async {
+    if (source == _Source.bell) {
+      await tester.tap(find.byTooltip('Notifications'));
+      await tester.pumpAndSettle();
+    } else if (source == _Source.toast) {
+      notifier.state = AsyncData([repository.record]);
+      await tester.pump();
+      await tester.pump();
+    }
+    await tester.tap(
+      find.text(
+        source == _Source.toast
+            ? 'VIEW DETAILS'
+            : 'Material request approval required',
+      ),
+    );
+    await tester.pumpAndSettle();
   }
 
   void complete(_Destination destination) {
@@ -251,6 +543,7 @@ class _Harness {
   }
 
   Future<void> close(WidgetTester tester) async {
+    YorksAppToast.dismiss();
     await tester.pumpWidget(const SizedBox.shrink());
     container.dispose();
     router.dispose();

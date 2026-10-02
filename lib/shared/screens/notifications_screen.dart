@@ -16,8 +16,8 @@ import '../providers/yorks_v1_notification_provider.dart';
 import '../widgets/notification_delivery_card.dart';
 
 /// Notification centre (SRS §4.6) — a simple, single list of lifecycle alerts
-/// with read/unread status. Accessible by all roles. Tap to mark read; swipe to
-/// dismiss; "Mark all read" clears the unread state.
+/// with read/unread status. Accessible by all roles. Opening a protected record
+/// marks it read only after it loads; "Mark all read" explicitly clears unread.
 class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
 
@@ -426,9 +426,14 @@ class _NotificationDismissible extends ConsumerWidget {
     child: _NotificationCard(
       notification: notification,
       onTap: () async {
-        if (notification.route.isNotEmpty) context.push(notification.route);
         try {
-          await ref.read(notificationActionsProvider).markRead(notification);
+          final router = GoRouter.of(context);
+          await ref
+              .read(notificationActionsProvider)
+              .open(
+                notification,
+                navigate: (location) => router.push(location),
+              );
         } catch (_) {
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(

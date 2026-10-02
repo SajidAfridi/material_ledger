@@ -112,6 +112,38 @@ class NotificationActions {
 
   final Ref _ref;
 
+  /// Opens a notification without treating navigation as a successful read.
+  /// Authoritative destinations carry recipient-owned acknowledgement metadata;
+  /// the protected destination loader/read cursor commits the read afterwards.
+  /// A push keeps the user's in-app Back history intact.
+  Future<void> open(
+    AppNotification notification, {
+    required void Function(String location) navigate,
+  }) async {
+    if (notification.isServerAuthoritative) {
+      final destination = Uri.tryParse(notification.route);
+      if (destination == null ||
+          destination.hasScheme ||
+          destination.hasAuthority ||
+          !destination.path.startsWith('/') ||
+          destination.path.startsWith('//')) {
+        return;
+      }
+      final id = notification.id.trim();
+      final query = {...destination.queryParameters}..remove('notificationId');
+      if (RegExp(
+        r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+        caseSensitive: false,
+      ).hasMatch(id)) {
+        query['notificationId'] = id;
+      }
+      navigate(destination.replace(queryParameters: query).toString());
+      return;
+    }
+    if (notification.route.isNotEmpty) navigate(notification.route);
+    await markRead(notification);
+  }
+
   Future<void> markRead(AppNotification notification) {
     if (notification.isServerAuthoritative) {
       return _ref

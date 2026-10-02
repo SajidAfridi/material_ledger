@@ -293,14 +293,6 @@ class _NotificationAlertHostState extends ConsumerState<NotificationAlertHost>
         _activeRoutePath() == path;
   }
 
-  Future<void> _markRead(AppNotification notification) async {
-    try {
-      await ref.read(notificationActionsProvider).markRead(notification);
-    } catch (_) {
-      // Keep the unread state; an authorized refresh reconciles it.
-    }
-  }
-
   void _refreshChat() {
     if (!ref.read(yorksV1FeatureFlagsProvider).teamChat) return;
     unawaited(ref.read(yorksV1TeamChatProvider.notifier).refresh());
@@ -383,13 +375,24 @@ class _NotificationAlertHostState extends ConsumerState<NotificationAlertHost>
             ? null
             : () {
                 if (!_canPresent(generation, owner)) return;
-                if (!notification.route.startsWith(
-                  RoutePaths.yorksV1TeamChat,
-                )) {
-                  unawaited(_markRead(notification));
-                }
                 try {
-                  ref.read(appRouterProvider).push(notification.route);
+                  final router = ref.read(appRouterProvider);
+                  if (!notification.isServerAuthoritative &&
+                      notification.route.startsWith(
+                        RoutePaths.yorksV1TeamChat,
+                      )) {
+                    router.push(notification.route);
+                  } else {
+                    unawaited(
+                      ref
+                          .read(notificationActionsProvider)
+                          .open(
+                            notification,
+                            navigate: (location) => router.push(location),
+                          )
+                          .catchError((Object _) {}),
+                    );
+                  }
                 } catch (_) {
                   // A stale deep link must not make the alert action fatal.
                 }

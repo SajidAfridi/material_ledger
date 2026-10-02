@@ -230,14 +230,14 @@ class _PreviewRow extends ConsumerWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
       onTap: () {
+        final router = GoRouter.of(context);
+        final actions = ref.read(notificationActionsProvider);
+        Navigator.pop(context);
         unawaited(
-          ref
-              .read(notificationActionsProvider)
-              .markRead(notification)
+          actions
+              .open(notification, navigate: (location) => router.push(location))
               .catchError((Object _) {}),
         );
-        Navigator.pop(context);
-        if (notification.route.isNotEmpty) context.push(notification.route);
       },
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: AppSpacing.minTapTarget),

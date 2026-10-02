@@ -1,22 +1,17 @@
 # Web notification reliability candidate — 30 September 2026
 
-Status: **web/PWA candidate; staged database, Edge and preview verified; final follow-up validation and production delivery gate pending**.
+Status: **web/PWA released to production; transport remains paused pending the live Owner Chrome delivery gate**.
 
 Branch: `codex/web-notification-reliability`, based on
 `b86ff4362cde5c214aaff2906c05b0adac258074`.
 The primary checkout and its unrelated work were preserved.
 
-This implements part of the 30 September notification audit, prioritizing the
-website and installed PWA. The notification-only migration pair and compatible Edge sender are deployed
-to staging. Staging remains paused and all 251 pre-existing outbox rows were
-retained. No production migration, web promotion, transport restart, backlog
-replay, or live test notification was performed. The designated Owner/Chrome-on-Mac probe remains
-authorized but unexecuted. Do not store account credentials in this document.
+This implements the 30 September notification audit for the website and installed PWA. Staging remains paused, with all 251 notification/outbox rows and 12 token rows retained. Production notification migrations, compatible Edge sender and the verified web artifact were deployed on 2 October 2026. All 4,576 notification/outbox rows and 65 token rows present at deployment were retained. Production transport and cron remain paused pending the designated Owner/Chrome-on-Mac delivery gate. The first explicit check was read before dispatch; the relevance guard rejected it with zero provider attempts. No backlog replay occurred. Do not store account credentials in this document.
 
 ## Implemented candidate
 
 - Protected paginated history RPC with stable timestamp/ID cursors, independent
-  unread totals, search/filter parameters, and authorized request/project labels.
+  unread totals, search/filter parameters, and authorized Company, MR/Return, Accounts and Workforce references. Labels and reference search use current read authority independently of whether an old action still needs attention.
   Chat attention records are separate from the workflow inbox and its count.
 - Preserved validated internal destinations through sign-in, password changes,
   and router reconstruction; unsafe return locations are rejected.
@@ -28,7 +23,7 @@ authorized but unexecuted. Do not store account credentials in this document.
 - Accounts/Workforce and existing workflow event copy generated from versioned catalogues, with four in-app/device languages, CI producer coverage and exact protected record destinations. Per-device language updates require the current owner and active Auth session.
 - Search, load-earlier history, stale-data feedback, date grouping, localized
   relative times, unread semantics, delivery-pause messaging, and iOS Home Screen
-  guidance. Mark-read waits for the server instead of restoring an obsolete list
+  guidance. Opening a row waits for protected destination loading and rendering before acknowledgement, with current-page and account fences. Explicit mark-read waits for the server instead of restoring an obsolete list
   after a concurrent refresh.
 - Focus/lifecycle foreground guards, bounded alert history, burst grouping,
   and toast dismissal paused during hover/focus. Worker fallback clicks preserve
@@ -43,17 +38,17 @@ closure or real-device delivery.
 |---|---|
 | Flutter dependency resolution | Completed |
 | Flutter analysis | No issues |
-| Focused follow-up suites | Protected acknowledgement, paging, cold startup, worker, language and module navigation checks passed; final lifecycle follow-up running |
-| Full Flutter suite | 2,072 passed, 4 existing skips; no failures |
+| Focused follow-up suites | Protected acknowledgement, paging, cold startup, worker, language and module navigation checks passed; final lifecycle follow-up passed |
+| Full Flutter suite | 2,107 passed, 4 existing skips; no failures |
 | Local Supabase reset | Passed |
-| Full database suite | 120 files, 3,429 assertions passed after clean reset; digest regression: eight fail against old helper |
+| Full database suite | 121 files, 3,533 assertions passed after clean reset; digest regression: eight fail against old helper |
 | Edge tests | 28 passed |
 | Push failure classifier tests | 10 passed |
 | Worker / compactor | 26 worker cases and one parse/print contract passed |
 | Whitespace check | Passed |
 | CI web / APK builds | Final CI web passed: 9,638,669 raw / 2,777,365 gzip bytes; APK passed (108.3 MB), CI-only ephemeral signing. This is not a production store signing artifact. |
-| Staging | Forward migration deployed; pause, all 251 notification/outbox rows and 12 token rows retained. Matching final Edge deployed; final worker/preview validation pending |
-| Owner live FCM receipt and tap | Not performed |
+| Staging | Forward migration deployed; pause, all 251 notification/outbox rows and 12 token rows retained. Matching final Edge and preview verified; protected context migration deployed; desktop/360px reference search and exact destination checks passed |
+| Owner live FCM receipt and tap | First check read before dispatch; read-state guard rejected it with zero FCM attempts. Replacement background check authorized by the user continuation; not yet sent. |
 
 An isolated checkout of unchanged production source `b86ff43` reproduced 271
 failures. Regeneration on that unchanged source exposed two non-visual contract
@@ -82,8 +77,7 @@ The original audit and 74-state matrix remain at
 ## Authorized follow-up and remaining work
 
 The user explicitly authorized repairing the baseline failures after the earlier
-stop report. The full suite is now green. Production deployment and the designated live probe remain authorized. Staging
-database and Edge verification have started; production remains unchanged.
+stop report. The full suite is now green. Production deployment completed under the user authorization. The designated probe was created, then read before push dispatch. The user continuation authorizes one replacement background check to the designated Owner/Chrome installation; no read-state or duplicate-delivery safeguard will be bypassed.
 
 Completed follow-up: Chat burst destinations; separate bell/history filters;
 loaded-history retention; stale-query fencing; onboarding/maintenance intent;
@@ -95,9 +89,9 @@ Audit disposition for the current web/PWA scope:
 
 | Audit | Candidate behavior / acceptance boundary |
 |---|---|
-| N01 | Transport remains paused until the designated fresh browser probe succeeds; production rollout and probe are authorized but pending. |
+| N01 | Production web/DB/Edge rollout completed. Transport remains paused until a fresh unread background browser probe succeeds. |
 | N02 | Protected attention projection includes real Chat records without mixing Chat into the workflow inbox. |
-| N03 | Initial browser location is captured before the startup app renders; auth, password, maintenance and account transitions retain only validated internal intent. Successful protected destination loading precedes acknowledgement. |
+| N03 | Initial browser location is captured before the startup app renders; auth, password, maintenance and account transitions retain only validated internal intent. Successful protected destination loading and a rendered frame precede acknowledgement for both OS/external taps and bell, inbox and foreground-popup actions. Imperative pushes use the top GoRouter page and retain Back history. |
 | N04 | 58 active SQL producer event codes are covered by generated catalogues, safe copy and destination validation. Exact Accounts and Workforce targets use protected loaders. |
 | N05 | Stable cursor pagination, independent unread totals, server filters, retained loaded history and competing refresh/read tests. |
 | N06 | Silent Darwin initialization is fixed. Native APNs readiness and signed device acceptance remain future native work. |
@@ -109,7 +103,7 @@ Audit disposition for the current web/PWA scope:
 | N12 | Foreground visibility/focus gate, bounded dedupe, scoped toast dismissal, burst summaries and accessible timing. Physical multi-tab/background acceptance remains pending. |
 | N13 | Conservative unknown preferences, preference-aware enrollment, bounded version-fenced refresh/save, no historical preference replay. |
 | N14 | Server-confirmed ID-scoped acknowledgement; concurrent refresh is retained. Chat read cursor follows protected thread loading. |
-| N15 | Authorized record labels, real urgency, localized event copy, search/date groups and visible detail actions. |
+| N15 | Authorized Company, MR/Return, Accounts and Workforce references, real urgency, localized event copy, search/date groups and visible detail actions. New context suite: 104 assertions; completed history stays readable and revoked references are absent from display and search. |
 | N16 | Localized timestamps, read/button semantics, contrast and directional layout; desktop/360px tests. Actual screen-reader certification remains unperformed. |
 | N17 | Loading, stale/error, filter-empty and refresh feedback without claiming cached work is current. |
 | N18 | Web/PWA supported-path focus; native desktop background push is not advertised as implemented. |
@@ -121,10 +115,7 @@ compression is applied, preserving deferred library contracts and licenses.
 Producer inventory, device language and broad current-entity tests are complete.
 Exact attendance routes and lifecycle race fixes pass their final checks. The browser worker handles visible-unfocused delivery and protects unsaved tabs for both normal FCM and fallback taps; 26 worker cases pass.
 
-Remaining release gates are final full checks/builds, the forward staging
-migration and matching Edge/preview, cold/desktop/360px browser acceptance,
-then the compatible production database/Edge/web rollout and one fresh Owner
-Chrome-on-Mac probe. Record durable history, provider acceptance, OS display,
+Local full checks/builds, forward staging migrations, matching Edge/preview, cold/desktop/360px browser acceptance and the compatible production database/Edge/web rollout are complete. The remaining gate is one fresh unread Owner Chrome-on-Mac background probe. Record durable history, provider acceptance, OS display,
 exact target opening and read/badge convergence separately. Review queue age
 before restart; retain dead letters terminal and do not replay historical jobs.
 
@@ -133,8 +124,9 @@ later work per the user's web/PWA priority. No all-OS sign-off is implied.
 
 ## Data preservation and rollback
 
-Migrations `20260930140403_web_notification_reliability.sql` and
-`20261001180000_notification_attention_and_device_language.sql` are additive.
+Migrations `20260930140403_web_notification_reliability.sql`,
+`20261001180000_notification_attention_and_device_language.sql` and
+`20261002010000_notification_record_context.sql` are additive.
 The initial migration is preserved exactly as applied in staging; later fixes use
 the forward migration. In the initial migration, the new
 session column is nullable; historical notifications, tokens, delivery ledgers,
@@ -156,3 +148,21 @@ MR register migration as 20260928160705, while this checkout uses
 No unrelated ledger entries were repaired or overwritten. Only
 20260929150000 and 20260930140403 were applied atomically with their ledger
 entries. The sender was deployed to project iqltcyimlqtcwyzlemwx.
+
+## Production artifact and live release boundary — 2 October 2026
+
+- App/worker source: `1de7e63c18806fc7a6811ebabd70c114f1b81537`. Protected reference SQL/tests: `dec6613`. Source remains local at the user's request; no release push or GitHub authorization expansion was performed.
+- Verified deployment: `dpl_3sz9uGDFBnbuYRo89Dng5mRVPbLT`, `https://yorks-r35-nv5nomdom-sajid-alis-projects-0ec775a2.vercel.app`, promoted to `https://yorks-r35.vercel.app`.
+- Production main bundle SHA-256: `64cf2dd5ffff0f4f78a99fad84311b83363f3f784948065dc2435e792393e75a`. Firebase worker SHA-256: `1055f04e9abb387fa59c13837a18b458b89fe54dc0f1e86045d3d0dc95a92cc7`. Preview and canonical routes, shell, worker, manifest and deferred chunks matched the isolated artifact byte-for-byte.
+- Production Edge sender: `send-push` version 14. Its webhook remains protected; no JWT verification was disabled beyond its existing secret-authenticated webhook contract.
+- Production received only the three reviewed notification migrations and their exact ledger bodies. No generic database push, unrelated migration repair or business workflow mutation occurred.
+- Existing Owner Chrome session re-enrolled: exactly one eligible canonical web installation, five retained ineligible legacy token records, no non-web Owner token.
+- The first explicit `notification_delivery_check` remained authoritative history and was read before dispatch. The server correctly refused a push for a read notification; attempts, dispatches and device-delivery rows remain zero. This is read-state protection evidence, not FCM/OS delivery acceptance.
+- On successful replacement acceptance, the committed pre-resume transport cohort will be terminalized with truthful age/relevance/cutover reasons, while all inbox history, attempts and prior terminal outcomes remain. Only new post-resume events may enqueue prospective delivery.
+- Browser evidence: `staging-inbox-desktop-final.jpg`, `staging-inbox-mobile-final.jpg`, `staging-reference-search-mobile-final.jpg`, `staging-destination-final.jpg`, `staging-destination-mobile-final.jpg` in the local evidence folder. These are live staging browser checks, not physical iOS/Android acceptance.
+
+## In-app acknowledgement follow-up
+
+The bell, full inbox and foreground popup now use one shared open action. Authoritative rows carry their validated notification ID to the protected destination. A loading, denied, failed, unsupported or abandoned destination stays unread. The bridge follows the actual top GoRouter page for imperative pushes rather than the retained address-bar URI; a successful load must render before acknowledgement. Existing in-app Back history is preserved. Invalid IDs cannot propagate stale acknowledgement metadata. Accounts and Workforce keep their existing exact-record protected loaders; Chat keeps its protected read cursor.
+
+Final focused suite: 157 passed, including 48 acknowledgement cases across the three actions, pending/denied/success, logout/account/Back races and unsafe targets. Full Flutter gate after source freeze: 2,107 passed, four existing skips. Analysis and six-file formatting passed. CI web: 9,639,393 raw / 2,777,846 gzip bytes. The production web follow-up artifact and live delivery acceptance are pending; transport remains paused.

@@ -36,14 +36,17 @@ final pushBridgeProvider = Provider<void>((ref) {
   var active = true;
   ref.onDispose(() => active = false);
 
+  Uri? currentPageLocation() {
+    if (router.routerDelegate.currentConfiguration.isEmpty) return null;
+    // The address bar can deliberately retain the previous URI after push.
+    // GoRouter.state describes the top rendered route for both push and go.
+    return router.state.uri;
+  }
+
   void acknowledgeCurrentRoute() {
     if (ref.read(currentUserProvider) == null) return;
-    final id = router
-        .routeInformationProvider
-        .value
-        .uri
-        .queryParameters['notificationId']
-        ?.trim();
+    final location = currentPageLocation();
+    final id = location?.queryParameters['notificationId']?.trim();
     if (id == null ||
         !RegExp(
           r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
@@ -52,12 +55,12 @@ final pushBridgeProvider = Provider<void>((ref) {
         !acknowledgedRouteIds.add(id)) {
       return;
     }
-    final location = router.routeInformationProvider.value.uri;
+    if (location == null) return;
     final owner = ref.read(currentUserProvider)?.id;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!active ||
           owner != ref.read(currentUserProvider)?.id ||
-          router.routeInformationProvider.value.uri != location ||
+          currentPageLocation() != location ||
           location.path == '/login' ||
           location.path == '/change-password') {
         acknowledgedRouteIds.remove(id);
@@ -89,9 +92,12 @@ final pushBridgeProvider = Provider<void>((ref) {
             acknowledgedRouteIds.remove(id);
             return;
           }
+          // Data completion alone is not visible success. Let the protected
+          // page render before acknowledging and fence navigation/account races.
+          await WidgetsBinding.instance.endOfFrame;
           if (!active ||
               owner != ref.read(currentUserProvider)?.id ||
-              router.routeInformationProvider.value.uri != location) {
+              currentPageLocation() != location) {
             acknowledgedRouteIds.remove(id);
             return;
           }
@@ -103,10 +109,9 @@ final pushBridgeProvider = Provider<void>((ref) {
     });
   }
 
-  router.routeInformationProvider.addListener(acknowledgeCurrentRoute);
+  router.routerDelegate.addListener(acknowledgeCurrentRoute);
   ref.onDispose(
-    () =>
-        router.routeInformationProvider.removeListener(acknowledgeCurrentRoute),
+    () => router.routerDelegate.removeListener(acknowledgeCurrentRoute),
   );
   if (pushEnabled == true) {
     unawaited(push.register());
