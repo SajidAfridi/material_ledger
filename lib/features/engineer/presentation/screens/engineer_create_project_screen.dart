@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
@@ -21,6 +22,7 @@ import '../../../../shared/providers/session_provider.dart';
 import '../../../../shared/providers/yorks_v1_feature_flags_provider.dart';
 import '../../../projects/presentation/screens/project_create_flow_screen.dart';
 import '../../../projects/presentation/screens/yorks_v1_project_create_flow_screen.dart';
+import '../../../projects/presentation/screens/yorks_v1_project_legacy_flow_screen.dart';
 
 /// Stable route entry point. The V7 flow remains fail-closed behind its module
 /// flag while the legacy form stays available for production rollback.
@@ -33,7 +35,9 @@ class EngineerCreateProjectScreen extends ConsumerWidget {
     // enabled. The V1 screen owns its exact-claim UX guard; it does not reuse
     // this legacy shell role as project authority.
     if (ref.watch(yorksV1FeatureFlagsProvider).projects) {
-      return const YorksV1ProjectCreateFlowScreen();
+      return ref.watch(yorksV1FeatureFlagsProvider).projectSetup && kIsWeb
+          ? const YorksV1ProjectCreateFlowScreen()
+          : const YorksV1LegacyProjectCreateFlowScreen();
     }
     if (ref.watch(nexusFeatureFlagsProvider).projects) {
       return const ProjectCreateFlowScreen();
