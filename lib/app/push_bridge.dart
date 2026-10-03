@@ -1,9 +1,15 @@
 import 'dart:async';
+import 'package:flutter/widgets.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../shared/models/app_user.dart';
+import '../shared/models/app_language.dart';
+import '../shared/providers/language_provider.dart';
 import '../shared/providers/session_provider.dart';
+import '../shared/providers/yorks_v1_material_request_provider.dart';
+import '../shared/providers/yorks_v1_company_material_request_provider.dart';
+import '../shared/providers/yorks_v1_logistics_provider.dart';
 import '../shared/providers/yorks_v1_notification_provider.dart';
 import '../shared/providers/yorks_v1_notification_preferences_provider.dart';
 import '../shared/services/push_service.dart';
@@ -22,19 +28,25 @@ final pushBridgeProvider = Provider<void>((ref) {
   // Registration is retried below once a user exists, keeping the token
   // strictly owner-bound in Supabase.
   final push = ref.read(pushServiceProvider);
+  if (push is FcmPushService) unawaited(push.initialize());
   final preferences = ref.watch(yorksV1NotificationPreferencesProvider);
   final pushEnabled = preferences.valueOrNull?.pushEnabled;
   final router = ref.watch(appRouterProvider);
   final acknowledgedRouteIds = <String>{};
+  var active = true;
+  ref.onDispose(() => active = false);
+
+  Uri? currentPageLocation() {
+    if (router.routerDelegate.currentConfiguration.isEmpty) return null;
+    // The address bar can deliberately retain the previous URI after push.
+    // GoRouter.state describes the top rendered route for both push and go.
+    return router.state.uri;
+  }
 
   void acknowledgeCurrentRoute() {
     if (ref.read(currentUserProvider) == null) return;
-    final id = router
-        .routeInformationProvider
-        .value
-        .uri
-        .queryParameters['notificationId']
-        ?.trim();
+    final location = currentPageLocation();
+    final id = location?.queryParameters['notificationId']?.trim();
     if (id == null ||
         !RegExp(
           r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
@@ -43,19 +55,63 @@ final pushBridgeProvider = Provider<void>((ref) {
         !acknowledgedRouteIds.add(id)) {
       return;
     }
-    unawaited(() async {
-      try {
-        await ref.read(yorksV1NotificationsProvider.notifier).markSeen(id);
-      } catch (_) {
+    if (location == null) return;
+    final owner = ref.read(currentUserProvider)?.id;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!active ||
+          owner != ref.read(currentUserProvider)?.id ||
+          currentPageLocation() != location ||
+          location.path == '/login' ||
+          location.path == '/change-password') {
         acknowledgedRouteIds.remove(id);
+        return;
       }
-    }());
+      unawaited(() async {
+        try {
+          // A route redirect or loading/error screen is not a successful open.
+          // Await the destination's protected data loader before acknowledging.
+          final segments = location.pathSegments;
+          if (segments.length == 4 &&
+              segments.take(3).join('/') == 'yorks/material-requests/company') {
+            await ref.read(
+              yorksV1CompanyMaterialRequestProvider(segments.last).future,
+            );
+          } else if (segments.length == 3 &&
+              segments.take(2).join('/') == 'yorks/material-requests') {
+            await ref.read(
+              yorksV1MaterialRequestDetailProvider(segments.last).future,
+            );
+          } else if (segments.length == 3 &&
+              segments.take(2).join('/') == 'yorks/returns') {
+            await ref.read(
+              yorksV1ProjectMaterialReturnProvider(segments.last).future,
+            );
+          } else {
+            // Other destinations retain unread state until their explicit
+            // acknowledgement/read cursor succeeds. Never infer read from URL.
+            acknowledgedRouteIds.remove(id);
+            return;
+          }
+          // Data completion alone is not visible success. Let the protected
+          // page render before acknowledging and fence navigation/account races.
+          await WidgetsBinding.instance.endOfFrame;
+          if (!active ||
+              owner != ref.read(currentUserProvider)?.id ||
+              currentPageLocation() != location) {
+            acknowledgedRouteIds.remove(id);
+            return;
+          }
+          await ref.read(yorksV1NotificationsProvider.notifier).markSeen(id);
+        } catch (_) {
+          acknowledgedRouteIds.remove(id);
+        }
+      }());
+    });
   }
 
-  router.routeInformationProvider.addListener(acknowledgeCurrentRoute);
+  router.routerDelegate.addListener(acknowledgeCurrentRoute);
   ref.onDispose(
-    () =>
-        router.routeInformationProvider.removeListener(acknowledgeCurrentRoute),
+    () => router.routerDelegate.removeListener(acknowledgeCurrentRoute),
   );
   if (pushEnabled == true) {
     unawaited(push.register());
@@ -72,6 +128,11 @@ final pushBridgeProvider = Provider<void>((ref) {
     if (pushEnabled == true) unawaited(push.register());
     acknowledgeCurrentRoute();
   }, fireImmediately: true);
+  if (push is FcmPushService) {
+    ref.listen<AppLanguage>(languageProvider, (previous, next) {
+      if (previous != next && pushEnabled == true) unawaited(push.register());
+    });
+  }
 });
 
 /// Live, non-sensitive health of this installation's push transport.

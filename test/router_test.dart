@@ -21,6 +21,35 @@ import 'package:material_ledger/shared/services/app_config_service.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  testWidgets('cold notification link survives the signed-out login gate', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final preferences = await SharedPreferences.getInstance();
+    const target =
+        '/notifications?notificationId=11000000-0000-4000-8000-000000000001';
+    final router = createAppRouter(
+      isOnboarded: true,
+      isLoggedIn: false,
+      role: UserRole.engineer,
+      restoredLocation: target,
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [sharedPreferencesProvider.overrideWithValue(preferences)],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(router.routeInformationProvider.value.uri.path, RoutePaths.login);
+    expect(
+      router.routeInformationProvider.value.uri.queryParameters['returnTo'],
+      target,
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+    router.dispose();
+  });
+
   test('project workspace path uses the stable project identifier', () {
     expect(
       RoutePaths.projectWorkspacePath('project-41'),

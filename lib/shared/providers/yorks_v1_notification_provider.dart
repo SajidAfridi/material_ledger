@@ -10,6 +10,39 @@ import '../repositories/yorks_v1_notification_repository.dart';
 import '../sync/authorized_refresh_queue.dart';
 import 'language_provider.dart';
 
+class NotificationHistoryStatus {
+  const NotificationHistoryStatus({
+    this.unreadCount,
+    this.hasMore = false,
+    this.loadingMore = false,
+    this.servicePaused,
+  });
+  final int? unreadCount;
+  final bool hasMore;
+  final bool loadingMore;
+  final bool? servicePaused;
+}
+
+final notificationAttentionSnapshotProvider =
+    StateProvider<AsyncValue<List<YorksV1NotificationRecord>>>((ref) {
+      ref.watch(authSessionProvider);
+      return const AsyncLoading();
+    });
+final notificationAttentionFeedProvider =
+    Provider<AsyncValue<List<YorksV1NotificationRecord>>>((ref) {
+      final repository = ref.watch(yorksV1NotificationRepositoryProvider);
+      if (repository is PagedNotificationRepository) {
+        ref.watch(yorksV1NotificationsProvider);
+        return ref.watch(notificationAttentionSnapshotProvider);
+      }
+      return ref.watch(yorksV1NotificationsProvider);
+    });
+
+final notificationHistoryStatusProvider = StateProvider((ref) {
+  ref.watch(authSessionProvider);
+  return const NotificationHistoryStatus();
+});
+
 final yorksV1NotificationRepositoryProvider =
     Provider<YorksV1NotificationRepository?>((ref) {
       final client = ref.watch(supabaseClientProvider);
@@ -30,6 +63,36 @@ final yorksV1NotificationsProvider =
         client: client,
         repository: repository,
         authUserId: appSessionId == null ? null : authUserId,
+        onAttention: (value) =>
+            ref.read(notificationAttentionSnapshotProvider.notifier).state =
+                AsyncData(value),
+        onHistory: (value) =>
+            ref.read(notificationHistoryStatusProvider.notifier).state = value,
+      );
+      unawaited(notifier.start());
+      return notifier;
+    });
+
+// The inbox owns its filters and loaded window. The global bell/attention feed
+// remains unfiltered even while a user searches older history.
+final notificationInboxStatusProvider = StateProvider.autoDispose((ref) {
+  ref.watch(authSessionProvider);
+  return const NotificationHistoryStatus();
+});
+final notificationInboxProvider =
+    StateNotifierProvider.autoDispose<
+      YorksV1NotificationsNotifier,
+      AsyncValue<List<YorksV1NotificationRecord>>
+    >((ref) {
+      final client = ref.watch(supabaseClientProvider);
+      final session = ref.watch(authSessionProvider);
+      final notifier = YorksV1NotificationsNotifier(
+        client: client,
+        repository: ref.watch(yorksV1NotificationRepositoryProvider),
+        authUserId: session == null ? null : client?.auth.currentUser?.id,
+        channelSuffix: 'inbox',
+        onHistory: (value) =>
+            ref.read(notificationInboxStatusProvider.notifier).state = value,
       );
       unawaited(notifier.start());
       return notifier;
@@ -53,14 +116,73 @@ class YorksV1NotificationsNotifier
     required SupabaseClient? client,
     required YorksV1NotificationRepository? repository,
     required String? authUserId,
+    this.onHistory,
+    this.onAttention,
+    this.channelSuffix = 'attention',
   }) : _client = client,
        _repository = repository,
        _authUserId = authUserId?.trim(),
        super(const AsyncLoading());
 
+  final String channelSuffix;
   final SupabaseClient? _client;
   final YorksV1NotificationRepository? _repository;
   final String? _authUserId;
+
+  final void Function(NotificationHistoryStatus)? onHistory;
+  final void Function(List<YorksV1NotificationRecord>)? onAttention;
+  int _loadedLimit = 100;
+  String? _search;
+  Future<void> search(String? value) async {
+    if (_disposed || value == _search) return;
+    _search = value;
+    _queryGeneration++;
+    _loadedLimit = 100;
+    state = const AsyncLoading();
+    await refresh();
+  }
+
+  NotificationHistoryStatus _history = const NotificationHistoryStatus();
+  bool _unreadOnly = false;
+  bool _urgentOnly = false;
+  int _queryGeneration = 0;
+  void _setHistory(NotificationHistoryStatus value) {
+    _history = value;
+    onHistory?.call(value);
+  }
+
+  Future<void> setUnreadOnly(bool value, {bool urgentOnly = false}) async {
+    if (_disposed || (_unreadOnly == value && _urgentOnly == urgentOnly)) {
+      return;
+    }
+    _urgentOnly = urgentOnly;
+    _unreadOnly = value;
+    _queryGeneration++;
+    _loadedLimit = 100;
+    state = const AsyncLoading();
+    await refresh();
+  }
+
+  Future<void> loadMore() async {
+    final repository = _repository;
+    if (repository is! PagedNotificationRepository ||
+        !_history.hasMore ||
+        _history.loadingMore) {
+      return;
+    }
+    _loadedLimit += 100;
+    _setHistory(
+      NotificationHistoryStatus(
+        unreadCount: _history.unreadCount,
+        servicePaused: _history.servicePaused,
+        hasMore: true,
+        loadingMore: true,
+      ),
+    );
+    // Use the same serialized refresh queue as Realtime and acknowledgements.
+    // Re-fetch the loaded window so new arrivals cannot create cursor gaps.
+    await refresh();
+  }
 
   RealtimeChannel? _channel;
   StreamSubscription<AuthState>? _authSubscription;
@@ -100,9 +222,40 @@ class YorksV1NotificationsNotifier
     final repository = _repository;
     if (repository == null || _disposed) return;
     final previous = state.valueOrNull;
+    final generation = _queryGeneration;
     try {
-      final records = await repository.listMine();
-      if (_disposed) return;
+      NotificationPage? page;
+      NotificationPage? firstPage;
+      final records = <YorksV1NotificationRecord>[];
+      if (repository is PagedNotificationRepository) {
+        final paged = repository as PagedNotificationRepository;
+        do {
+          page = await paged.page(
+            limit: (_loadedLimit - records.length).clamp(1, 200),
+            before: records.isEmpty ? null : records.last,
+            unreadOnly: _unreadOnly,
+            urgentOnly: _urgentOnly,
+            search: _search,
+          );
+          if (_disposed || generation != _queryGeneration) return;
+          firstPage ??= page;
+          records.addAll(page.records);
+        } while (page.hasMore &&
+            page.records.isNotEmpty &&
+            records.length < _loadedLimit);
+        onAttention?.call(firstPage.attention);
+        records.addAll(firstPage.attention.where((n) => n.isChatTransport));
+      } else {
+        records.addAll(await repository.listMine());
+      }
+      if (_disposed || generation != _queryGeneration) return;
+      _setHistory(
+        NotificationHistoryStatus(
+          unreadCount: firstPage?.unreadCount,
+          servicePaused: firstPage?.servicePaused,
+          hasMore: page?.hasMore ?? false,
+        ),
+      );
       // Retain the recipient's protected transport rows in this internal feed
       // so the global alert host can provide a foreground Team Chat tone/toast
       // even before FCM permission is granted. Public notification-centre
@@ -110,12 +263,20 @@ class YorksV1NotificationsNotifier
       // unread authority and Chat never enters the workflow bell.
       state = AsyncData(records);
     } catch (error, stackTrace) {
-      if (_disposed) return;
+      if (_disposed || generation != _queryGeneration) return;
       // Preserve the last authorized list during a temporary network failure;
       // the retry timer/Realtime reconnect will reconcile it.
-      if (previous == null || previous.isEmpty) {
-        state = AsyncError(error, stackTrace);
-      }
+      state = AsyncValue<List<YorksV1NotificationRecord>>.error(
+        error,
+        stackTrace,
+      ).copyWithPrevious(AsyncData(previous ?? const []));
+      _setHistory(
+        NotificationHistoryStatus(
+          unreadCount: _history.unreadCount,
+          servicePaused: _history.servicePaused,
+          hasMore: _history.hasMore,
+        ),
+      );
       _startFallback();
     }
   }
@@ -123,49 +284,24 @@ class YorksV1NotificationsNotifier
   Future<void> markSeen(String notificationId) async {
     final repository = _repository;
     if (repository == null) return;
-    final current = state.valueOrNull ?? const <YorksV1NotificationRecord>[];
-    final index = current.indexWhere((item) => item.id == notificationId);
-    if (index < 0) {
-      await repository.markSeen(notificationId);
-      await refresh();
-      return;
-    }
-    if (current[index].seenAt != null) return;
-    final acknowledged = current[index].acknowledgedAt(DateTime.now());
-    state = AsyncData([
-      ...current.take(index),
-      acknowledged,
-      ...current.skip(index + 1),
-    ]);
-    try {
-      await repository.markSeen(notificationId);
-    } catch (_) {
-      if (!_disposed) state = AsyncData(current);
-      rethrow;
-    }
+    // Commit before presenting success. Never restore a whole old snapshot:
+    // a competing refresh may contain newly arrived notifications.
+    await repository.markSeen(notificationId);
+    if (_disposed) return;
+    final now = DateTime.now();
+    state = AsyncData(
+      (state.valueOrNull ?? const <YorksV1NotificationRecord>[])
+          .map((n) => n.id == notificationId ? n.acknowledgedAt(now) : n)
+          .toList(),
+    );
+    await refresh();
   }
 
   Future<void> markAllSeen() async {
     final repository = _repository;
     if (repository == null) return;
-    final current = state.valueOrNull ?? const <YorksV1NotificationRecord>[];
-    if (!current.any((record) => record.seenAt == null)) return;
-    final acknowledgedAt = DateTime.now();
-    state = AsyncData(
-      current
-          .map(
-            (record) => record.seenAt == null
-                ? record.acknowledgedAt(acknowledgedAt)
-                : record,
-          )
-          .toList(growable: false),
-    );
-    try {
-      await repository.markAllSeen();
-    } catch (_) {
-      if (!_disposed) state = AsyncData(current);
-      rethrow;
-    }
+    await repository.markAllSeen();
+    if (!_disposed) await refresh();
   }
 
   Future<bool> _subscribe() async {
@@ -187,7 +323,7 @@ class YorksV1NotificationsNotifier
       });
       final joined = Completer<bool>();
       _channel = client
-          .channel('yorks-v1-notification-center:$authUserId')
+          .channel('yorks-v1-notification-center:$authUserId:$channelSuffix')
           .onPostgresChanges(
             event: PostgresChangeEvent.all,
             schema: 'public',

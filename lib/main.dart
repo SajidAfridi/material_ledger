@@ -149,7 +149,15 @@ void _bootstrap(ObservabilityService observability) {
           systemNavigationBarIconBrightness: Brightness.light,
         ),
       );
-      runApp(_RuntimeBootstrapHost(observability: observability));
+      // The temporary startup Navigator may report '/' while disk / Auth
+      // initialize. Capture the original OS/browser intent before it mounts.
+      final initialLocation = captureAppLaunchLocation();
+      runApp(
+        _RuntimeBootstrapHost(
+          observability: observability,
+          initialLocation: initialLocation,
+        ),
+      );
     },
     // Uncaught async errors.
     (error, stack) => observability.recordError(error, stack, fatal: true),
@@ -161,9 +169,13 @@ void _bootstrap(ObservabilityService observability) {
 /// calling runApp, leaving the platform surface blank and unrecoverable when a
 /// plugin failed. This host makes initialization an explicit, retryable state.
 class _RuntimeBootstrapHost extends StatefulWidget {
-  const _RuntimeBootstrapHost({required this.observability});
+  const _RuntimeBootstrapHost({
+    required this.observability,
+    required this.initialLocation,
+  });
 
   final ObservabilityService observability;
+  final String? initialLocation;
 
   @override
   State<_RuntimeBootstrapHost> createState() => _RuntimeBootstrapHostState();
@@ -185,14 +197,19 @@ class _RuntimeBootstrapHostState extends State<_RuntimeBootstrapHost> {
   void _start() {
     setState(() {
       _reportedInitializationError = false;
-      _initialization = _initializeRuntime(widget.observability);
+      _initialization = _initializeRuntime(
+        widget.observability,
+        initialLocation: widget.initialLocation,
+      );
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final initialization = _initialization;
-    if (initialization == null) return const _StartupSurface();
+    if (initialization == null) {
+      return _StartupSurface(initialLocation: widget.initialLocation);
+    }
     return FutureBuilder<Widget>(
       future: initialization,
       builder: (context, snapshot) {
@@ -207,17 +224,25 @@ class _RuntimeBootstrapHostState extends State<_RuntimeBootstrapHost> {
               ),
             );
           }
-          return _StartupFailure(onRetry: _start);
+          return _StartupFailure(
+            onRetry: _start,
+            initialLocation: widget.initialLocation,
+          );
         }
         final application = snapshot.data;
-        if (application == null) return const _StartupSurface();
+        if (application == null) {
+          return _StartupSurface(initialLocation: widget.initialLocation);
+        }
         return _ApplicationReadyReporter(child: application);
       },
     );
   }
 }
 
-Future<Widget> _initializeRuntime(ObservabilityService observability) async {
+Future<Widget> _initializeRuntime(
+  ObservabilityService observability, {
+  String? initialLocation,
+}) async {
   _StartupTimeline.mark('runtime_initialization_started');
   final prefs = await SharedPreferences.getInstance();
   _StartupTimeline.mark('preferences_ready');
@@ -229,12 +254,16 @@ Future<Widget> _initializeRuntime(ObservabilityService observability) async {
     localDemoPassword: _localDemoPassword,
   );
   if (backend.mode == BackendStartupMode.blocked) {
-    return _BackendConfigurationFailure(reason: backend.failureReason);
+    return _BackendConfigurationFailure(
+      reason: backend.failureReason,
+      initialLocation: initialLocation,
+    );
   }
   const r35Flags = YorksV1FeatureFlags.fromEnvironment();
   if (kReleaseMode && !r35Flags.isCompleteR35) {
-    return const _BackendConfigurationFailure(
+    return _BackendConfigurationFailure(
       reason: 'The complete Yorks V1 R35 feature chain is required.',
+      initialLocation: initialLocation,
     );
   }
   if (kDebugMode || _buildDiagnostic) {
@@ -257,6 +286,7 @@ Future<Widget> _initializeRuntime(ObservabilityService observability) async {
   );
   final analytics = _createAnalyticsService();
   final overrides = <Override>[
+    appLaunchLocationProvider.overrideWithValue(initialLocation),
     sharedPreferencesProvider.overrideWithValue(prefs),
     appVersionProvider.overrideWithValue(versionInfo),
     observabilityProvider.overrideWithValue(observability),
@@ -368,13 +398,40 @@ abstract final class _StartupTimeline {
   }
 }
 
-class _StartupSurface extends StatelessWidget {
-  const _StartupSurface();
+/// Holds the original route while a temporary startup / retry page renders.
+/// A home-only Navigator would reject an OS deep link and report '/' before
+/// the authenticated GoRouter has even been created.
+class YorksStartupPage extends StatelessWidget {
+  const YorksStartupPage({
+    super.key,
+    this.initialLocation,
+    required this.child,
+  });
+
+  final String? initialLocation;
+  final Widget child;
+
+  Route<void> _route(RouteSettings settings) =>
+      MaterialPageRoute<void>(settings: settings, builder: (context) => child);
 
   @override
   Widget build(BuildContext context) => MaterialApp(
     debugShowCheckedModeBanner: false,
-    home: Scaffold(
+    initialRoute: initialLocation ?? '/',
+    onGenerateRoute: _route,
+    onGenerateInitialRoutes: (route) => [_route(RouteSettings(name: route))],
+  );
+}
+
+class _StartupSurface extends StatelessWidget {
+  const _StartupSurface({this.initialLocation});
+
+  final String? initialLocation;
+
+  @override
+  Widget build(BuildContext context) => YorksStartupPage(
+    initialLocation: initialLocation,
+    child: Scaffold(
       backgroundColor: const Color(0xFF041E42),
       body: Semantics(
         liveRegion: true,
@@ -416,14 +473,15 @@ class _StartupSurface extends StatelessWidget {
 }
 
 class _StartupFailure extends StatelessWidget {
-  const _StartupFailure({required this.onRetry});
+  const _StartupFailure({required this.onRetry, this.initialLocation});
 
   final VoidCallback onRetry;
+  final String? initialLocation;
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
-    debugShowCheckedModeBanner: false,
-    home: Scaffold(
+  Widget build(BuildContext context) => YorksStartupPage(
+    initialLocation: initialLocation,
+    child: Scaffold(
       backgroundColor: AppColors.surface,
       body: Center(
         child: ConstrainedBox(
@@ -472,19 +530,19 @@ class _StartupFailure extends StatelessWidget {
 /// Operationally closed startup state. No repositories, routes or local data
 /// are exposed when backend configuration fails validation.
 class _BackendConfigurationFailure extends StatelessWidget {
-  const _BackendConfigurationFailure({required this.reason});
+  const _BackendConfigurationFailure({
+    required this.reason,
+    this.initialLocation,
+  });
 
   final String reason;
+  final String? initialLocation;
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      // This fallback is a plain MaterialApp, not GoRouter. Force its own
-      // root route so a stale browser hash such as /login cannot trigger the
-      // "Could not navigate to initial route" white screen.
-      initialRoute: '/',
-      home: Scaffold(
+    return YorksStartupPage(
+      initialLocation: initialLocation,
+      child: Scaffold(
         backgroundColor: const Color(0xFFF7F9FB),
         body: Center(
           child: ConstrainedBox(

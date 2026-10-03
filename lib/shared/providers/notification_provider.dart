@@ -67,7 +67,11 @@ final visibleNotificationsProvider = Provider<List<AppNotification>>((ref) {
 
 /// Count of unread notifications for the current role (drives the badge dot).
 final unreadNotificationCountProvider = Provider<int>((ref) {
-  return ref.watch(visibleNotificationsProvider).where((n) => !n.isRead).length;
+  final legacy = ref
+      .watch(visibleNotificationsProvider)
+      .where((n) => !n.isServerAuthoritative && !n.isRead)
+      .length;
+  return legacy + ref.watch(yorksV1WorkflowUnreadCountProvider);
 });
 
 /// Server-authoritative workflow unread count used by operating-system
@@ -75,10 +79,11 @@ final unreadNotificationCountProvider = Provider<int>((ref) {
 /// records during rollout, but a device-local compatibility row must never
 /// create a browser-tab, PWA or native application badge on another account.
 final yorksV1WorkflowUnreadCountProvider = Provider<int>((ref) {
-  return ref
-      .watch(yorksV1AppNotificationsProvider)
-      .where((notification) => !notification.isRead)
-      .length;
+  return ref.watch(notificationHistoryStatusProvider).unreadCount ??
+      ref
+          .watch(yorksV1AppNotificationsProvider)
+          .where((notification) => !notification.isRead)
+          .length;
 });
 
 /// Combined unresolved attention for surfaces outside Yorks itself (browser
@@ -106,6 +111,38 @@ class NotificationActions {
   const NotificationActions(this._ref);
 
   final Ref _ref;
+
+  /// Opens a notification without treating navigation as a successful read.
+  /// Authoritative destinations carry recipient-owned acknowledgement metadata;
+  /// the protected destination loader/read cursor commits the read afterwards.
+  /// A push keeps the user's in-app Back history intact.
+  Future<void> open(
+    AppNotification notification, {
+    required void Function(String location) navigate,
+  }) async {
+    if (notification.isServerAuthoritative) {
+      final destination = Uri.tryParse(notification.route);
+      if (destination == null ||
+          destination.hasScheme ||
+          destination.hasAuthority ||
+          !destination.path.startsWith('/') ||
+          destination.path.startsWith('//')) {
+        return;
+      }
+      final id = notification.id.trim();
+      final query = {...destination.queryParameters}..remove('notificationId');
+      if (RegExp(
+        r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+        caseSensitive: false,
+      ).hasMatch(id)) {
+        query['notificationId'] = id;
+      }
+      navigate(destination.replace(queryParameters: query).toString());
+      return;
+    }
+    if (notification.route.isNotEmpty) navigate(notification.route);
+    await markRead(notification);
+  }
 
   Future<void> markRead(AppNotification notification) {
     if (notification.isServerAuthoritative) {

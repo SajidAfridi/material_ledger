@@ -85,6 +85,78 @@ void main() {
     },
   );
 
+  for (final chat in [true, false]) {
+    testWidgets(
+      'burst action opens the matching ${chat ? 'Chat' : 'workflow'} surface',
+      (tester) async {
+        SharedPreferences.setMockInitialValues({});
+        final preferences = await SharedPreferences.getInstance();
+        final server = _FakeServerNotificationsNotifier();
+        final router = GoRouter(
+          routes: [
+            GoRoute(path: '/', builder: (_, _) => const Scaffold()),
+            GoRoute(
+              path: '/notifications',
+              builder: (_, _) => const Scaffold(body: Text('Workflow inbox')),
+            ),
+            GoRoute(
+              path: '/yorks/team-chat',
+              builder: (_, _) => const Scaffold(body: Text('Chat inbox')),
+            ),
+          ],
+        );
+        final container = ProviderContainer(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(preferences),
+            pushServiceProvider.overrideWithValue(const NoopPushService()),
+            appRouterProvider.overrideWithValue(router),
+            yorksV1NotificationsProvider.overrideWith((_) => server),
+          ],
+        );
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: MaterialApp.router(
+              routerConfig: router,
+              builder: (_, child) => NotificationAlertHost(child: child!),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        server.publishMany(
+          List.generate(
+            3,
+            (i) => YorksV1NotificationRecord(
+              id: 'burst-$i',
+              eventCode: chat
+                  ? 'team_chat_message'
+                  : 'material_request_approval_required',
+              entityType: chat ? 'chat_message' : 'material_request',
+              entityId: 'entity-$i',
+              chatConversationId: chat ? 'conversation-$i' : null,
+              createdAt: DateTime.now(),
+            ),
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(
+          find.text('3 new updates. Open to review them.'),
+          findsOneWidget,
+        );
+        await tester.tap(find.text('VIEW DETAILS'));
+        await tester.pumpAndSettle();
+        expect(
+          find.text(chat ? 'Chat inbox' : 'Workflow inbox'),
+          findsOneWidget,
+        );
+        await tester.pumpWidget(const SizedBox.shrink());
+        container.dispose();
+        router.dispose();
+      },
+    );
+  }
+
   testWidgets('foreground alert is compact, dismissible, and expires', (
     tester,
   ) async {
@@ -270,7 +342,9 @@ void main() {
 
     expect(find.text('Chat conversation-1'), findsOneWidget);
     expect(find.text('New chat message'), findsNothing);
-    expect(container.read(notificationsProvider).first.isRead, isTrue);
+    // A matching URL suppresses presentation only. The protected Chat loader
+    // and member read cursor own acknowledgement after successful loading.
+    expect(container.read(notificationsProvider).first.isRead, isFalse);
     await tester.pumpWidget(const SizedBox.shrink());
     container.dispose();
   });
@@ -308,7 +382,7 @@ void main() {
           entityType: 'chat_message',
           entityId: 'message-1',
           chatConversationId: 'conversation-2',
-          createdAt: DateTime(2026, 8, 20),
+          createdAt: DateTime.now(),
         ),
       );
       await tester.pump();
@@ -331,6 +405,10 @@ class _FakeServerNotificationsNotifier extends YorksV1NotificationsNotifier {
   _FakeServerNotificationsNotifier()
     : super(client: null, repository: null, authUserId: null) {
     state = const AsyncData([]);
+  }
+
+  void publishMany(List<YorksV1NotificationRecord> records) {
+    state = AsyncData([...records, ...?state.valueOrNull]);
   }
 
   void beginLoad() {

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:material_ledger/features/accounts/application/accounts_portfolio_providers.dart';
 import 'package:material_ledger/features/accounts/application/accounts_providers.dart';
 import 'package:material_ledger/features/accounts/application/accounts_receivables_providers.dart';
@@ -27,9 +28,12 @@ import 'package:material_ledger/core/theme/app_theme.dart';
 import 'package:material_ledger/shared/models/app_language.dart';
 import 'package:material_ledger/shared/models/yorks_v1_document.dart';
 import 'package:material_ledger/shared/models/yorks_v1_role.dart';
+import 'package:material_ledger/shared/models/yorks_v1_notification.dart';
+import 'package:material_ledger/shared/models/yorks_v1_domain_error.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_documents_repository_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_notification_provider.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_documents_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -45,6 +49,140 @@ void main() {
       ..addFont(rootBundle.load('assets/fonts/NotoSansArabic-Regular.ttf'));
     await Future.wait([font.load(), arabic.load()]);
   });
+
+  for (final failure in ['none', 'denied', 'wrong_record']) {
+    testWidgets(
+      'Exact Accounts notification acknowledges only a protected target: $failure',
+      (tester) async {
+        final notifications = _NotificationRecorder();
+        final repository = _ReceivablesRepository(
+          claimLoader: (project, id) async {
+            if (failure == 'denied') {
+              throw const YorksV1DomainException(
+                YorksV1DomainErrorCode.unauthorized,
+              );
+            }
+            return _notificationClaim(
+              failure == 'wrong_record' ? _claimTwo : id,
+            );
+          },
+        );
+        final router = _notificationRouter(_claimOne, _notificationOne);
+        addTearDown(router.dispose);
+        await _pumpProjectTab(
+          tester,
+          const Size(1366, 900),
+          YorksProjectAccountsTab.invoices,
+          receivablesRepository: repository,
+          router: router,
+          notifications: notifications,
+        );
+        expect(
+          notifications.seen,
+          failure == 'none' ? [_notificationOne] : isEmpty,
+        );
+        expect(
+          find.byType(BottomSheet),
+          failure == 'none' ? findsOneWidget : findsNothing,
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  for (final interruption in ['route', 'account']) {
+    testWidgets(
+      'A stale Accounts notification load stays unread after $interruption change',
+      (tester) async {
+        final pending = Completer<YorksAccountsClaimDetailProjection>();
+        final actor = StateProvider<String?>((_) => 'accountant-1');
+        final notifications = _NotificationRecorder();
+        final repository = _ReceivablesRepository(
+          claimLoader: (_, _) => pending.future,
+        );
+        final router = _notificationRouter(_claimOne, _notificationOne);
+        addTearDown(router.dispose);
+        final container = await _pumpProjectTab(
+          tester,
+          const Size(1366, 900),
+          YorksProjectAccountsTab.invoices,
+          receivablesRepository: repository,
+          router: router,
+          notifications: notifications,
+          actorProvider: actor,
+        );
+        if (interruption == 'route') {
+          router.go('/away');
+        } else {
+          container.read(actor.notifier).state = 'different-account';
+        }
+        await tester.pump();
+        pending.complete(_notificationClaim(_claimOne));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(notifications.seen, isEmpty);
+        expect(find.byType(BottomSheet), findsNothing);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets(
+    'A second Accounts notification on the same tab opens and acknowledges its exact claim',
+    (tester) async {
+      final notifications = _NotificationRecorder();
+      final repository = _ReceivablesRepository(
+        claimLoader: (_, id) async => _notificationClaim(id),
+      );
+      final router = _notificationRouter(_claimOne, _notificationOne);
+      addTearDown(router.dispose);
+      await _pumpProjectTab(
+        tester,
+        const Size(1366, 900),
+        YorksProjectAccountsTab.invoices,
+        receivablesRepository: repository,
+        router: router,
+        notifications: notifications,
+      );
+      expect(notifications.seen, [_notificationOne]);
+      Navigator.of(tester.element(find.byType(BottomSheet))).pop();
+      await tester.pumpAndSettle();
+      router.go(_notificationLocation(_claimTwo, _notificationTwo));
+      await tester.pumpAndSettle();
+      expect(notifications.seen, [_notificationOne, _notificationTwo]);
+      expect(find.text('Notification claim $_claimTwo'), findsWidgets);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'A retained Accounts screen cannot also open a pushed notification target',
+    (tester) async {
+      final notifications = _NotificationRecorder();
+      final repository = _ReceivablesRepository(
+        claimLoader: (_, id) async => _notificationClaim(id),
+      );
+      final router = _notificationRouter(_claimOne, _notificationOne);
+      addTearDown(router.dispose);
+      await _pumpProjectTab(
+        tester,
+        const Size(1366, 900),
+        YorksProjectAccountsTab.invoices,
+        receivablesRepository: repository,
+        router: router,
+        notifications: notifications,
+      );
+      Navigator.of(tester.element(find.byType(BottomSheet))).pop();
+      await tester.pumpAndSettle();
+      unawaited(
+        router.push(_notificationLocation(_claimTwo, _notificationTwo)),
+      );
+      await tester.pumpAndSettle();
+      expect(notifications.seen, [_notificationOne, _notificationTwo]);
+      expect(find.byType(BottomSheet), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('Accounts portfolio is a dense desktop register', (tester) async {
     await _pumpPortfolio(tester, const Size(1440, 1000));
@@ -717,12 +855,17 @@ Future<void> _pumpProjectBilling(WidgetTester tester, Size size) async {
   await _pumpProjectTab(tester, size, YorksProjectAccountsTab.billing);
 }
 
-Future<void> _pumpProjectTab(
+Future<ProviderContainer> _pumpProjectTab(
   WidgetTester tester,
   Size size,
   YorksProjectAccountsTab tab, {
   YorksAccountsPortfolioRepository overviewRepository = const _Repository(),
   YorksAccountsRepository projectRepository = const _ProjectRepository(),
+  YorksAccountsReceivablesRepository receivablesRepository =
+      const _ReceivablesRepository(),
+  GoRouter? router,
+  _NotificationRecorder? notifications,
+  StateProvider<String?>? actorProvider,
 }) async {
   await tester.pumpWidget(const SizedBox.shrink());
   tester.view.physicalSize = size;
@@ -735,7 +878,14 @@ Future<void> _pumpProjectTab(
     ProviderScope(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(preferences),
-        yorksV1AuthUserIdProvider.overrideWithValue('accountant-1'),
+        if (actorProvider == null)
+          yorksV1AuthUserIdProvider.overrideWithValue('accountant-1')
+        else
+          yorksV1AuthUserIdProvider.overrideWith(
+            (ref) => ref.watch(actorProvider),
+          ),
+        if (notifications != null)
+          yorksV1NotificationsProvider.overrideWith((_) => notifications),
         yorksV1CurrentRoleProvider.overrideWithValue(YorksV1Role.accountant),
         yorksAccountsPermissionEpochProvider.overrideWith(
           (ref) => (
@@ -750,7 +900,7 @@ Future<void> _pumpProjectTab(
         ),
         yorksAccountsRepositoryProvider.overrideWithValue(projectRepository),
         yorksAccountsReceivablesRepositoryProvider.overrideWithValue(
-          const _ReceivablesRepository(),
+          receivablesRepository,
         ),
         yorksAccountsSupplierRepositoryProvider.overrideWithValue(
           const _SupplierRepository(),
@@ -762,14 +912,20 @@ Future<void> _pumpProjectTab(
           const _DocumentsRepository(),
         ),
       ],
-      child: MaterialApp(
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.light,
-        home: YorksProjectAccountsScreen(
-          projectId: 'project-322',
-          initialTab: tab,
-        ),
-      ),
+      child: router != null
+          ? MaterialApp.router(
+              debugShowCheckedModeBanner: false,
+              theme: AppTheme.light,
+              routerConfig: router,
+            )
+          : MaterialApp(
+              debugShowCheckedModeBanner: false,
+              theme: AppTheme.light,
+              home: YorksProjectAccountsScreen(
+                projectId: 'project-322',
+                initialTab: tab,
+              ),
+            ),
     ),
   );
   await tester.pump();
@@ -811,6 +967,7 @@ Future<void> _pumpProjectTab(
   }
   await tester.pump(const Duration(milliseconds: 100));
   await tester.pumpAndSettle();
+  return container;
 }
 
 void _expectSelectedAccountsTabVisible(
@@ -972,7 +1129,15 @@ final class _ProjectRepository implements YorksAccountsRepository {
 
 final class _ReceivablesRepository
     implements YorksAccountsReceivablesRepository {
-  const _ReceivablesRepository();
+  const _ReceivablesRepository({this.claimLoader});
+  final Future<YorksAccountsClaimDetailProjection> Function(String, String)?
+  claimLoader;
+
+  @override
+  Future<YorksAccountsClaimDetailProjection> getClaim(
+    String projectId,
+    String claimId,
+  ) => claimLoader!(projectId, claimId);
 
   @override
   Future<YorksAccountsClaimsProjection> listClaims(
@@ -1614,3 +1779,68 @@ YorksAccountsPortfolioProject _project({
   supplierReviewCount: actions,
   supplierOpenAmount: YorksAccountsDecimal.parse('250000'),
 );
+
+const _claimOne = 'ab300000-0000-4000-8000-000000000001';
+const _claimTwo = 'ab300000-0000-4000-8000-000000000002';
+const _notificationOne = 'ab400000-0000-4000-8000-000000000001';
+const _notificationTwo = 'ab400000-0000-4000-8000-000000000002';
+String _notificationLocation(String claim, String notification) =>
+    '/yorks/projects/project-322/accounts/client-invoices?claim_id=$claim&notificationId=$notification';
+GoRouter _notificationRouter(String claim, String notification) => GoRouter(
+  initialLocation: _notificationLocation(claim, notification),
+  routes: [
+    GoRoute(
+      path: '/yorks/projects/project-322/accounts/client-invoices',
+      builder: (_, _) => const YorksProjectAccountsScreen(
+        projectId: 'project-322',
+        initialTab: YorksProjectAccountsTab.invoices,
+      ),
+    ),
+    GoRoute(
+      path: '/away',
+      builder: (_, _) => const Scaffold(body: Text('Away')),
+    ),
+  ],
+);
+
+class _NotificationRecorder extends YorksV1NotificationsNotifier {
+  _NotificationRecorder()
+    : super(client: null, repository: null, authUserId: null) {
+    state = const AsyncData(<YorksV1NotificationRecord>[]);
+  }
+  final seen = <String>[];
+  @override
+  Future<void> markSeen(String notificationId) async =>
+      seen.add(notificationId);
+}
+
+YorksAccountsClaimDetailProjection _notificationClaim(String id) =>
+    YorksAccountsClaimDetailProjection(
+      schemaVersion: 3,
+      projectId: 'project-322',
+      capabilities: _receivablesCapabilities,
+      commands: _receivablesCommands,
+      claim: YorksAccountsClientClaim(
+        claimId: id,
+        projectId: 'project-322',
+        baselineRevisionId: 'baseline-1',
+        claimReference: 'Notification claim $id',
+        periodStart: YorksAccountsDate.parse('2026-08-01'),
+        periodEnd: YorksAccountsDate.parse('2026-08-31'),
+        status: YorksAccountsClaimStatus.invoiced,
+        adminExceptionReason: null,
+        notes: null,
+        isStale: false,
+        staleReason: null,
+        recordVersion: 1,
+        createdByAuthUserId: 'engineer-1',
+        createdByExactRole: 'project_engineer',
+        readyForAccountsAt: DateTime.utc(2026, 8, 26),
+        cancelledAt: null,
+        cancellationReason: null,
+        claimedExVat: YorksAccountsDecimal.parse('100'),
+        lines: [],
+        createdAt: DateTime.utc(2026, 8, 25),
+        updatedAt: DateTime.utc(2026, 8, 26),
+      ),
+    );

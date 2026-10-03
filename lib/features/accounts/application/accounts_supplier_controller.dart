@@ -176,18 +176,22 @@ final class YorksAccountsSupplierController
     Future<T> Function() invoke,
     YorksAccountsSupplierState Function(T value) success,
   ) async {
+    if (!mounted) return false;
     state = state.copyWith(
       status: YorksAccountsViewStatus.loading,
       clearError: true,
     );
     try {
       final value = await invoke();
+      if (!mounted) return false;
       state = success(value);
       return true;
     } on YorksV1DomainException catch (error) {
+      if (!mounted) return false;
       _setFailure(error, commandMayHaveCommitted: false);
       return false;
     } catch (error) {
+      if (!mounted) return false;
       _setFailure(
         YorksV1DomainException(
           YorksV1DomainErrorCode.backendUnavailable,

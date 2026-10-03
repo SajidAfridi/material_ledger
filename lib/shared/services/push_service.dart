@@ -12,9 +12,12 @@ import '../../firebase_options.dart';
 import '../models/app_notification.dart';
 import '../models/yorks_v1_notification.dart';
 import '../providers/language_provider.dart'
-    show supabaseClientProvider, sharedPreferencesProvider;
-import '../providers/yorks_v1_notification_provider.dart';
+    show languageProvider, supabaseClientProvider, sharedPreferencesProvider;
+import '../providers/yorks_v1_notification_preferences_provider.dart';
+import '../../app/router.dart' show safeReturnLocation;
 import 'observability_service.dart';
+import 'push_installation_lifecycle.dart';
+import 'push_installation_language.dart';
 
 /// Enroll only the explicitly configured site, never arbitrary preview URLs.
 const _webPushOrigin = String.fromEnvironment(
@@ -102,10 +105,9 @@ class PushDeliveryStatus {
       deviceRegistered = false,
       errorCode = '';
 
-  const PushDeliveryStatus.unsupported()
+  const PushDeliveryStatus.unsupported([this.errorCode = ''])
     : authorization = PushAuthorizationState.unsupported,
-      deviceRegistered = false,
-      errorCode = '';
+      deviceRegistered = false;
 
   final PushAuthorizationState authorization;
   final bool deviceRegistered;
@@ -218,6 +220,34 @@ class FcmPushService implements PushService {
   final _localPlugin = FlutterLocalNotificationsPlugin();
   final _controller = StreamController<PushMessage>.broadcast();
   final _statusController = StreamController<PushDeliveryStatus>.broadcast();
+  static const _operationBudget = Duration(seconds: 15);
+  final List<StreamSubscription<dynamic>> _subscriptions = [];
+  late final _installation = PushInstallationLifecycle(
+    cleanupPending: () =>
+        _ref
+            .read(sharedPreferencesProvider)
+            .getBool('yorks_push_cleanup_pending') ==
+        true,
+    setCleanupPending: (value) async {
+      await _ref
+          .read(sharedPreferencesProvider)
+          .setBool('yorks_push_cleanup_pending', value);
+    },
+    deleteToken: () async {
+      await initialize();
+      if (!_ready) throw StateError('PUSH_CLEANUP_NOT_READY');
+      await FirebaseMessaging.instance.deleteToken().timeout(_operationBudget);
+    },
+  );
+  String? _registeredToken;
+  String? _registeredOwner;
+  bool _disposed = false;
+  bool get _pushEnabled =>
+      _ref
+          .read(yorksV1NotificationPreferencesProvider)
+          .valueOrNull
+          ?.pushEnabled ==
+      true;
   bool _ready = false;
   bool _listenersAttached = false;
   Future<void>? _initializing;
@@ -233,33 +263,66 @@ class FcmPushService implements PushService {
   Stream<PushDeliveryStatus> get onStatus => _statusController.stream;
 
   @override
-  Future<String?> register() async {
-    await initialize();
-    if (!_ready || !_status.isAllowed) return null;
+  Future<String?> register() {
+    return _installation.register((_) => _register()).catchError((
+      Object error,
+      StackTrace stack,
+    ) {
+      if (!_disposed) _reportFailure('TOKEN_CLEANUP_PENDING', error, stack);
+      return null;
+    });
+  }
+
+  Future<String?> _register() async {
+    final generation = _installation.generation;
+    final owner = _ref.read(supabaseClientProvider)?.auth.currentUser?.id;
     try {
-      final token = await _getToken();
-      // [initialize] can run before authentication exists. Repeat this
-      // owner-bound registration after a later sign-in instead of leaving a
-      // token unassociated with that user.
+      await initialize().timeout(_operationBudget);
+      if (!_ready || _disposed || generation != _installation.generation) {
+        return null;
+      }
+      final settings = await FirebaseMessaging.instance
+          .getNotificationSettings()
+          .timeout(_operationBudget);
+      _setAuthorization(settings.authorizationStatus);
+      if (!_status.isAllowed || !_pushEnabled) return null;
+      final token = await _getToken().timeout(_operationBudget);
+      if (_disposed ||
+          generation != _installation.generation ||
+          owner != _ref.read(supabaseClientProvider)?.auth.currentUser?.id) {
+        return null;
+      }
       final registered = await _registerToken(token);
-      _setStatus(_status.copyWith(deviceRegistered: registered, errorCode: ''));
-      return token;
+      if (!_disposed && generation == _installation.generation) {
+        _setStatus(
+          _status.copyWith(deviceRegistered: registered, errorCode: ''),
+        );
+      }
+      return registered ? token : null;
     } catch (e, st) {
-      _reportFailure('TOKEN_REGISTRATION_FAILED', e, st);
+      if (!_disposed && generation == _installation.generation) {
+        _reportFailure('TOKEN_REGISTRATION_FAILED', e, st);
+      }
       return null;
     }
   }
 
   @override
   Future<PushDeliveryStatus> enable() async {
-    await initialize();
-    if (!_ready) return _status;
     try {
-      final settings = await FirebaseMessaging.instance.requestPermission(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
+      if (!_ready) {
+        await initialize().timeout(_operationBudget);
+        return _status;
+      }
+      if (_disposed) return _status;
+      if (_status.authorization != PushAuthorizationState.notDetermined) {
+        await register();
+        return _status;
+      }
+      // Invoke from the gesture before network, audio or settings awaits.
+      final settings = await FirebaseMessaging.instance
+          .requestPermission(alert: true, badge: true, sound: true)
+          .timeout(_operationBudget);
       _setAuthorization(settings.authorizationStatus);
       if (_status.isAllowed) await register();
     } catch (e, st) {
@@ -275,7 +338,21 @@ class FcmPushService implements PushService {
     if (_ready) return Future<void>.value();
     final inFlight = _initializing;
     if (inFlight != null) return inFlight;
-    final attempt = _initialize();
+    final attempt = _initialize()
+        .catchError((Object error, StackTrace stack) {
+          if (!_disposed) _reportFailure('INITIALIZATION_FAILED', error, stack);
+        })
+        .timeout(
+          _operationBudget,
+          onTimeout: () {
+            _setStatus(
+              const PushDeliveryStatus(
+                authorization: PushAuthorizationState.error,
+                errorCode: 'INITIALIZATION_TIMEOUT',
+              ),
+            );
+          },
+        );
     _initializing = attempt;
     return attempt.whenComplete(() {
       if (identical(_initializing, attempt)) _initializing = null;
@@ -285,7 +362,9 @@ class FcmPushService implements PushService {
   Future<void> _initialize() async {
     // Preview origins must never silently enroll against the production backend.
     if (kIsWeb && Uri.base.origin != _webPushOrigin) {
-      _setStatus(const PushDeliveryStatus.unsupported());
+      _setStatus(
+        const PushDeliveryStatus.unsupported('WEB_ORIGIN_NOT_ENROLLED'),
+      );
       return;
     }
     try {
@@ -306,6 +385,14 @@ class FcmPushService implements PushService {
       }
       return;
     }
+    if (_disposed) return;
+    if (kIsWeb &&
+        !await FirebaseMessaging.instance.isSupported().timeout(
+          _operationBudget,
+        )) {
+      _setStatus(const PushDeliveryStatus.unsupported());
+      return;
+    }
     _ready = true;
 
     try {
@@ -313,7 +400,11 @@ class FcmPushService implements PushService {
         await _localPlugin.initialize(
           settings: const InitializationSettings(
             android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-            iOS: DarwinInitializationSettings(),
+            iOS: DarwinInitializationSettings(
+              requestAlertPermission: false,
+              requestBadgePermission: false,
+              requestSoundPermission: false,
+            ),
           ),
           onDidReceiveNotificationResponse: (resp) => _openRoute(resp.payload),
         );
@@ -354,15 +445,19 @@ class FcmPushService implements PushService {
     // Foreground: FCM does not auto-display consistently, so publish it to the
     // cross-platform alert host. The real record separately syncs from the
     // protected notification table and is de-duplicated by notification ID.
-    FirebaseMessaging.onMessage.listen((m) {
-      _debugMessage('foreground', m);
-      _controller.add(_toPushMessage(m));
-    });
+    _subscriptions.add(
+      FirebaseMessaging.onMessage.listen((m) {
+        _debugMessage('foreground', m);
+        if (!_disposed) _controller.add(_toPushMessage(m));
+      }),
+    );
     // Backgrounded (app alive, tapped from the tray) → deep-link.
-    FirebaseMessaging.onMessageOpenedApp.listen((m) {
-      _debugMessage('opened', m);
-      _openMessage(m);
-    });
+    _subscriptions.add(
+      FirebaseMessaging.onMessageOpenedApp.listen((m) {
+        _debugMessage('opened', m);
+        _openMessage(m);
+      }),
+    );
     // Terminated (the tap launched the app fresh) → check once at startup.
     try {
       final initial = await FirebaseMessaging.instance.getInitialMessage();
@@ -374,15 +469,14 @@ class FcmPushService implements PushService {
       _observe(e, st);
     }
 
-    FirebaseMessaging.instance.onTokenRefresh.listen((token) {
-      unawaited(
-        _registerToken(token).then((registered) {
-          _setStatus(
-            _status.copyWith(deviceRegistered: registered, errorCode: ''),
-          );
-        }),
-      );
-    });
+    _subscriptions.add(
+      FirebaseMessaging.instance.onTokenRefresh.listen((token) {
+        if (!_pushEnabled || !_status.isAllowed || _disposed) return;
+        // Use the same serialized lifecycle as resume/login. A rotation cannot
+        // enroll while logout is still retiring the previous subscription.
+        unawaited(register());
+      }),
+    );
   }
 
   void _setAuthorization(AuthorizationStatus authorization) {
@@ -403,6 +497,7 @@ class FcmPushService implements PushService {
   }
 
   void _setStatus(PushDeliveryStatus value) {
+    if (_disposed) return;
     _status = value;
     if (!_statusController.isClosed) _statusController.add(value);
   }
@@ -465,9 +560,13 @@ class FcmPushService implements PushService {
   /// no widget context" problem). Never throws — a bad/stale route on tap must
   /// never crash the app.
   void _openRoute(String? route) {
-    if (route == null || route.isEmpty) return;
+    route = safeReturnLocation(route);
+    if (route == null || _disposed) return;
     try {
-      _ref.read(appRouterProvider).push(route);
+      // External notification intent becomes the router's current location so
+      // authentication reconstruction and successful-open acknowledgement see
+      // the same destination. Imperative push can leave the browser URI stale.
+      _ref.read(appRouterProvider).go(route);
     } catch (e, st) {
       _observe(e, st);
     }
@@ -475,17 +574,6 @@ class FcmPushService implements PushService {
 
   void _openMessage(RemoteMessage message) {
     final push = _toPushMessage(message);
-    if (push.notificationId.isNotEmpty) {
-      unawaited(() async {
-        try {
-          await _ref
-              .read(yorksV1NotificationsProvider.notifier)
-              .markSeen(push.notificationId);
-        } catch (error, stackTrace) {
-          _observe(error, stackTrace);
-        }
-      }());
-    }
     _openRoute(_routeWithAcknowledgement(push));
   }
 
@@ -511,6 +599,12 @@ class FcmPushService implements PushService {
   Future<bool> _registerToken([String? currentToken]) async {
     final client = _ref.read(supabaseClientProvider);
     final authUserId = client?.auth.currentUser?.id;
+    final generation = _installation.generation;
+    bool valid() =>
+        !_disposed &&
+        generation == _installation.generation &&
+        client?.auth.currentUser?.id == authUserId &&
+        _pushEnabled;
     if (client == null || authUserId == null || authUserId.isEmpty) {
       return false;
     }
@@ -523,15 +617,40 @@ class FcmPushService implements PushService {
         installationId = const Uuid().v4();
         await prefs.setString('yorks_push_installation_id', installationId);
       }
-      await client.rpc(
-        kIsWeb ? 'v1_register_push_installation' : 'v1_register_push_device',
-        params: {
-          'p_token': token,
-          'p_platform': kIsWeb ? 'web' : defaultTargetPlatform.name,
-          if (kIsWeb) 'p_web_origin': Uri.base.origin,
-          if (kIsWeb) 'p_installation_id': installationId,
-        },
-      );
+      if (!valid()) return false;
+      final enrolled = await client
+          .rpc(
+            kIsWeb
+                ? 'v1_register_push_installation'
+                : 'v1_register_push_device',
+            params: {
+              'p_token': token,
+              'p_platform': kIsWeb ? 'web' : defaultTargetPlatform.name,
+              if (kIsWeb) 'p_web_origin': Uri.base.origin,
+              if (kIsWeb) 'p_installation_id': installationId,
+            },
+          )
+          .timeout(_operationBudget);
+      if (enrolled != true || !valid()) return false;
+      if (kIsWeb) {
+        final localized = await syncCurrentPushLanguage(
+          readLanguage: () => _ref.read(languageProvider).code,
+          isCurrent: valid,
+          update: (language) async =>
+              await client.rpc(
+                'v1_set_my_push_installation_language',
+                params: {
+                  'p_installation_id': installationId,
+                  'p_language': language,
+                },
+              ) ==
+              true,
+          timeout: _operationBudget,
+        );
+        if (!localized || !valid()) return false;
+      }
+      _registeredToken = token;
+      _registeredOwner = authUserId;
       return true;
     } catch (e, st) {
       _observe(e, st);
@@ -542,16 +661,35 @@ class FcmPushService implements PushService {
   /// De-registers this device — call on sign-out so a stale token can't keep
   /// receiving pushes meant for the account that just signed out.
   Future<void> unregisterToken() async {
-    if (!_ready) return;
+    final token = _registeredToken;
+    final owner = _registeredOwner;
+    _registeredToken = null;
+    _registeredOwner = null;
+    _setStatus(_status.copyWith(deviceRegistered: false));
     final client = _ref.read(supabaseClientProvider);
-    if (client == null) return;
     try {
-      final token = await _getToken();
-      if (token == null) return;
-      await client.rpc('v1_unregister_push_device', params: {'p_token': token});
+      await _installation.retire(() async {
+        if (token != null && client?.auth.currentUser?.id == owner) {
+          await client!
+              .rpc('v1_unregister_push_device', params: {'p_token': token})
+              .timeout(_operationBudget);
+        }
+      });
     } catch (e, st) {
+      // Persisted cleanup must succeed before any later account can enroll.
+      // Server session/preference gates independently suppress old registrations.
       _observe(e, st);
     }
+  }
+
+  void dispose() {
+    _disposed = true;
+    _installation.dispose();
+    for (final subscription in _subscriptions) {
+      unawaited(subscription.cancel());
+    }
+    unawaited(_controller.close());
+    unawaited(_statusController.close());
   }
 
   void _observe(Object e, StackTrace st) {
@@ -563,4 +701,8 @@ class FcmPushService implements PushService {
   }
 }
 
-final pushServiceProvider = Provider<PushService>((ref) => FcmPushService(ref));
+final pushServiceProvider = Provider<PushService>((ref) {
+  final service = FcmPushService(ref);
+  ref.onDispose(service.dispose);
+  return service;
+});

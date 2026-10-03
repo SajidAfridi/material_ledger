@@ -1,14 +1,21 @@
 begin;
+-- Isolate transport behavior for synthetic entity IDs. Real entity access,
+-- revocation and action-state checks run in yorks_push_entity_access.test.sql.
+create or replace function public.v1_push_notification_entity_allowed(n public.v1_notifications)
+returns boolean language sql stable security definer set search_path='' as $$select true$$;
+
 create extension if not exists pgtap with schema extensions;
 set local search_path=public,extensions;
 select plan(13);
 update public.v1_push_transport_control set operator_paused=false where id;
+insert into auth.sessions(id,user_id,created_at,updated_at)
+values('b3000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000003',now(),now());
 insert into public.v1_notifications(id,recipient_auth_user_id,event_code,entity_type,entity_id)
 values('9a000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000003',
 'material_request_submitted','material_request','9a000000-0000-4000-8000-000000000002');
 insert into public.v1_push_device_tokens(token,auth_user_id,platform)
 values('p0-fake-token-for-testing-only','10000000-0000-4000-8000-000000000003','web');
-update public.v1_push_device_tokens set web_origin='https://yorks-r35.vercel.app',installation_id=gen_random_uuid(),enrolled_at=clock_timestamp()-interval '1 minute' where token like 'p0-%';
+update public.v1_push_device_tokens set auth_session_id='b3000000-0000-4000-8000-000000000001', web_origin='https://yorks-r35.vercel.app',installation_id=gen_random_uuid(),enrolled_at=clock_timestamp()-interval '1 minute' where token like 'p0-%';
 update public.v1_notification_push_outbox set dispatch_lease_until=clock_timestamp()+interval '2 minutes'
 where notification_id='9a000000-0000-4000-8000-000000000001';
 create temporary table device_fixture as select
@@ -29,7 +36,7 @@ select ok(not has_table_privilege('service_role','public.v1_push_device_deliveri
 -- Exercise token pruning with a second current device outcome.
 insert into public.v1_push_device_tokens(token,auth_user_id,platform)
 values('p0-stale-token-for-testing-only','10000000-0000-4000-8000-000000000003','web');
-update public.v1_push_device_tokens set web_origin='https://yorks-r35.vercel.app',installation_id=gen_random_uuid(),enrolled_at=clock_timestamp()-interval '1 minute' where token='p0-stale-token-for-testing-only';
+update public.v1_push_device_tokens set auth_session_id='b3000000-0000-4000-8000-000000000001', web_origin='https://yorks-r35.vercel.app',installation_id=gen_random_uuid(),enrolled_at=clock_timestamp()-interval '1 minute' where token='p0-stale-token-for-testing-only';
 update device_fixture set hash=encode(extensions.digest('p0-stale-token-for-testing-only','sha256'),'hex');
 select is(public.v1_begin_push_device(id,claim,hash),'ready','Second device independently claims') from device_fixture;
 select is(public.v1_finish_push_device(id,claim,hash,'TOKEN_UNREGISTERED'),true,'Definitive revocation recorded') from device_fixture;

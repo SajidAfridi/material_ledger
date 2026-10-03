@@ -1,0 +1,306 @@
+{
+  "accounts_claim_ready": {
+    "title": {
+      "en": "Claim ready for Accounts",
+      "ar": "المطالبة جاهزة للحسابات",
+      "ur": "اکاؤنٹس کے لیے کلیم تیار",
+      "hi": "लेखा के लिए दावा तैयार"
+    },
+    "body": {
+      "en": "Review the claim before preparing its invoice.",
+      "ar": "راجع المطالبة قبل إعداد فاتورتها.",
+      "ur": "انوائس تیار کرنے سے پہلے کلیم کا جائزہ لیں۔",
+      "hi": "चालान बनाने से पहले दावे की समीक्षा करें।"
+    },
+    "destination": "invoices",
+    "urgent": false
+  },
+  "accounts_claim_returned": {
+    "title": {
+      "en": "Claim changes required",
+      "ar": "مطلوب تعديل المطالبة",
+      "ur": "کلیم میں تبدیلی درکار",
+      "hi": "दावे में बदलाव आवश्यक"
+    },
+    "body": {
+      "en": "Review the returned invoice and the reason for changes.",
+      "ar": "راجع الفاتورة المعادة وسبب التعديلات المطلوبة.",
+      "ur": "واپس کی گئی انوائس اور تبدیلیوں کی وجہ کا جائزہ لیں۔",
+      "hi": "लौटाए गए चालान और बदलाव के कारण की समीक्षा करें।"
+    },
+    "destination": "invoices",
+    "urgent": false
+  },
+  "accounts_certification_difference": {
+    "title": {
+      "en": "Certification needs review",
+      "ar": "شهادة الدفع تحتاج مراجعة",
+      "ur": "سرٹیفیکیشن کا جائزہ درکار",
+      "hi": "प्रमाणन की समीक्षा आवश्यक"
+    },
+    "body": {
+      "en": "Review the recorded certification difference and its reason.",
+      "ar": "راجع الفرق المسجل في شهادة الدفع وسببه.",
+      "ur": "سرٹیفیکیشن میں درج فرق اور اس کی وجہ کا جائزہ لیں۔",
+      "hi": "दर्ज प्रमाणन अंतर और उसके कारण की समीक्षा करें।"
+    },
+    "destination": "invoices",
+    "urgent": false
+  },
+  "accounts_supplier_evidence_incomplete": {
+    "title": {
+      "en": "Supplier bill evidence incomplete",
+      "ar": "مستندات فاتورة المورد غير مكتملة",
+      "ur": "سپلائر بل کے ثبوت نامکمل",
+      "hi": "आपूर्तिकर्ता बिल के प्रमाण अधूरे"
+    },
+    "body": {
+      "en": "Review the supplier bill and add the missing matching evidence.",
+      "ar": "راجع فاتورة المورد وأضف مستندات المطابقة الناقصة.",
+      "ur": "سپلائر بل کا جائزہ لیں اور مطابقت کے نامکمل ثبوت شامل کریں۔",
+      "hi": "आपूर्तिकर्ता बिल की समीक्षा करें और मिलान के अधूरे प्रमाण जोड़ें।"
+    },
+    "destination": "supplier-bills",
+    "urgent": false
+  },
+  "accounts_supplier_bill_ready": {
+    "title": {
+      "en": "Supplier bill ready for Accounts",
+      "ar": "فاتورة المورد جاهزة للحسابات",
+      "ur": "سپلائر بل اکاؤنٹس کے لیے تیار",
+      "hi": "आपूर्तिकर्ता बिल लेखा के लिए तैयार"
+    },
+    "body": {
+      "en": "Review the matched supplier bill before approving payment.",
+      "ar": "راجع فاتورة المورد المطابقة قبل اعتماد الدفع.",
+      "ur": "ادائیگی منظور کرنے سے پہلے میچ شدہ سپلائر بل کا جائزہ لیں۔",
+      "hi": "भुगतान स्वीकृत करने से पहले मिलान किए गए आपूर्तिकर्ता बिल की समीक्षा करें।"
+    },
+    "destination": "supplier-bills",
+    "urgent": false
+  },
+  "accounts_invoice_due_soon": {
+    "title": {
+      "en": "Invoice due soon",
+      "ar": "موعد الفاتورة قريب",
+      "ur": "انوائس جلد واجب الادا",
+      "hi": "चालान जल्द देय"
+    },
+    "body": {
+      "en": "Review the invoice due date and recorded receipts.",
+      "ar": "راجع تاريخ استحقاق الفاتورة والمقبوضات المسجلة.",
+      "ur": "انوائس کی مقررہ تاریخ اور درج وصولیوں کا جائزہ لیں۔",
+      "hi": "चालान की देय तिथि और दर्ज प्राप्तियों की समीक्षा करें।"
+    },
+    "destination": "invoices",
+    "urgent": false
+  },
+  "accounts_invoice_overdue": {
+    "title": {
+      "en": "Invoice overdue",
+      "ar": "فاتورة متأخرة",
+      "ur": "انوائس کی تاریخ گزر گئی",
+      "hi": "चालान अतिदेय"
+    },
+    "body": {
+      "en": "Review the overdue invoice and update receipts when payment arrives.",
+      "ar": "راجع الفاتورة المتأخرة وحدّث المقبوضات عند استلام الدفع.",
+      "ur": "تاخیر شدہ انوائس کا جائزہ لیں اور ادائیگی موصول ہونے پر وصولیاں اپ ڈیٹ کریں۔",
+      "hi": "अतिदेय चालान की समीक्षा करें और भुगतान आने पर प्राप्तियां अपडेट करें।"
+    },
+    "destination": "invoices",
+    "urgent": true
+  },
+  "accounts_pdc_due_soon": {
+    "title": {
+      "en": "Cheque due soon",
+      "ar": "موعد الشيك قريب",
+      "ur": "چیک جلد واجب الادا",
+      "hi": "चेक जल्द देय"
+    },
+    "body": {
+      "en": "Review the cheque date and next collection step.",
+      "ar": "راجع تاريخ الشيك وخطوة التحصيل التالية.",
+      "ur": "چیک کی تاریخ اور اگلے وصولی مرحلے کا جائزہ لیں۔",
+      "hi": "चेक की तिथि और अगले संग्रह चरण की समीक्षा करें।"
+    },
+    "destination": "receipts-pdc",
+    "urgent": false
+  },
+  "accounts_pdc_overdue": {
+    "title": {
+      "en": "Cheque overdue",
+      "ar": "شيك متأخر",
+      "ur": "چیک کی تاریخ گزر گئی",
+      "hi": "चेक अतिदेय"
+    },
+    "body": {
+      "en": "Review the overdue cheque and record its current status.",
+      "ar": "راجع الشيك المتأخر وسجل حالته الحالية.",
+      "ur": "تاخیر شدہ چیک کا جائزہ لیں اور اس کی موجودہ حالت درج کریں۔",
+      "hi": "अतिदेय चेक की समीक्षा करें और उसकी वर्तमान स्थिति दर्ज करें।"
+    },
+    "destination": "receipts-pdc",
+    "urgent": true
+  },
+  "workforce_period_submitted": {
+    "title": {
+      "en": "Timesheet ready for review",
+      "ar": "كشف الدوام جاهز للمراجعة",
+      "ur": "ٹائم شیٹ جائزے کے لیے تیار",
+      "hi": "टाइमशीट समीक्षा के लिए तैयार"
+    },
+    "body": {
+      "en": "Review the submitted monthly timesheet.",
+      "ar": "راجع كشف الدوام الشهري المقدم.",
+      "ur": "جمع کردہ ماہانہ ٹائم شیٹ کا جائزہ لیں۔",
+      "hi": "जमा की गई मासिक टाइमशीट की समीक्षा करें।"
+    },
+    "destination": "timesheets",
+    "urgent": false
+  },
+  "workforce_period_returned": {
+    "title": {
+      "en": "Timesheet changes required",
+      "ar": "مطلوب تعديل كشف الدوام",
+      "ur": "ٹائم شیٹ میں تبدیلی درکار",
+      "hi": "टाइमशीट में बदलाव आवश्यक"
+    },
+    "body": {
+      "en": "Review the return reason and correct the monthly timesheet.",
+      "ar": "راجع سبب الإعادة وصحح كشف الدوام الشهري.",
+      "ur": "واپسی کی وجہ دیکھیں اور ماہانہ ٹائم شیٹ درست کریں۔",
+      "hi": "लौटाने का कारण देखें और मासिक टाइमशीट सुधारें।"
+    },
+    "destination": "timesheets",
+    "urgent": false
+  },
+  "workforce_correction_completed": {
+    "title": {
+      "en": "Timesheet corrected",
+      "ar": "تم تصحيح كشف الدوام",
+      "ur": "ٹائم شیٹ درست کر دی گئی",
+      "hi": "टाइमशीट सुधारी गई"
+    },
+    "body": {
+      "en": "Review the corrections recorded in the monthly timesheet.",
+      "ar": "راجع التصحيحات المسجلة في كشف الدوام الشهري.",
+      "ur": "ماہانہ ٹائم شیٹ میں درج تصحیحات کا جائزہ لیں۔",
+      "hi": "मासिक टाइमशीट में दर्ज सुधारों की समीक्षा करें।"
+    },
+    "destination": "timesheets",
+    "urgent": false
+  },
+  "workforce_period_verified": {
+    "title": {
+      "en": "Timesheet verified",
+      "ar": "تم التحقق من كشف الدوام",
+      "ur": "ٹائم شیٹ کی تصدیق ہو گئی",
+      "hi": "टाइमशीट सत्यापित"
+    },
+    "body": {
+      "en": "The monthly timesheet was verified and is awaiting final approval.",
+      "ar": "تم التحقق من كشف الدوام الشهري وهو بانتظار الاعتماد النهائي.",
+      "ur": "ماہانہ ٹائم شیٹ کی تصدیق ہو گئی اور حتمی منظوری کا انتظار ہے۔",
+      "hi": "मासिक टाइमशीट सत्यापित हुई और अंतिम स्वीकृति की प्रतीक्षा में है।"
+    },
+    "destination": "timesheets",
+    "urgent": false
+  },
+  "workforce_period_approved_locked": {
+    "title": {
+      "en": "Timesheet approved and locked",
+      "ar": "تم اعتماد وإقفال كشف الدوام",
+      "ur": "ٹائم شیٹ منظور اور مقفل",
+      "hi": "टाइमशीट स्वीकृत और लॉक"
+    },
+    "body": {
+      "en": "Open the approved monthly timesheet to review its locked record.",
+      "ar": "افتح كشف الدوام الشهري المعتمد لمراجعة سجله المقفل.",
+      "ur": "مقفل ریکارڈ دیکھنے کے لیے منظور شدہ ماہانہ ٹائم شیٹ کھولیں۔",
+      "hi": "लॉक किए गए रिकॉर्ड की समीक्षा के लिए स्वीकृत मासिक टाइमशीट खोलें।"
+    },
+    "destination": "timesheets",
+    "urgent": false
+  },
+  "workforce_reopen_requested": {
+    "title": {
+      "en": "Timesheet reopening requested",
+      "ar": "طُلب إعادة فتح كشف الدوام",
+      "ur": "ٹائم شیٹ دوبارہ کھولنے کی درخواست",
+      "hi": "टाइमशीट दोबारा खोलने का अनुरोध"
+    },
+    "body": {
+      "en": "Review the request and reason to reopen the locked timesheet.",
+      "ar": "راجع طلب إعادة فتح كشف الدوام المقفل وسببه.",
+      "ur": "مقفل ٹائم شیٹ دوبارہ کھولنے کی درخواست اور وجہ کا جائزہ لیں۔",
+      "hi": "लॉक टाइमशीट दोबारा खोलने के अनुरोध और कारण की समीक्षा करें।"
+    },
+    "destination": "timesheets",
+    "urgent": false
+  },
+  "workforce_reopen_approved": {
+    "title": {
+      "en": "Timesheet reopening approved",
+      "ar": "اعتُمد إعادة فتح كشف الدوام",
+      "ur": "ٹائم شیٹ دوبارہ کھولنے کی منظوری",
+      "hi": "टाइमशीट दोबारा खोलना स्वीकृत"
+    },
+    "body": {
+      "en": "Open the reopened monthly timesheet to make the permitted corrections.",
+      "ar": "افتح كشف الدوام الشهري المعاد فتحه لإجراء التصحيحات المسموح بها.",
+      "ur": "اجازت یافتہ تصحیحات کے لیے دوبارہ کھولی گئی ماہانہ ٹائم شیٹ کھولیں۔",
+      "hi": "अनुमत सुधारों के लिए दोबारा खोली गई मासिक टाइमशीट खोलें।"
+    },
+    "destination": "timesheets",
+    "urgent": false
+  },
+  "workforce_final_approval_required": {
+    "title": {
+      "en": "Timesheet final approval required",
+      "ar": "مطلوب الاعتماد النهائي لكشف الدوام",
+      "ur": "ٹائم شیٹ کی حتمی منظوری درکار",
+      "hi": "टाइमशीट की अंतिम स्वीकृति आवश्यक"
+    },
+    "body": {
+      "en": "Review the verified monthly timesheet for final approval.",
+      "ar": "راجع كشف الدوام الشهري الذي تم التحقق منه للاعتماد النهائي.",
+      "ur": "حتمی منظوری کے لیے تصدیق شدہ ماہانہ ٹائم شیٹ کا جائزہ لیں۔",
+      "hi": "अंतिम स्वीकृति के लिए सत्यापित मासिक टाइमशीट की समीक्षा करें।"
+    },
+    "destination": "timesheets",
+    "urgent": false
+  },
+  "workforce_daily_attendance_missing": {
+    "title": {
+      "en": "Daily attendance missing",
+      "ar": "الحضور اليومي غير مسجل",
+      "ur": "روزانہ حاضری درج نہیں",
+      "hi": "दैनिक उपस्थिति अनुपलब्ध"
+    },
+    "body": {
+      "en": "Review missing attendance in your assigned team.",
+      "ar": "راجع الحضور غير المسجل في الفريق المسند إليك.",
+      "ur": "آپ کی تفویض کردہ ٹیم میں نامکمل حاضری کا جائزہ لیں۔",
+      "hi": "अपनी नियुक्त टीम में अनुपलब्ध उपस्थिति की समीक्षा करें।"
+    },
+    "destination": "attendance",
+    "urgent": false
+  },
+  "workforce_monthly_period_incomplete": {
+    "title": {
+      "en": "Monthly timesheet incomplete",
+      "ar": "كشف الدوام الشهري غير مكتمل",
+      "ur": "ماہانہ ٹائم شیٹ نامکمل",
+      "hi": "मासिक टाइमशीट अधूरी"
+    },
+    "body": {
+      "en": "Complete missing attendance before submitting the monthly timesheet.",
+      "ar": "أكمل الحضور غير المسجل قبل تقديم كشف الدوام الشهري.",
+      "ur": "ماہانہ ٹائم شیٹ جمع کرنے سے پہلے نامکمل حاضری مکمل کریں۔",
+      "hi": "मासिक टाइमशीट जमा करने से पहले अनुपलब्ध उपस्थिति पूरी करें।"
+    },
+    "destination": "timesheets",
+    "urgent": false
+  }
+}

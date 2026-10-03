@@ -1,0 +1,662 @@
+{
+  "notification_delivery_check": {
+    "title": {
+      "en": "Yorks device alert check",
+      "ar": "اختبار تنبيهات جهاز يوركس",
+      "ur": "یورکس ڈیوائس الرٹ کی جانچ",
+      "hi": "यॉर्क्स डिवाइस अलर्ट की जाँच"
+    },
+    "body": {
+      "en": "This is the notification delivery check you requested. Open to view the linked Yorks record.",
+      "ar": "هذا اختبار تسليم الإشعارات الذي طلبته. افتح الإشعار لعرض سجل يوركس المرتبط.",
+      "ur": "یہ اطلاع کی ترسیل کی جانچ ہے جس کی آپ نے درخواست کی تھی۔ منسلک یورکس ریکارڈ دیکھنے کے لیے کھولیں۔",
+      "hi": "यह आपके अनुरोध पर किया गया सूचना वितरण परीक्षण है। संबंधित यॉर्क्स रिकॉर्ड देखने के लिए खोलें।"
+    },
+    "type": "info"
+  },
+  "company_material_request_approval_requested": {
+    "title": {
+      "en": "Company request approval required",
+      "ar": "مطلوب اعتماد طلب مواد الشركة",
+      "ur": "کمپنی مٹیریل درخواست کی منظوری درکار ہے",
+      "hi": "कंपनी सामग्री अनुरोध की स्वीकृति आवश्यक"
+    },
+    "body": {
+      "en": "A company material request is waiting for your decision.",
+      "ar": "طلب مواد للشركة بانتظار قرارك.",
+      "ur": "کمپنی مٹیریل درخواست آپ کے فیصلے کی منتظر ہے۔",
+      "hi": "एक कंपनी सामग्री अनुरोध आपके निर्णय की प्रतीक्षा में है।"
+    },
+    "type": "request"
+  },
+  "company_material_request_approved": {
+    "title": {
+      "en": "Company request approved",
+      "ar": "تم اعتماد طلب مواد الشركة",
+      "ur": "کمپنی مٹیریل درخواست منظور",
+      "hi": "कंपनी सामग्री अनुरोध स्वीकृत"
+    },
+    "body": {
+      "en": "Your company material request was approved.",
+      "ar": "تم اعتماد طلب مواد الشركة الخاص بك.",
+      "ur": "آپ کی کمپنی مٹیریل درخواست منظور ہو گئی۔",
+      "hi": "आपका कंपनी सामग्री अनुरोध स्वीकृत हो गया।"
+    },
+    "type": "request"
+  },
+  "company_material_request_returned": {
+    "title": {
+      "en": "Company request changes required",
+      "ar": "مطلوب تعديل طلب مواد الشركة",
+      "ur": "کمپنی مٹیریل درخواست میں تبدیلی درکار ہے",
+      "hi": "कंपनी सामग्री अनुरोध में बदलाव आवश्यक"
+    },
+    "body": {
+      "en": "Your company material request was returned with a reason.",
+      "ar": "تمت إعادة طلب مواد الشركة الخاص بك مع السبب.",
+      "ur": "آپ کی کمپنی مٹیریل درخواست وجہ کے ساتھ واپس کر دی گئی۔",
+      "hi": "आपका कंपनी सामग्री अनुरोध कारण सहित लौटाया गया।"
+    },
+    "type": "request"
+  },
+  "company_material_request_rejected": {
+    "title": {
+      "en": "Company request rejected",
+      "ar": "تم رفض طلب مواد الشركة",
+      "ur": "کمپنی مٹیریل درخواست مسترد",
+      "hi": "कंपनी सामग्री अनुरोध अस्वीकृत"
+    },
+    "body": {
+      "en": "Your company material request was rejected with a reason.",
+      "ar": "تم رفض طلب مواد الشركة الخاص بك مع السبب.",
+      "ur": "آپ کی کمپنی مٹیریل درخواست وجہ کے ساتھ مسترد کر دی گئی۔",
+      "hi": "आपका कंपनी सामग्री अनुरोध कारण सहित अस्वीकृत किया गया।"
+    },
+    "type": "request"
+  },
+  "company_material_request_supply_planned": {
+    "title": {
+      "en": "Company request supply planned",
+      "ar": "تم تخطيط توريد طلب الشركة",
+      "ur": "کمپنی درخواست کی سپلائی پلان ہو گئی",
+      "hi": "कंपनी अनुरोध की आपूर्ति योजना बनी"
+    },
+    "body": {
+      "en": "Procurement updated the supply plan for your company request.",
+      "ar": "حدّثت المشتريات خطة التوريد لطلب الشركة الخاص بك.",
+      "ur": "پروکیورمنٹ نے آپ کی کمپنی درخواست کا سپلائی پلان اپ ڈیٹ کیا۔",
+      "hi": "खरीद टीम ने आपके कंपनी अनुरोध की आपूर्ति योजना अपडेट की।"
+    },
+    "type": "request"
+  },
+  "company_material_request_dispatched": {
+    "title": {
+      "en": "Company materials dispatched",
+      "ar": "تم إرسال مواد الشركة",
+      "ur": "کمپنی مٹیریل روانہ ہو گیا",
+      "hi": "कंपनी सामग्री भेजी गई"
+    },
+    "body": {
+      "en": "Company materials are waiting for your receipt review.",
+      "ar": "مواد الشركة بانتظار مراجعة الاستلام منك.",
+      "ur": "کمپنی مٹیریل آپ کی وصولی جانچ کا منتظر ہے۔",
+      "hi": "कंपनी सामग्री आपकी प्राप्ति समीक्षा की प्रतीक्षा में है।"
+    },
+    "type": "request"
+  },
+  "company_material_request_received": {
+    "title": {
+      "en": "Company materials received",
+      "ar": "تم استلام مواد الشركة",
+      "ur": "کمپنی مٹیریل موصول ہو گیا",
+      "hi": "कंपनी सामग्री प्राप्त हुई"
+    },
+    "body": {
+      "en": "Good received quantities are ready for beneficiary handover.",
+      "ar": "الكميات المستلمة بحالة جيدة جاهزة للتسليم للمستفيد.",
+      "ur": "اچھی حالت میں موصول مقدار مستفید کو حوالگی کے لیے تیار ہے۔",
+      "hi": "अच्छी प्राप्त मात्रा लाभार्थी को सौंपने के लिए तैयार है।"
+    },
+    "type": "request"
+  },
+  "company_material_request_handed_over": {
+    "title": {
+      "en": "Beneficiary handover confirmed",
+      "ar": "تم تأكيد التسليم للمستفيد",
+      "ur": "مستفید کو حوالگی کی تصدیق",
+      "hi": "लाभार्थी को सौंपना दर्ज हुआ"
+    },
+    "body": {
+      "en": "The company material beneficiary handover was recorded.",
+      "ar": "تم تسجيل تسليم مواد الشركة للمستفيد.",
+      "ur": "کمپنی مٹیریل کی مستفید کو حوالگی ریکارڈ ہو گئی۔",
+      "hi": "कंपनी सामग्री लाभार्थी को सौंपने का रिकॉर्ड दर्ज हुआ।"
+    },
+    "type": "request"
+  },
+  "company_material_request_return_confirmed": {
+    "title": {
+      "en": "Company material return confirmed",
+      "ar": "تم تأكيد مرتجع مواد الشركة",
+      "ur": "کمپنی مٹیریل واپسی کی تصدیق",
+      "hi": "कंपनी सामग्री वापसी की पुष्टि"
+    },
+    "body": {
+      "en": "Procurement confirmed physical receipt of the returned material.",
+      "ar": "أكدت المشتريات الاستلام الفعلي للمواد المرتجعة.",
+      "ur": "پروکیورمنٹ نے واپس کیے گئے مٹیریل کی جسمانی وصولی کی تصدیق کی۔",
+      "hi": "खरीद टीम ने लौटाई गई सामग्री की भौतिक प्राप्ति की पुष्टि की।"
+    },
+    "type": "request"
+  },
+  "company_material_request_return_submitted": {
+    "title": {
+      "en": "Company material return awaiting confirmation",
+      "ar": "مرتجع مواد الشركة بانتظار التأكيد",
+      "ur": "کمپنی واپسی تصدیق کی منتظر",
+      "hi": "कंपनी वापसी पुष्टि की प्रतीक्षा में"
+    },
+    "body": {
+      "en": "Review the returned items and confirm physical receipt.",
+      "ar": "راجع المواد المرتجعة وأكد استلامها الفعلي.",
+      "ur": "واپس کی گئی اشیا کا جائزہ لے کر جسمانی وصولی کی تصدیق کریں۔",
+      "hi": "लौटी सामग्री की समीक्षा करें और भौतिक प्राप्ति की पुष्टि करें।"
+    },
+    "type": "request"
+  },
+  "company_material_request_return_rejected": {
+    "title": {
+      "en": "Company material return rejected",
+      "ar": "رُفض مرتجع مواد الشركة",
+      "ur": "کمپنی واپسی مسترد",
+      "hi": "कंपनी वापसी अस्वीकृत"
+    },
+    "body": {
+      "en": "Open the request to review the reason.",
+      "ar": "افتح الطلب لمراجعة السبب.",
+      "ur": "وجہ دیکھنے کے لیے درخواست کھولیں۔",
+      "hi": "कारण देखने के लिए अनुरोध खोलें।"
+    },
+    "type": "request"
+  },
+  "company_material_request_remainder_withdrawn": {
+    "title": {
+      "en": "Company remaining need withdrawn",
+      "ar": "سُحب الاحتياج المتبقي للشركة",
+      "ur": "کمپنی باقی ضرورت واپس لی گئی",
+      "hi": "कंपनी शेष आवश्यकता वापस ली गई"
+    },
+    "body": {
+      "en": "Open the request to review the remaining quantities.",
+      "ar": "افتح الطلب لمراجعة الكميات المتبقية.",
+      "ur": "باقی مقدار دیکھنے کے لیے درخواست کھولیں۔",
+      "hi": "शेष मात्रा देखने के लिए अनुरोध खोलें।"
+    },
+    "type": "request"
+  },
+  "company_material_request_cancelled": {
+    "title": {
+      "en": "Company request cancelled",
+      "ar": "أُلغي طلب الشركة",
+      "ur": "کمپنی درخواست منسوخ",
+      "hi": "कंपनी अनुरोध रद्द"
+    },
+    "body": {
+      "en": "Open the request to review the cancellation reason.",
+      "ar": "افتح الطلب لمراجعة سبب الإلغاء.",
+      "ur": "منسوخی کی وجہ دیکھنے کے لیے درخواست کھولیں۔",
+      "hi": "रद्द करने का कारण देखने के लिए अनुरोध खोलें।"
+    },
+    "type": "request"
+  },
+  "company_material_request_closed": {
+    "title": {
+      "en": "Company request closed",
+      "ar": "تم إغلاق طلب الشركة",
+      "ur": "کمپنی درخواست بند ہو گئی",
+      "hi": "कंपनी अनुरोध बंद हुआ"
+    },
+    "body": {
+      "en": "The completed company material request was closed.",
+      "ar": "تم إغلاق طلب مواد الشركة المكتمل.",
+      "ur": "مکمل کمپنی مٹیریل درخواست بند کر دی گئی۔",
+      "hi": "पूरा कंपनी सामग्री अनुरोध बंद कर दिया गया।"
+    },
+    "type": "request"
+  },
+  "material_request_approval_required": {
+    "title": {
+      "en": "Material request approval required",
+      "ar": "مطلوب اعتماد طلب المواد",
+      "ur": "مٹیریل ریکویسٹ کی منظوری درکار ہے",
+      "hi": "सामग्री अनुरोध की स्वीकृति आवश्यक"
+    },
+    "body": {
+      "en": "A material request is ready for Engineering approval.",
+      "ar": "طلب مواد جاهز لاعتماد الهندسة.",
+      "ur": "مٹیریل ریکویسٹ انجینئرنگ منظوری کے لیے تیار ہے۔",
+      "hi": "सामग्री अनुरोध इंजीनियरिंग स्वीकृति के लिए तैयार है।"
+    },
+    "type": "request"
+  },
+  "material_request_updated_for_approval": {
+    "title": {
+      "en": "Material request approval required",
+      "ar": "مطلوب اعتماد طلب المواد",
+      "ur": "مٹیریل ریکویسٹ کی منظوری درکار ہے",
+      "hi": "सामग्री अनुरोध की स्वीकृति आवश्यक"
+    },
+    "body": {
+      "en": "A material request is ready for Engineering approval.",
+      "ar": "طلب مواد جاهز لاعتماد الهندسة.",
+      "ur": "مٹیریل ریکویسٹ انجینئرنگ منظوری کے لیے تیار ہے۔",
+      "hi": "सामग्री अनुरोध इंजीनियरिंग स्वीकृति के लिए तैयार है।"
+    },
+    "type": "request"
+  },
+  "material_request_approved_for_arrangement": {
+    "title": {
+      "en": "Material request approved",
+      "ar": "تم اعتماد طلب المواد",
+      "ur": "مٹیریل ریکویسٹ منظور",
+      "hi": "सामग्री अनुरोध स्वीकृत"
+    },
+    "body": {
+      "en": "Engineering approved the request for Procurement arrangement.",
+      "ar": "اعتمدت الهندسة الطلب لترتيب المشتريات.",
+      "ur": "انجینئرنگ نے پروکیورمنٹ انتظام کے لیے ریکویسٹ منظور کر لی ہے۔",
+      "hi": "इंजीनियरिंग ने खरीद व्यवस्था के लिए अनुरोध स्वीकृत कर दिया है।"
+    },
+    "type": "request"
+  },
+  "material_request_changes_requested": {
+    "title": {
+      "en": "Material request changes required",
+      "ar": "مطلوب تعديل طلب المواد",
+      "ur": "مٹیریل ریکویسٹ میں تبدیلی درکار ہے",
+      "hi": "सामग्री अनुरोध में बदलाव आवश्यक"
+    },
+    "body": {
+      "en": "Engineering returned the request with a reason.",
+      "ar": "أعادت الهندسة الطلب مع السبب.",
+      "ur": "انجینئرنگ نے ریکویسٹ وجہ کے ساتھ واپس کر دی ہے۔",
+      "hi": "इंजीनियरिंग ने कारण सहित अनुरोध वापस कर दिया है।"
+    },
+    "type": "request"
+  },
+  "material_request_mentioned": {
+    "title": {
+      "en": "You were mentioned",
+      "ar": "تمت الإشارة إليك",
+      "ur": "آپ کا ذکر کیا گیا",
+      "hi": "आपका उल्लेख किया गया"
+    },
+    "body": {
+      "en": "A teammate mentioned you in a material request comment.",
+      "ar": "أشار إليك زميل في تعليق على طلب مواد.",
+      "ur": "ایک ساتھی نے مٹیریل ریکویسٹ کے تبصرے میں آپ کا ذکر کیا ہے۔",
+      "hi": "एक साथी ने सामग्री अनुरोध टिप्पणी में आपका उल्लेख किया है।"
+    },
+    "type": "info"
+  },
+  "material_request_work_assigned": {
+    "title": {
+      "en": "Material request assigned to you",
+      "ar": "تم إسناد طلب مواد إليك",
+      "ur": "مٹیریل ریکویسٹ آپ کو تفویض کی گئی",
+      "hi": "सामग्री अनुरोध आपको सौंपा गया"
+    },
+    "body": {
+      "en": "A teammate assigned you responsibility for a material request.",
+      "ar": "أسند إليك أحد الزملاء مسؤولية متابعة طلب مواد.",
+      "ur": "ایک ساتھی نے مٹیریل ریکویسٹ کی ذمہ داری آپ کو تفویض کی ہے۔",
+      "hi": "एक सहकर्मी ने सामग्री अनुरोध की जिम्मेदारी आपको सौंपी है।"
+    },
+    "type": "request"
+  },
+  "team_chat_message": {
+    "title": {
+      "en": "New Team Chat message",
+      "ar": "رسالة جديدة في محادثة الفريق",
+      "ur": "ٹیم چیٹ میں نیا پیغام",
+      "hi": "टीम चैट में नया संदेश"
+    },
+    "body": {
+      "en": "A conversation you participate in has a new message.",
+      "ar": "توجد رسالة جديدة في محادثة تشارك فيها.",
+      "ur": "آپ کی شریک گفتگو میں ایک نیا پیغام ہے۔",
+      "hi": "आपकी बातचीत में एक नया संदेश आया है।"
+    },
+    "type": "info"
+  },
+  "team_chat_mention": {
+    "title": {
+      "en": "You were mentioned in Team Chat",
+      "ar": "تمت الإشارة إليك في محادثة الفريق",
+      "ur": "ٹیم چیٹ میں آپ کا ذکر ہوا",
+      "hi": "टीम चैट में आपका उल्लेख हुआ"
+    },
+    "body": {
+      "en": "A teammate mentioned you in a conversation.",
+      "ar": "أشار إليك زميل في محادثة.",
+      "ur": "ایک ساتھی نے گفتگو میں آپ کا ذکر کیا۔",
+      "hi": "एक साथी ने बातचीत में आपका उल्लेख किया।"
+    },
+    "type": "info"
+  },
+  "arrangement_ready_for_dispatch": {
+    "title": {
+      "en": "Materials ready for dispatch",
+      "ar": "المواد جاهزة للصرف",
+      "ur": "مٹیریل ڈسپیچ کے لیے تیار ہے",
+      "hi": "सामग्री डिस्पैच के लिए तैयार"
+    },
+    "body": {
+      "en": "Procurement completed the approved arrangement.",
+      "ar": "أكملت المشتريات الترتيب المعتمد.",
+      "ur": "پروکیورمنٹ نے منظور شدہ انتظام مکمل کر لیا ہے۔",
+      "hi": "खरीद ने स्वीकृत व्यवस्था पूरी कर ली है।"
+    },
+    "type": "request"
+  },
+  "arrangement_completed_unavailable": {
+    "title": {
+      "en": "All items currently unavailable",
+      "ar": "جميع البنود غير متاحة حالياً",
+      "ur": "تمام آئٹمز فی الحال دستیاب نہیں",
+      "hi": "सभी आइटम अभी अनुपलब्ध हैं"
+    },
+    "body": {
+      "en": "Procurement can revise the arrangement, or an authorised reviewer can cancel the request.",
+      "ar": "يمكن للمشتريات تعديل الترتيب أو يمكن للمراجع المخوّل إلغاء الطلب.",
+      "ur": "پروکیورمنٹ انتظام میں ترمیم کر سکتی ہے، یا مجاز جائزہ لینے والا درخواست منسوخ کر سکتا ہے۔",
+      "hi": "खरीद व्यवस्था संशोधित कर सकती है, या अधिकृत समीक्षक अनुरोध रद्द कर सकता है।"
+    },
+    "type": "request"
+  },
+  "material_request_submitted": {
+    "title": {
+      "en": "New material request",
+      "ar": "طلب مواد جديد",
+      "ur": "نئی مٹیریل ریکویسٹ",
+      "hi": "नया सामग्री अनुरोध"
+    },
+    "body": {
+      "en": "A material request is ready for Procurement arrangement.",
+      "ar": "طلب مواد جاهز لترتيب المشتريات.",
+      "ur": "مٹیریل ریکویسٹ پروکیورمنٹ انتظام کے لیے تیار ہے۔",
+      "hi": "सामग्री अनुरोध खरीद व्यवस्था के लिए तैयार है।"
+    },
+    "type": "request"
+  },
+  "arrangement_review_required": {
+    "title": {
+      "en": "Arrangement ready for review",
+      "ar": "الترتيب جاهز للمراجعة",
+      "ur": "انتظام جائزے کے لیے تیار",
+      "hi": "व्यवस्था समीक्षा के लिए तैयार"
+    },
+    "body": {
+      "en": "Procurement submitted an arrangement for Engineering approval.",
+      "ar": "قدمت المشتريات ترتيباً لاعتماد الهندسة.",
+      "ur": "پروکیورمنٹ نے انجینئرنگ منظوری کے لیے انتظام جمع کیا ہے۔",
+      "hi": "खरीद ने इंजीनियरिंग अनुमोदन के लिए व्यवस्था भेजी है।"
+    },
+    "type": "request"
+  },
+  "arrangement_approved": {
+    "title": {
+      "en": "Arrangement approved",
+      "ar": "تم اعتماد الترتيب",
+      "ur": "انتظام منظور ہو گیا",
+      "hi": "व्यवस्था स्वीकृत"
+    },
+    "body": {
+      "en": "The material request is ready for controlled dispatch.",
+      "ar": "طلب المواد جاهز للصرف المنضبط.",
+      "ur": "مٹیریل ریکویسٹ کنٹرولڈ ڈسپیچ کے لیے تیار ہے۔",
+      "hi": "सामग्री अनुरोध नियंत्रित डिस्पैच के लिए तैयार है।"
+    },
+    "type": "request"
+  },
+  "arrangement_returned": {
+    "title": {
+      "en": "Arrangement returned",
+      "ar": "تمت إعادة الترتيب",
+      "ur": "انتظام واپس کر دیا گیا",
+      "hi": "व्यवस्था लौटाई गई"
+    },
+    "body": {
+      "en": "Engineering returned the arrangement to Procurement.",
+      "ar": "أعادت الهندسة الترتيب إلى المشتريات.",
+      "ur": "انجینئرنگ نے انتظام پروکیورمنٹ کو واپس کیا ہے۔",
+      "hi": "इंजीनियरिंग ने व्यवस्था खरीद को लौटा दी है।"
+    },
+    "type": "request"
+  },
+  "receipt_review_required": {
+    "title": {
+      "en": "Delivery ready for receipt review",
+      "ar": "التسليم جاهز لمراجعة الاستلام",
+      "ur": "ڈیلیوری وصولی جائزے کے لیے تیار",
+      "hi": "डिलीवरी प्राप्ति समीक्षा के लिए तैयार"
+    },
+    "body": {
+      "en": "Dispatched materials are awaiting the project team review.",
+      "ar": "المواد المصروفة بانتظار مراجعة فريق المشروع.",
+      "ur": "بھیجا گیا مواد پروجیکٹ ٹیم کے جائزے کا منتظر ہے۔",
+      "hi": "भेजी गई सामग्री परियोजना टीम की समीक्षा की प्रतीक्षा में है।"
+    },
+    "type": "request"
+  },
+  "receipt_review_confirmed": {
+    "title": {
+      "en": "Receipt review confirmed",
+      "ar": "تم تأكيد مراجعة الاستلام",
+      "ur": "وصولی جائزے کی تصدیق ہو گئی",
+      "hi": "प्राप्ति समीक्षा की पुष्टि हुई"
+    },
+    "body": {
+      "en": "The project team recorded the delivered material condition.",
+      "ar": "سجل فريق المشروع حالة المواد المسلمة.",
+      "ur": "پروجیکٹ ٹیم نے موصولہ مواد کی حالت ریکارڈ کر دی ہے۔",
+      "hi": "परियोजना टीम ने वितरित सामग्री की स्थिति दर्ज की है।"
+    },
+    "type": "request"
+  },
+  "material_return_submitted": {
+    "title": {
+      "en": "Material return submitted",
+      "ar": "تم تقديم مرتجع مواد",
+      "ur": "مٹیریل ریٹرن جمع ہو گیا",
+      "hi": "सामग्री वापसी जमा हुई"
+    },
+    "body": {
+      "en": "A project material return is awaiting Procurement confirmation.",
+      "ar": "مرتجع مواد المشروع بانتظار تأكيد المشتريات.",
+      "ur": "پروجیکٹ مٹیریل ریٹرن پروکیورمنٹ تصدیق کا منتظر ہے۔",
+      "hi": "परियोजना सामग्री वापसी खरीद पुष्टि की प्रतीक्षा में है।"
+    },
+    "type": "request"
+  },
+  "material_return_approval_required": {
+    "title": {
+      "en": "Material return approval required",
+      "ar": "مطلوب اعتماد مرتجع المواد",
+      "ur": "مٹیریل ریٹرن کی منظوری درکار ہے",
+      "hi": "सामग्री वापसी अनुमोदन आवश्यक"
+    },
+    "body": {
+      "en": "A project material return is ready for Engineering review.",
+      "ar": "مرتجع مواد المشروع جاهز لمراجعة الهندسة.",
+      "ur": "پروجیکٹ مٹیریل ریٹرن انجینئرنگ جائزے کے لیے تیار ہے۔",
+      "hi": "परियोजना सामग्री वापसी इंजीनियरिंग समीक्षा के लिए तैयार है।"
+    },
+    "type": "request"
+  },
+  "material_return_approved": {
+    "title": {
+      "en": "Material return approved",
+      "ar": "تم اعتماد مرتجع المواد",
+      "ur": "مٹیریل ریٹرن منظور ہو گیا",
+      "hi": "सामग्री वापसी स्वीकृत"
+    },
+    "body": {
+      "en": "Engineering approved the material return for site dispatch.",
+      "ar": "اعتمدت الهندسة مرتجع المواد للإرسال من الموقع.",
+      "ur": "انجینئرنگ نے سائٹ سے بھیجنے کے لیے مٹیریل ریٹرن منظور کر لیا ہے۔",
+      "hi": "इंजीनियरिंग ने साइट से भेजने के लिए सामग्री वापसी स्वीकृत की।"
+    },
+    "type": "request"
+  },
+  "material_return_returned_for_changes": {
+    "title": {
+      "en": "Material return changes required",
+      "ar": "مطلوب تعديل مرتجع المواد",
+      "ur": "مٹیریل ریٹرن میں تبدیلی درکار ہے",
+      "hi": "सामग्री वापसी में बदलाव आवश्यक"
+    },
+    "body": {
+      "en": "Engineering returned the material return with a reason.",
+      "ar": "أعادت الهندسة مرتجع المواد مع السبب.",
+      "ur": "انجینئرنگ نے مٹیریل ریٹرن وجہ کے ساتھ واپس کیا ہے۔",
+      "hi": "इंजीनियरिंग ने कारण सहित सामग्री वापसी लौटा दी।"
+    },
+    "type": "request"
+  },
+  "material_return_receipt_required": {
+    "title": {
+      "en": "Returned materials awaiting receipt",
+      "ar": "المواد المرتجعة بانتظار الاستلام",
+      "ur": "واپس شدہ مواد وصولی کا منتظر ہے",
+      "hi": "लौटाई सामग्री प्राप्ति की प्रतीक्षा में"
+    },
+    "body": {
+      "en": "Dispatched return materials are ready for Procurement receipt.",
+      "ar": "المواد المرتجعة المرسلة جاهزة لاستلام المشتريات.",
+      "ur": "بھیجا گیا واپس شدہ مواد پروکیورمنٹ وصولی کے لیے تیار ہے۔",
+      "hi": "भेजी गई वापसी सामग्री खरीद प्राप्ति के लिए तैयार है।"
+    },
+    "type": "request"
+  },
+  "material_return_confirmed": {
+    "title": {
+      "en": "Material return confirmed",
+      "ar": "تم تأكيد مرتجع المواد",
+      "ur": "مٹیریل ریٹرن کی تصدیق ہو گئی",
+      "hi": "सामग्री वापसी की पुष्टि हुई"
+    },
+    "body": {
+      "en": "Procurement confirmed physical receipt of the returned material.",
+      "ar": "أكدت المشتريات الاستلام الفعلي للمواد المرتجعة.",
+      "ur": "پروکیورمنٹ نے واپس شدہ مواد کی فزیکل وصولی کی تصدیق کر دی ہے۔",
+      "hi": "खरीद ने लौटाई गई सामग्री की भौतिक प्राप्ति की पुष्टि की।"
+    },
+    "type": "request"
+  },
+  "material_return_rejected": {
+    "title": {
+      "en": "Material return rejected",
+      "ar": "تم رفض مرتجع المواد",
+      "ur": "مٹیریل ریٹرن مسترد ہو گیا",
+      "hi": "सामग्री वापसी अस्वीकृत हुई"
+    },
+    "body": {
+      "en": "Procurement returned the material return with a reason.",
+      "ar": "أعادت المشتريات مرتجع المواد مع السبب.",
+      "ur": "پروکیورمنٹ نے مٹیریل ریٹرن وجہ کے ساتھ واپس کر دیا ہے۔",
+      "hi": "खरीद ने कारण सहित सामग्री वापसी लौटा दी।"
+    },
+    "type": "request"
+  },
+  "material_return_cancelled": {
+    "title": {
+      "en": "Material return cancelled",
+      "ar": "تم إلغاء مرتجع المواد",
+      "ur": "مٹیریل ریٹرن منسوخ ہو گیا",
+      "hi": "सामग्री वापसी रद्द हुई"
+    },
+    "body": {
+      "en": "The material return was cancelled before warehouse receipt.",
+      "ar": "تم إلغاء مرتجع المواد قبل استلام المستودع.",
+      "ur": "مٹیریل ریٹرن گودام کی وصولی سے پہلے منسوخ کر دیا گیا۔",
+      "hi": "गोदाम प्राप्ति से पहले सामग्री वापसी रद्द कर दी गई।"
+    },
+    "type": "request"
+  },
+  "material_request_cancelled": {
+    "title": {
+      "en": "Material request cancelled",
+      "ar": "تم إلغاء طلب المواد",
+      "ur": "مٹیریل ریکویسٹ منسوخ ہو گئی",
+      "hi": "सामग्री अनुरोध रद्द हुआ"
+    },
+    "body": {
+      "en": "The material request was cancelled and open work was released.",
+      "ar": "تم إلغاء طلب المواد وتحرير العمل المفتوح.",
+      "ur": "مٹیریل ریکویسٹ منسوخ کر کے کھلا کام جاری کر دیا گیا ہے۔",
+      "hi": "सामग्री अनुरोध रद्द कर दिया गया और खुला कार्य मुक्त हुआ।"
+    },
+    "type": "request"
+  },
+  "material_request_closed": {
+    "title": {
+      "en": "Material request completed",
+      "ar": "اكتمل طلب المواد",
+      "ur": "مٹیریل ریکویسٹ مکمل ہو گئی",
+      "hi": "सामग्री अनुरोध पूरा हुआ"
+    },
+    "body": {
+      "en": "The received material request was closed.",
+      "ar": "تم إغلاق طلب المواد المستلم.",
+      "ur": "موصولہ مٹیریل ریکویسٹ بند کر دی گئی ہے۔",
+      "hi": "प्राप्त सामग्री अनुरोध बंद कर दिया गया।"
+    },
+    "type": "request"
+  },
+  "project_member_assigned": {
+    "title": {
+      "en": "Project access assigned",
+      "ar": "تم تعيين صلاحية المشروع",
+      "ur": "پروجیکٹ رسائی تفویض ہو گئی",
+      "hi": "परियोजना पहुंच सौंपी गई"
+    },
+    "body": {
+      "en": "You were assigned to a Yorks project.",
+      "ar": "تم تعيينك في مشروع يوركس.",
+      "ur": "آپ کو یورکس پروجیکٹ میں تفویض کیا گیا ہے۔",
+      "hi": "आपको यॉर्क्स परियोजना में नियुक्त किया गया है।"
+    },
+    "type": "project"
+  },
+  "project_member_revoked": {
+    "title": {
+      "en": "Project access changed",
+      "ar": "تم تغيير صلاحية المشروع",
+      "ur": "پروجیکٹ رسائی تبدیل ہو گئی",
+      "hi": "परियोजना पहुंच बदली गई"
+    },
+    "body": {
+      "en": "Your active assignment to a Yorks project ended.",
+      "ar": "انتهى تعيينك النشط في مشروع يوركس.",
+      "ur": "یورکس پروجیکٹ میں آپ کی فعال تفویض ختم ہو گئی ہے۔",
+      "hi": "यॉर्क्स परियोजना में आपकी सक्रिय नियुक्ति समाप्त हुई।"
+    },
+    "type": "project"
+  },
+  "_fallback": {
+    "title": {
+      "en": "Yorks workflow update",
+      "ar": "تحديث سير عمل يوركس",
+      "ur": "یورکس ورک فلو اپ ڈیٹ",
+      "hi": "यॉर्क्स कार्यप्रवाह अपडेट"
+    },
+    "body": {
+      "en": "A record assigned to you has changed.",
+      "ar": "تم تغيير سجل مسند إليك.",
+      "ur": "آپ کو تفویض کردہ ریکارڈ تبدیل ہوا ہے۔",
+      "hi": "आपको सौंपा गया रिकॉर्ड बदल गया है।"
+    },
+    "type": "info"
+  }
+}

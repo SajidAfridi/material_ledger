@@ -13,13 +13,8 @@ import '../providers/yorks_v1_notification_preferences_provider.dart';
 import '../services/notification_alert_sound.dart';
 import '../services/push_service.dart';
 
-/// A session-scoped, global enrollment prompt for system notifications.
-///
-/// Browser and OS permission dialogs must be initiated by a user gesture. The
-/// previous notification-centre-only control was too easy to miss, leaving the
-/// production device registry empty. This prompt appears after sign-in on
-/// every unregistered supported installation, without opening a permission
-/// dialog automatically. Dismissal lasts only for this app session.
+/// An optional enrollment surface; the workspace does not mount this banner.
+/// Browser and OS permission dialogs must be initiated by a user gesture.
 class NotificationDeliveryPrompt extends ConsumerStatefulWidget {
   const NotificationDeliveryPrompt({super.key, required this.child});
 
@@ -79,13 +74,25 @@ class _NotificationDeliveryPromptState
 
   Future<void> _enable() async {
     if (_working) return;
+    final owner = ref.read(currentUserProvider)?.id;
     setState(() => _working = true);
-    final soundReady = await prepareNotificationAlertSound();
-    final status = await ref.read(pushServiceProvider).enable();
-    if (soundReady && status.isAllowed) {
-      await playNotificationAlertSound();
+    try {
+      // Start permission before yielding so the browser retains user activation.
+      final enabling = ref.read(pushServiceProvider).enable();
+      final soundReady = await prepareNotificationAlertSound().timeout(
+        const Duration(seconds: 2),
+        onTimeout: () => false,
+      );
+      final status = await enabling;
+      if (!mounted || ref.read(currentUserProvider)?.id != owner) return;
+      if (soundReady &&
+          status.isAllowed &&
+          ref.read(yorksV1NotificationSoundEnabledProvider)) {
+        await playNotificationAlertSound();
+      }
+    } finally {
+      if (mounted) setState(() => _working = false);
     }
-    if (mounted) setState(() => _working = false);
   }
 }
 

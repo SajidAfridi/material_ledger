@@ -1,6 +1,7 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import {
   isTeamChatEvent,
+  normalizedPushLanguage,
   normalizedUnreadCount,
   type PushClaim,
   routeFor,
@@ -221,4 +222,162 @@ Deno.test("Company Request alerts have meaningful copy and exact protected route
       "request",
     );
   }
+});
+
+Deno.test("expiry is absolute and malformed/missing expiry fails closed", async () => {
+  const { remainingLifetime } = await import("./notification_payload.ts");
+  const now = Date.parse("2026-09-30T12:00:00Z");
+  assertEquals(remainingLifetime("2026-09-30T12:00:30Z", now), 30);
+  assertEquals(remainingLifetime("2026-09-30T11:59:00Z", now), 0);
+  assertEquals(remainingLifetime(undefined, now), 0);
+  assertEquals(remainingLifetime("invalid", now), 0);
+});
+
+Deno.test("module catalogue covers safe copy and guarded routes", async () => {
+  const { moduleEvents } = await import("./module_catalogue.ts");
+  for (const code of Object.keys(moduleEvents)) {
+    assertEquals(safePushCopy(code).title === "Yorks workflow update", false);
+    assertEquals(
+      routeFor({ ...claim(), eventCode: code }).startsWith("/yorks/"),
+      true,
+    );
+  }
+});
+
+Deno.test("module destination retains parent record and rejects external URLs", () => {
+  const target =
+    "/yorks/projects/ab100000-0000-4000-8000-000000000001/accounts/client-invoices?invoice_id=ab200000-0000-4000-8000-000000000001";
+  assertEquals(
+    routeFor({
+      ...claim(),
+      eventCode: "accounts_claim_returned",
+      moduleRoute: target,
+    }),
+    target,
+  );
+  assertEquals(
+    routeFor({
+      ...claim(),
+      eventCode: "accounts_claim_returned",
+      moduleRoute: "https://evil.test",
+    }),
+    "/yorks/accounts",
+  );
+});
+
+Deno.test("workflow and module copy uses all supported installation languages", async () => {
+  const { moduleEvents, workflowEvents } = await import(
+    "./module_catalogue.ts"
+  );
+  for (
+    const [code, event] of Object.entries({
+      ...moduleEvents,
+      ...workflowEvents,
+    })
+  ) {
+    for (const language of ["en", "ar", "ur", "hi"]) {
+      assertEquals(safePushCopy(code, language).title, event.title[language]);
+      assertEquals(safePushCopy(code, language).body, event.body[language]);
+    }
+  }
+  assertEquals(safePushCopy("future_event", "ar").title, "تحديث سير عمل يوركس");
+  assertEquals(
+    safePushCopy("future_event", "hi").body,
+    "आपको सौंपा गया रिकॉर्ड बदल गया है।",
+  );
+  assertEquals(normalizedPushLanguage("UR-pk"), "ur");
+  assertEquals(normalizedPushLanguage("ar_AE"), "ar");
+  assertEquals(normalizedPushLanguage("unsupported"), "en");
+  assertEquals(normalizedPushLanguage(null), "en");
+  assertEquals(
+    safePushCopy("material_request_submitted", "unsupported"),
+    safePushCopy("material_request_submitted"),
+  );
+});
+
+Deno.test("Accounts and Workforce copy names the relevant record and action", async () => {
+  const { moduleEvents } = await import("./module_catalogue.ts");
+  for (const code of Object.keys(moduleEvents)) {
+    const copy = safePushCopy(code);
+    assertEquals(copy.body.includes("Open the workspace"), false);
+    assertEquals(copy.title === "Yorks workflow update", false);
+  }
+  assertEquals(
+    safePushCopy("accounts_supplier_bill_ready").body,
+    "Review the matched supplier bill before approving payment.",
+  );
+  assertEquals(
+    safePushCopy("workforce_period_returned").body,
+    "Review the return reason and correct the monthly timesheet.",
+  );
+});
+
+Deno.test("daily digest opens only its trusted exact team and calendar date", () => {
+  const teamId = "ab500000-0000-4000-8000-000000000001";
+  const route = `/yorks/workforce/attendance?team_id=${teamId}&date=2026-08-30`;
+  const daily = {
+    ...claim(),
+    eventCode: "workforce_daily_attendance_missing",
+    entityType: "workforce_daily_roster",
+    entityId: teamId,
+    moduleRoute: route,
+  };
+  assertEquals(routeFor(daily), route);
+  assertEquals(
+    routeFor({
+      ...daily,
+      moduleRoute: route.replace("2026-08-30", "2028-02-29"),
+    }),
+    route.replace("2026-08-30", "2028-02-29"),
+  );
+  for (
+    const malformed of [
+      route.replace("2026-08-30", "2026-02-30"),
+      route.replace("2026-08-30", "0000-01-01"),
+      route.replace(teamId, "not-a-team"),
+      route.replace(teamId, "ab500000-0000-4000-8000-000000000002"),
+      `${route}&redirect=https://attacker.example`,
+      `https://attacker.example${route}`,
+    ]
+  ) {
+    assertEquals(
+      routeFor({ ...daily, moduleRoute: malformed }),
+      "/yorks/workforce/attendance",
+    );
+  }
+  assertEquals(
+    routeFor({ ...daily, entityType: "workforce_monthly_period" }),
+    "/yorks/workforce/attendance",
+  );
+  assertEquals(
+    routeFor({ ...daily, eventCode: "workforce_period_submitted" }),
+    "/yorks/workforce/timesheets",
+  );
+});
+
+Deno.test("requested delivery check is explicit and opens the existing protected request", () => {
+  const requestId = "14000000-0000-4000-8000-000000000001";
+  const fixture = {
+    ...claim(requestId),
+    eventCode: "notification_delivery_check",
+  };
+  const copy = safePushCopy(fixture.eventCode);
+  assertEquals(copy.title, "Yorks device alert check");
+  assertEquals(
+    copy.body,
+    "This is the notification delivery check you requested. Open to view the linked Yorks record.",
+  );
+  assertEquals(copy.type, "info");
+  for (const language of ["en", "ar", "ur", "hi"]) {
+    assertEquals(
+      safePushCopy(fixture.eventCode, language).title ===
+        safePushCopy("future_event", language).title,
+      false,
+    );
+    assertEquals(
+      safePushCopy(fixture.eventCode, language).body.length > 0,
+      true,
+    );
+  }
+  assertEquals(routeFor(fixture), `/yorks/material-requests/${requestId}`);
 });

@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
@@ -21,77 +22,87 @@ void main() {
     (name: 'notification_center_desktop.png', size: const Size(1366, 768)),
     (name: 'notification_center_mobile.png', size: const Size(360, 800)),
   ]) {
-    testWidgets('authoritative notification centre — ${evidence.size}', (
-      tester,
-    ) async {
-      tester.view.physicalSize = evidence.size;
-      tester.view.devicePixelRatio = 1;
-      addTearDown(() {
-        tester.view.resetPhysicalSize();
-        tester.view.resetDevicePixelRatio();
-      });
-      final notification = YorksV1NotificationRecord(
-        id: '21000000-0000-4000-8000-000000000001',
-        eventCode: 'company_material_request_approval_requested',
-        entityType: 'company_material_request',
-        entityId: '22000000-0000-4000-8000-000000000001',
-        createdAt: DateTime.now(),
-      ).toAppNotification(AppLanguage.english);
-      final unavailable = YorksV1NotificationRecord(
-        id: '21000000-0000-4000-8000-000000000002',
-        eventCode: 'historical_event',
-        entityType: 'historical_record',
-        entityId: 'unknown',
-        createdAt: DateTime.now(),
-      ).toAppNotification(AppLanguage.english);
-      final router = GoRouter(
-        routes: [
-          GoRoute(path: '/', builder: (_, _) => const NotificationsScreen()),
-          GoRoute(
-            path: notification.route,
-            builder: (_, _) =>
-                const Scaffold(body: Text('Company request detail target')),
-          ),
-        ],
-      );
-      final preferences = await SharedPreferences.getInstance();
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            sharedPreferencesProvider.overrideWithValue(preferences),
-            pushServiceProvider.overrideWithValue(
-              const _RegisteredPushService(),
+    testWidgets(
+      'authoritative notification centre — ${evidence.size}',
+      (
+        tester,
+      ) async => withClock(Clock.fixed(DateTime(2026, 9, 30, 12)), () async {
+        final semantics = tester.ensureSemantics();
+        tester.view.physicalSize = evidence.size;
+        tester.view.devicePixelRatio = 1;
+        addTearDown(() {
+          tester.view.resetPhysicalSize();
+          tester.view.resetDevicePixelRatio();
+        });
+        final notification = YorksV1NotificationRecord(
+          id: '21000000-0000-4000-8000-000000000001',
+          eventCode: 'company_material_request_approval_requested',
+          entityType: 'company_material_request',
+          entityId: '22000000-0000-4000-8000-000000000001',
+          createdAt: clock.now(),
+        ).toAppNotification(AppLanguage.english);
+        final unavailable = YorksV1NotificationRecord(
+          id: '21000000-0000-4000-8000-000000000002',
+          eventCode: 'historical_event',
+          entityType: 'historical_record',
+          entityId: 'unknown',
+          createdAt: clock.now(),
+        ).toAppNotification(AppLanguage.english);
+        final router = GoRouter(
+          routes: [
+            GoRoute(path: '/', builder: (_, _) => const NotificationsScreen()),
+            GoRoute(
+              path: notification.route,
+              builder: (_, _) =>
+                  const Scaffold(body: Text('Company request detail target')),
             ),
-            visibleNotificationsProvider.overrideWithValue([
-              notification,
-              unavailable,
-            ]),
-            unreadNotificationCountProvider.overrideWithValue(1),
           ],
-          child: MaterialApp.router(
-            debugShowCheckedModeBanner: false,
-            theme: AppTheme.light,
-            routerConfig: router,
+        );
+        final preferences = await SharedPreferences.getInstance();
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              sharedPreferencesProvider.overrideWithValue(preferences),
+              pushServiceProvider.overrideWithValue(
+                const _RegisteredPushService(),
+              ),
+              visibleNotificationsProvider.overrideWithValue([
+                notification,
+                unavailable,
+              ]),
+              unreadNotificationCountProvider.overrideWithValue(1),
+            ],
+            child: MaterialApp.router(
+              debugShowCheckedModeBanner: false,
+              theme: AppTheme.light,
+              routerConfig: router,
+            ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
+        );
+        await tester.pumpAndSettle();
 
-      expect(find.text('Company request approval required'), findsOneWidget);
-      expect(find.text('Mark all read'), findsOneWidget);
-      expect(find.byType(Dismissible), findsNWidgets(2));
-      expect(tester.takeException(), isNull);
-      expect(unavailable.route, isEmpty);
-      await expectLater(
-        find.byType(NotificationsScreen),
-        matchesGoldenFile('goldens/push_p0/${evidence.name}'),
-      );
-      await tester.tap(find.text('Company request approval required'));
-      await tester.pumpAndSettle();
-      expect(find.text('Company request detail target'), findsOneWidget);
-      await tester.pumpWidget(const SizedBox.shrink());
-      router.dispose();
-    });
+        expect(find.text('Company request approval required'), findsOneWidget);
+        expect(find.text('Mark all read'), findsOneWidget);
+        expect(find.byType(Dismissible), findsNWidgets(2));
+        expect(tester.takeException(), isNull);
+        final notificationSemantics = tester
+            .getSemantics(find.text('Company request approval required'))
+            .getSemanticsData();
+        expect(notificationSemantics.flagsCollection.isButton, isTrue);
+        expect(notificationSemantics.flagsCollection.isHeader, isFalse);
+        semantics.dispose();
+        expect(unavailable.route, isEmpty);
+        await expectLater(
+          find.byType(NotificationsScreen),
+          matchesGoldenFile('goldens/push_p0/${evidence.name}'),
+        );
+        await tester.tap(find.text('Company request approval required'));
+        await tester.pumpAndSettle();
+        expect(find.text('Company request detail target'), findsOneWidget);
+        await tester.pumpWidget(const SizedBox.shrink());
+        router.dispose();
+      }),
+    );
   }
 }
 

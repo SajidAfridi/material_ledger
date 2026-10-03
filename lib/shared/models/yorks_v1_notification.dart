@@ -1,7 +1,8 @@
-import '../../app/router.dart' show RoutePaths;
+import '../../app/router.dart' show RoutePaths, safeReturnLocation;
 import 'app_language.dart';
 import 'app_notification.dart';
 import 'app_strings.dart';
+import 'notification_module_catalogue.dart';
 
 const yorksV1ChatTransportEventCodes = <String>{
   'team_chat_message',
@@ -28,6 +29,8 @@ class YorksV1NotificationRecord {
     this.projectId,
     this.chatConversationId,
     this.seenAt,
+    this.recordLabel,
+    this.moduleRoute,
   });
 
   final String id;
@@ -39,6 +42,8 @@ class YorksV1NotificationRecord {
   final String? chatConversationId;
   final DateTime createdAt;
   final DateTime? seenAt;
+  final String? recordLabel;
+  final String? moduleRoute;
 
   /// Chat uses its member read cursor as the authoritative unread state. These
   /// rows remain backend-only inputs to the durable FCM outbox and must never
@@ -57,11 +62,15 @@ class YorksV1NotificationRecord {
         chatConversationId: chatConversationId,
         createdAt: createdAt,
         seenAt: value,
+        recordLabel: recordLabel,
+        moduleRoute: moduleRoute,
       );
 
   factory YorksV1NotificationRecord.fromRpcJson(Map<String, dynamic> json) {
     return YorksV1NotificationRecord(
       id: json['notification_id'] as String,
+      recordLabel: json['record_label'] as String?,
+      moduleRoute: safeReturnLocation(json['module_route'] as String?),
       eventCode: json['event_code'] as String,
       entityType: json['entity_type'] as String,
       entityId: json['entity_id'] as String,
@@ -86,31 +95,47 @@ class YorksV1NotificationRecord {
         eventCode == 'material_request_mentioned' &&
         entityType == 'chat_message' &&
         resolvedRequestId.isNotEmpty;
-    final resolvedRoute = isMaterialRequestCommentMention
-        ? RoutePaths.yorksV1MaterialRequestPath(
-            resolvedRequestId,
-            commentId: entityId,
-          )
-        : resolvedChatConversationId.isNotEmpty
-        ? RoutePaths.yorksV1TeamChatPath(resolvedChatConversationId)
-        : isMaterialReturn
-        ? RoutePaths.yorksV1MaterialReturnPath(entityId)
-        : isCompanyMaterialRequest
-        ? RoutePaths.yorksV1CompanyMaterialRequestPath(entityId)
-        : resolvedRequestId.isNotEmpty
-        ? RoutePaths.yorksV1MaterialRequestPath(resolvedRequestId)
-        : resolvedProjectId.isNotEmpty &&
-              (entityType == 'project' || entityType == 'project_member')
-        ? RoutePaths.yorksV1ProjectPath(resolvedProjectId)
-        : '';
+    final module = notificationModuleEvents[eventCode];
+    final moduleDestination = module == null
+        ? null
+        : eventCode.startsWith('accounts_')
+        ? (resolvedProjectId.isEmpty
+              ? RoutePaths.yorksV1Accounts
+              : '/yorks/projects/$resolvedProjectId/accounts/${module['destination'] == 'invoices' ? 'client-invoices' : module['destination']}')
+        : '/yorks/workforce/${module['destination']}';
+    final resolvedRoute =
+        moduleRoute ??
+        moduleDestination ??
+        (isMaterialRequestCommentMention
+            ? RoutePaths.yorksV1MaterialRequestPath(
+                resolvedRequestId,
+                commentId: entityId,
+              )
+            : resolvedChatConversationId.isNotEmpty
+            ? RoutePaths.yorksV1TeamChatPath(resolvedChatConversationId)
+            : isMaterialReturn
+            ? RoutePaths.yorksV1MaterialReturnPath(entityId)
+            : isCompanyMaterialRequest
+            ? RoutePaths.yorksV1CompanyMaterialRequestPath(entityId)
+            : resolvedRequestId.isNotEmpty
+            ? RoutePaths.yorksV1MaterialRequestPath(resolvedRequestId)
+            : resolvedProjectId.isNotEmpty &&
+                  (entityType == 'project' || entityType == 'project_member')
+            ? RoutePaths.yorksV1ProjectPath(resolvedProjectId)
+            : '');
     return AppNotification(
       id: id,
       type: copy.type,
-      title: copy.title(language),
-      titleSecondary: '',
+      title: module == null
+          ? copy.title(language)
+          : moduleNotificationText(eventCode, 'title', language),
+      titleSecondary: recordLabel ?? '',
+      urgent: module?['urgent'] == true,
       body: resolvedRoute.isEmpty
           ? AppStrings.notificationDetailsUnavailable.active(language)
-          : copy.body(language),
+          : module == null
+          ? copy.body(language)
+          : moduleNotificationText(eventCode, 'body', language),
       timestamp: createdAt,
       isRead: seenAt != null,
       refId: isMaterialReturn
@@ -238,6 +263,21 @@ const _requestWorkAssigned = YorksV1NotificationCopy(
 );
 
 const _eventCopy = <String, YorksV1NotificationCopy>{
+  'notification_delivery_check': YorksV1NotificationCopy(
+    type: NotificationType.info,
+    englishTitle: 'Yorks device alert check',
+    englishBody:
+        'This is the notification delivery check you requested. Open to view the linked Yorks record.',
+    arabicTitle: 'اختبار تنبيهات جهاز يوركس',
+    arabicBody:
+        'هذا اختبار تسليم الإشعارات الذي طلبته. افتح الإشعار لعرض سجل يوركس المرتبط.',
+    urduTitle: 'یورکس ڈیوائس الرٹ کی جانچ',
+    urduBody:
+        'یہ اطلاع کی ترسیل کی جانچ ہے جس کی آپ نے درخواست کی تھی۔ منسلک یورکس ریکارڈ دیکھنے کے لیے کھولیں۔',
+    hindiTitle: 'यॉर्क्स डिवाइस अलर्ट की जाँच',
+    hindiBody:
+        'यह आपके अनुरोध पर किया गया सूचना वितरण परीक्षण है। संबंधित यॉर्क्स रिकॉर्ड देखने के लिए खोलें।',
+  ),
   'company_material_request_approval_requested': YorksV1NotificationCopy(
     type: NotificationType.request,
     englishTitle: 'Company request approval required',

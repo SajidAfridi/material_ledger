@@ -15,6 +15,7 @@ enum YorksAppToastTone { information, success, error }
 abstract final class YorksAppToast {
   static OverlayEntry? _entry;
   static Timer? _dismissTimer;
+  static Object? _entryOwner;
 
   /// Replaces any active notice with a single, accessible, lower-right toast.
   ///
@@ -30,20 +31,42 @@ abstract final class YorksAppToast {
     IconData? icon,
     String? actionLabel,
     VoidCallback? onAction,
+    String? secondaryActionLabel,
+    VoidCallback? onSecondaryAction,
     bool dismissible = false,
     double? maxWidth,
+    Object? owner,
   }) {
     _dismissTimer?.cancel();
     _entry?.remove();
     _entry = null;
+    _entryOwner = null;
 
     final navigator = Navigator.of(context, rootNavigator: true);
     final overlay = navigator.overlay;
     if (overlay == null) return;
 
     late final OverlayEntry entry;
+    var hovering = false;
+    var focused = false;
+    void updateTimer() {
+      if (!identical(_entry, entry)) return;
+      _dismissTimer?.cancel();
+      if (!hovering && !focused) {
+        _dismissTimer = Timer(duration, () => _remove(entry));
+      }
+    }
+
     entry = OverlayEntry(
       builder: (overlayContext) => _YorksAppToastSurface(
+        onHover: (value) {
+          hovering = value;
+          updateTimer();
+        },
+        onFocus: (value) {
+          focused = value;
+          updateTimer();
+        },
         title: title,
         message: message,
         tone: tone,
@@ -55,22 +78,32 @@ abstract final class YorksAppToast {
                 _remove(entry);
                 onAction();
               },
+        secondaryActionLabel: secondaryActionLabel,
+        onSecondaryAction: onSecondaryAction == null
+            ? null
+            : () {
+                _remove(entry);
+                onSecondaryAction();
+              },
         onDismiss: dismissible ? () => _remove(entry) : null,
         maxWidth: maxWidth,
       ),
     );
     _entry = entry;
+    _entryOwner = owner;
     overlay.insert(entry);
     _dismissTimer = Timer(duration, () => _remove(entry));
   }
 
   /// Removes the active notice. Exposed for deterministic widget tests and
   /// for any future explicit notification-centre dismissal affordance.
-  static void dismiss() {
+  static void dismiss({Object? owner}) {
+    if (owner != null && !identical(owner, _entryOwner)) return;
     _dismissTimer?.cancel();
     _dismissTimer = null;
     final entry = _entry;
     _entry = null;
+    _entryOwner = null;
     entry?.remove();
   }
 
@@ -79,6 +112,7 @@ abstract final class YorksAppToast {
     _dismissTimer?.cancel();
     _dismissTimer = null;
     _entry = null;
+    _entryOwner = null;
     entry.remove();
   }
 }
@@ -91,8 +125,12 @@ class _YorksAppToastSurface extends StatelessWidget {
     required this.icon,
     required this.actionLabel,
     required this.onAction,
+    required this.secondaryActionLabel,
+    required this.onSecondaryAction,
     required this.onDismiss,
     required this.maxWidth,
+    required this.onHover,
+    required this.onFocus,
   });
 
   final String title;
@@ -101,8 +139,12 @@ class _YorksAppToastSurface extends StatelessWidget {
   final IconData? icon;
   final String? actionLabel;
   final VoidCallback? onAction;
+  final String? secondaryActionLabel;
+  final VoidCallback? onSecondaryAction;
   final VoidCallback? onDismiss;
   final double? maxWidth;
+  final ValueChanged<bool> onHover;
+  final ValueChanged<bool> onFocus;
 
   @override
   Widget build(BuildContext context) => Positioned.fill(
@@ -123,7 +165,6 @@ class _YorksAppToastSurface extends StatelessWidget {
           final toast = Semantics(
             container: true,
             liveRegion: true,
-            label: message == null ? title : '$title. $message',
             child: SizedBox(
               width: desiredWidth,
               child: _YorksAppToastCard(
@@ -133,6 +174,8 @@ class _YorksAppToastSurface extends StatelessWidget {
                 icon: icon,
                 actionLabel: actionLabel,
                 onAction: onAction,
+                secondaryActionLabel: secondaryActionLabel,
+                onSecondaryAction: onSecondaryAction,
                 onDismiss: onDismiss,
               ),
             ),
@@ -148,11 +191,18 @@ class _YorksAppToastSurface extends StatelessWidget {
               alignment: AlignmentDirectional.bottomEnd,
               child: onDismiss == null
                   ? IgnorePointer(child: toast)
-                  : Dismissible(
-                      key: UniqueKey(),
-                      direction: DismissDirection.horizontal,
-                      onDismissed: (_) => onDismiss!(),
-                      child: toast,
+                  : Focus(
+                      onFocusChange: onFocus,
+                      child: MouseRegion(
+                        onEnter: (_) => onHover(true),
+                        onExit: (_) => onHover(false),
+                        child: Dismissible(
+                          key: UniqueKey(),
+                          direction: DismissDirection.horizontal,
+                          onDismissed: (_) => onDismiss!(),
+                          child: toast,
+                        ),
+                      ),
                     ),
             ),
           );
@@ -170,6 +220,8 @@ class _YorksAppToastCard extends StatelessWidget {
     required this.icon,
     required this.actionLabel,
     required this.onAction,
+    required this.secondaryActionLabel,
+    required this.onSecondaryAction,
     required this.onDismiss,
   });
 
@@ -179,6 +231,8 @@ class _YorksAppToastCard extends StatelessWidget {
   final IconData? icon;
   final String? actionLabel;
   final VoidCallback? onAction;
+  final String? secondaryActionLabel;
+  final VoidCallback? onSecondaryAction;
   final VoidCallback? onDismiss;
 
   @override
@@ -197,16 +251,18 @@ class _YorksAppToastCard extends StatelessWidget {
     };
     return LayoutBuilder(
       builder: (context, constraints) {
-        final stackAction = constraints.maxWidth < 460;
-        final actionButton = actionLabel != null && onAction != null
+        final stackAction =
+            constraints.maxWidth < 460 || onSecondaryAction != null;
+        Widget? button(String? label, VoidCallback? action) =>
+            label != null && action != null
             ? TextButton(
-                onPressed: onAction,
+                onPressed: action,
                 style: TextButton.styleFrom(
                   foregroundColor: AppColors.onPrimary,
                   minimumSize: const Size(44, 44),
                 ),
                 child: Text(
-                  actionLabel!,
+                  label,
                   style: AppTypography.labelMedium.copyWith(
                     color: AppColors.onPrimary,
                     fontWeight: FontWeight.w800,
@@ -214,6 +270,8 @@ class _YorksAppToastCard extends StatelessWidget {
                 ),
               )
             : null;
+        final actionButton = button(actionLabel, onAction);
+        final secondaryButton = button(secondaryActionLabel, onSecondaryAction);
         return Material(
           color: Colors.transparent,
           child: DecoratedBox(
@@ -309,7 +367,12 @@ class _YorksAppToastCard extends StatelessWidget {
                         ),
                     ],
                   ),
-                  if (stackAction && actionButton != null) actionButton,
+                  if (stackAction)
+                    Wrap(
+                      alignment: WrapAlignment.end,
+                      spacing: AppSpacing.sm,
+                      children: [?actionButton, ?secondaryButton],
+                    ),
                 ],
               ),
             ),

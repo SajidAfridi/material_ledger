@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ledger/core/theme/app_theme.dart';
 import 'package:material_ledger/features/workforce/application/workforce_daily_roster_controller.dart';
@@ -14,8 +15,12 @@ import 'package:material_ledger/features/workforce/domain/workforce_configuratio
 import 'package:material_ledger/features/workforce/domain/workforce_daily_roster_models.dart';
 import 'package:material_ledger/features/workforce/presentation/screens/yorks_workforce_daily_attendance_screen.dart';
 import 'package:material_ledger/shared/models/app_language.dart';
+import 'package:material_ledger/shared/models/yorks_v1_domain_error.dart';
+import 'package:material_ledger/shared/models/yorks_v1_notification.dart';
 import 'package:material_ledger/shared/models/yorks_v1_workforce_strings.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_notification_provider.dart';
 import 'package:material_ledger/shared/services/yorks_v1_critical_command_key_store.dart';
 import 'package:material_ledger/shared/sync/connectivity_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -36,6 +41,137 @@ void main() {
       ..addFont(Future.value(ByteData.sublistView(icons)));
     await Future.wait([nexus.load(), arabic.load(), materialIcons.load()]);
   });
+
+  for (final scenario in [
+    'success',
+    'denied',
+    'load_failure',
+    'missing_team',
+    'wrong_date',
+    'wrong_team',
+    'wrong_actor',
+    'invalid_date',
+    'invalid_team',
+    'offline',
+  ]) {
+    testWidgets(
+      'daily digest acknowledges only its exact authorized team/date: $scenario',
+      (tester) async {
+        final notifications = _DailyNotificationRecorder();
+        final fixture = await _pumpDailyNotification(
+          tester,
+          scenario: scenario,
+          notifications: notifications,
+        );
+        await tester.pumpAndSettle();
+        expect(
+          notifications.seen,
+          scenario == 'success' ? [_dailyNotificationId] : isEmpty,
+        );
+        if (scenario == 'invalid_date' ||
+            scenario == 'invalid_team' ||
+            scenario == 'offline') {
+          expect(fixture.repository.loads, isEmpty);
+        } else {
+          expect(fixture.repository.loads.single.date, _workDate);
+          expect(fixture.repository.loads.single.filters.teamId, _teamId);
+        }
+        if (scenario == 'success') {
+          final state = fixture.container.read(
+            yorksWorkforceDailyRosterControllerProvider,
+          );
+          expect(state.workDate, _workDate);
+          expect(state.filters.teamId, _teamId);
+          fixture.router.go(
+            _dailyNotificationLocation(_secondDailyNotificationId),
+          );
+          await tester.pumpAndSettle();
+          expect(notifications.seen, [
+            _dailyNotificationId,
+            _secondDailyNotificationId,
+          ]);
+        }
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  for (final interruption in ['route', 'account']) {
+    testWidgets(
+      'daily digest retains unread state after $interruption changes during loading',
+      (tester) async {
+        final pending = Completer<YorksWorkforceDailyRosterProjection>();
+        final actor = StateProvider<String?>((_) => _actorId);
+        final notifications = _DailyNotificationRecorder();
+        final fixture = await _pumpDailyNotification(
+          tester,
+          scenario: 'success',
+          notifications: notifications,
+          pending: pending,
+          actorProvider: actor,
+        );
+        await tester.pump();
+        if (interruption == 'route') {
+          fixture.router.go('/away');
+        } else {
+          fixture.container.read(actor.notifier).state = 'other-account';
+        }
+        await tester.pump();
+        pending.complete(
+          _projection(
+            includeRow: false,
+            filters: YorksWorkforceRosterFilters(teamId: _teamId),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(notifications.seen, isEmpty);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets(
+    'daily digest retry acknowledges only after its roster succeeds',
+    (tester) async {
+      final notifications = _DailyNotificationRecorder();
+      final fixture = await _pumpDailyNotification(
+        tester,
+        scenario: 'load_failure',
+        notifications: notifications,
+      );
+      await tester.pumpAndSettle();
+      expect(notifications.seen, isEmpty);
+      fixture.repository.scenario = 'success';
+      await tester.tap(
+        find.text(YorksV1WorkforceStrings.text(AppLanguage.english, 'retry')),
+      );
+      await tester.pumpAndSettle();
+      expect(notifications.seen, [_dailyNotificationId]);
+      expect(fixture.repository.loads, hasLength(2));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'daily digest acknowledgement failure does not break the loaded roster',
+    (tester) async {
+      final notifications = _DailyNotificationRecorder(fail: true);
+      final fixture = await _pumpDailyNotification(
+        tester,
+        scenario: 'success',
+        notifications: notifications,
+      );
+      await tester.pumpAndSettle();
+      expect(notifications.seen, isEmpty);
+      expect(
+        fixture.container
+            .read(yorksWorkforceDailyRosterControllerProvider)
+            .status,
+        YorksWorkforceDailyRosterStatus.ready,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'daily roster is overflow-free at acceptance viewports in English and Arabic RTL',
@@ -892,11 +1028,17 @@ YorksWorkforceDailyRosterProjection _projection({
   bool includeRow = true,
   bool allocationRestricted = false,
   int rowCount = 1,
+  String workDate = _workDate,
+  String actorAuthUserId = _actorId,
+  YorksWorkforceRosterFilters filters = const YorksWorkforceRosterFilters(),
+  bool includeTeam = true,
 }) {
   final selectors = YorksWorkforceRosterSelectors(
-    teams: const [
-      YorksWorkforceRosterTeamSelector(id: _teamId, name: 'Duct Team'),
-    ],
+    teams: includeTeam
+        ? const [
+            YorksWorkforceRosterTeamSelector(id: _teamId, name: 'Duct Team'),
+          ]
+        : const [],
     projects: const [
       YorksWorkforceRosterProjectSelector(
         id: _projectId,
@@ -951,11 +1093,11 @@ YorksWorkforceDailyRosterProjection _projection({
   return YorksWorkforceDailyRosterProjection(
     schemaVersion: 1,
     authorizationMode: 'enforced_t05',
-    actorAuthUserId: _actorId,
-    workDate: _workDate,
+    actorAuthUserId: actorAuthUserId,
+    workDate: workDate,
     isFuture: isFuture,
     serverTime: '2026-08-30T12:00:00Z',
-    filters: const YorksWorkforceRosterFilters(),
+    filters: filters,
     capabilities: YorksWorkforceRosterCapabilities(
       canView: true,
       canMaintainAttendance: !isFuture,
@@ -1118,10 +1260,11 @@ final class _WidgetRepository implements YorksWorkforceRepository {
 }
 
 final class _Connectivity implements ConnectivityService {
-  const _Connectivity();
+  const _Connectivity({this.online = true});
+  final bool online;
 
   @override
-  bool get isOnline => true;
+  bool get isOnline => online;
 
   @override
   Stream<bool> get onChange => const Stream.empty();
@@ -1154,4 +1297,142 @@ Directory _flutterCacheDirectory() {
     directory = directory.parent;
   }
   throw StateError('Could not locate the Flutter cache from the test runner');
+}
+
+const _dailyNotificationId = 'ab500000-0000-4000-8000-000000000001';
+const _secondDailyNotificationId = 'ab500000-0000-4000-8000-000000000002';
+String _dailyNotificationLocation(
+  String notificationId, {
+  String teamId = _teamId,
+  String date = _workDate,
+}) =>
+    '/yorks/workforce/attendance?team_id=$teamId&date=$date&notificationId=$notificationId';
+
+Future<
+  ({
+    ProviderContainer container,
+    GoRouter router,
+    _DailyNotificationRepository repository,
+  })
+>
+_pumpDailyNotification(
+  WidgetTester tester, {
+  required String scenario,
+  required _DailyNotificationRecorder notifications,
+  Completer<YorksWorkforceDailyRosterProjection>? pending,
+  StateProvider<String?>? actorProvider,
+}) async {
+  tester.view.physicalSize = const Size(390, 844);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+  SharedPreferences.setMockInitialValues({});
+  final preferences = await SharedPreferences.getInstance();
+  final repository = _DailyNotificationRepository(scenario, pending);
+  final router = GoRouter(
+    initialLocation: _dailyNotificationLocation(
+      _dailyNotificationId,
+      date: scenario == 'invalid_date' ? '2026-02-30' : _workDate,
+      teamId: scenario == 'invalid_team' ? 'not-a-team' : _teamId,
+    ),
+    routes: [
+      GoRoute(
+        path: '/yorks/workforce/attendance',
+        builder: (_, state) => YorksWorkforceDailyAttendanceScreen(
+          initialTeamId: state.uri.queryParameters['team_id'],
+          initialWorkDate: state.uri.queryParameters['date'],
+        ),
+      ),
+      GoRoute(
+        path: '/away',
+        builder: (_, _) => const Scaffold(body: Text('Away')),
+      ),
+    ],
+  );
+  addTearDown(router.dispose);
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(preferences),
+        if (actorProvider == null)
+          yorksV1AuthUserIdProvider.overrideWithValue(_actorId)
+        else
+          yorksV1AuthUserIdProvider.overrideWith(
+            (ref) => ref.watch(actorProvider),
+          ),
+        yorksV1NotificationsProvider.overrideWith((_) => notifications),
+        yorksWorkforceDailyRosterControllerProvider.overrideWith(
+          (_) => YorksWorkforceDailyRosterController(
+            repository: repository,
+            commandKeys: YorksV1CriticalCommandKeyStore(
+              preferences: preferences,
+              actorAuthUserId: _actorId,
+            ),
+            connectivity: _Connectivity(online: scenario != 'offline'),
+            clock: () => DateTime.utc(2026, 9, 10),
+          ),
+        ),
+      ],
+      child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
+    ),
+  );
+  await tester.pump();
+  return (
+    container: ProviderScope.containerOf(
+      tester.element(find.byType(YorksWorkforceDailyAttendanceScreen)),
+    ),
+    router: router,
+    repository: repository,
+  );
+}
+
+class _DailyNotificationRecorder extends YorksV1NotificationsNotifier {
+  _DailyNotificationRecorder({this.fail = false})
+    : super(client: null, repository: null, authUserId: null) {
+    state = const AsyncData(<YorksV1NotificationRecord>[]);
+  }
+  final bool fail;
+  final seen = <String>[];
+  @override
+  Future<void> markSeen(String notificationId) async {
+    if (fail) throw StateError('Acknowledgement unavailable');
+    seen.add(notificationId);
+  }
+}
+
+class _DailyNotificationRepository implements YorksWorkforceRepository {
+  _DailyNotificationRepository(this.scenario, this.pending);
+  String scenario;
+  final Completer<YorksWorkforceDailyRosterProjection>? pending;
+  final loads = <({String date, YorksWorkforceRosterFilters filters})>[];
+  @override
+  Future<YorksWorkforceDailyRosterProjection> getDailyRoster({
+    required String workDate,
+    YorksWorkforceRosterFilters filters = const YorksWorkforceRosterFilters(),
+  }) async {
+    loads.add((date: workDate, filters: filters));
+    if (scenario == 'denied') {
+      throw const YorksV1DomainException(YorksV1DomainErrorCode.unauthorized);
+    }
+    if (scenario == 'load_failure') {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.backendUnavailable,
+      );
+    }
+    if (pending != null) return pending!.future;
+    return _projection(
+      includeRow: false,
+      workDate: scenario == 'wrong_date' ? '2026-08-29' : workDate,
+      actorAuthUserId: scenario == 'wrong_actor'
+          ? '70010000-0000-4000-8000-000000000099'
+          : _actorId,
+      filters: scenario == 'wrong_team'
+          ? const YorksWorkforceRosterFilters()
+          : filters,
+      includeTeam: scenario != 'missing_team',
+    );
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

@@ -78,6 +78,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _handleLogin() async {
     if (_isLoading || !(_formKey.currentState?.validate() ?? false)) return;
+    final returnTo = safeReturnLocation(
+      GoRouterState.of(context).uri.queryParameters['returnTo'],
+    );
     setState(() => _isLoading = true);
     SignInResult result;
     try {
@@ -100,7 +103,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       case SignInResult.ok:
       case SignInResult.mustChangePassword:
         ref.read(sessionLockedProvider.notifier).unlock();
-        context.go(RoutePaths.engineerHome);
+        context.go(returnTo ?? RoutePaths.engineerHome);
       case SignInResult.invalidCredentials:
         _showLoginError(
           YorksV1ShellStrings.invalidCredentials.secondary(language),

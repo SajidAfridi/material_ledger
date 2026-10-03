@@ -8,6 +8,8 @@ import '../../app/router.dart';
 import '../../core/constants/constants.dart';
 import '../models/app_notification.dart';
 import '../models/app_strings.dart';
+import '../models/notification_experience_strings.dart';
+import '../providers/yorks_v1_notification_provider.dart';
 import '../providers/language_provider.dart';
 import '../providers/notification_provider.dart';
 import 'notification_delivery_card.dart';
@@ -22,12 +24,14 @@ class NotificationBell extends ConsumerWidget {
     final unread = ref.watch(unreadNotificationCountProvider);
     return Semantics(
       button: true,
-      label: AppStrings.notifications.primary,
+      label: AppStrings.notifications.active(ref.watch(languageProvider)),
       child: Stack(
         clipBehavior: Clip.none,
         children: [
           IconButton(
-            tooltip: AppStrings.notifications.primary,
+            tooltip: AppStrings.notifications.active(
+              ref.watch(languageProvider),
+            ),
             onPressed: () => _open(context),
             icon: const Icon(Icons.notifications_outlined),
             style: IconButton.styleFrom(foregroundColor: AppColors.primary),
@@ -86,10 +90,11 @@ class _NotificationPreviewPanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final language = ref.watch(languageProvider);
     final notifications = ref.watch(visibleNotificationsProvider);
+    final server = ref.watch(yorksV1NotificationsProvider);
     final unread = ref.watch(unreadNotificationCountProvider);
     final recent = notifications.take(6).toList(growable: false);
     return Dialog(
-      alignment: Alignment.topRight,
+      alignment: AlignmentDirectional.topEnd,
       insetPadding: const EdgeInsets.only(top: 68, right: 24, left: 24),
       backgroundColor: AppColors.surface,
       surfaceTintColor: Colors.transparent,
@@ -118,8 +123,24 @@ class _NotificationPreviewPanel extends ConsumerWidget {
                   ),
                   if (unread > 0)
                     TextButton(
-                      onPressed: () =>
-                          ref.read(notificationActionsProvider).markAllRead(),
+                      onPressed: () async {
+                        try {
+                          await ref
+                              .read(notificationActionsProvider)
+                              .markAllRead();
+                        } catch (_) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  NotificationExperienceStrings.readFailed
+                                      .active(language),
+                                ),
+                              ),
+                            );
+                          }
+                        }
+                      },
                       child: Text(AppStrings.markAllRead.active(language)),
                     ),
                   IconButton(
@@ -133,6 +154,15 @@ class _NotificationPreviewPanel extends ConsumerWidget {
               ),
               const SizedBox(height: AppSpacing.sm),
               const NotificationDeliveryCard(compact: true),
+              if (server.hasError && recent.isNotEmpty)
+                TextButton.icon(
+                  onPressed: () =>
+                      ref.read(yorksV1NotificationsProvider.notifier).refresh(),
+                  icon: const Icon(Icons.refresh),
+                  label: Text(
+                    NotificationExperienceStrings.stale.active(language),
+                  ),
+                ),
               const SizedBox(height: AppSpacing.md),
               const Divider(height: 1),
               if (recent.isEmpty)
@@ -147,7 +177,12 @@ class _NotificationPreviewPanel extends ConsumerWidget {
                       ),
                       const SizedBox(height: AppSpacing.sm),
                       Text(
-                        AppStrings.allCaughtUp.active(language),
+                        (server.hasError
+                                ? AppStrings.couldNotLoadNotifications
+                                : server.isLoading
+                                ? AppStrings.checkingAlertDelivery
+                                : AppStrings.allCaughtUp)
+                            .active(language),
                         style: AppTypography.bodyMedium,
                       ),
                     ],
@@ -195,9 +230,14 @@ class _PreviewRow extends ConsumerWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
       onTap: () {
-        unawaited(ref.read(notificationActionsProvider).markRead(notification));
+        final router = GoRouter.of(context);
+        final actions = ref.read(notificationActionsProvider);
         Navigator.pop(context);
-        if (notification.route.isNotEmpty) context.push(notification.route);
+        unawaited(
+          actions
+              .open(notification, navigate: (location) => router.push(location))
+              .catchError((Object _) {}),
+        );
       },
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: AppSpacing.minTapTarget),
@@ -242,9 +282,9 @@ class _PreviewRow extends ConsumerWidget {
               ),
               const SizedBox(width: AppSpacing.sm),
               Text(
-                notification.relativeTime,
+                notification.relativeTimeFor(ref.watch(languageProvider)),
                 style: AppTypography.labelSmall.copyWith(
-                  color: AppColors.muted,
+                  color: AppColors.inkSecondary,
                 ),
               ),
             ],

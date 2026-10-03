@@ -12,6 +12,8 @@ import '../../../../shared/models/yorks_v1_accounts_strings.dart';
 import '../../../../shared/models/yorks_v1_project_strings.dart';
 import '../../../../shared/models/yorks_v1_domain_error.dart';
 import '../../../../shared/providers/language_provider.dart';
+import '../../../../shared/providers/yorks_v1_identity_provider.dart';
+import '../../../../shared/providers/yorks_v1_notification_provider.dart';
 import '../../../../shared/services/analytics_service.dart';
 import '../../application/accounts_controller.dart';
 import '../../application/accounts_portfolio_controller.dart';
@@ -335,6 +337,8 @@ class YorksProjectAccountsScreen extends ConsumerStatefulWidget {
 
 class _YorksProjectAccountsScreenState
     extends ConsumerState<YorksProjectAccountsScreen> {
+  String? _openedNotificationTarget;
+  RouteInformationProvider? _notificationRouteInformation;
   int _activeTabLoads = 0;
   bool _workspaceTracked = false;
 
@@ -342,6 +346,44 @@ class _YorksProjectAccountsScreenState
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final information = GoRouter.maybeOf(context)?.routeInformationProvider;
+    if (!identical(information, _notificationRouteInformation)) {
+      _notificationRouteInformation?.removeListener(
+        _scheduleNotificationTarget,
+      );
+      _notificationRouteInformation = information;
+      information?.addListener(_scheduleNotificationTarget);
+    }
+    _scheduleNotificationTarget();
+  }
+
+  Uri? _notificationPageUri() =>
+      GoRouter.maybeOf(context) == null ? null : GoRouterState.of(context).uri;
+
+  void _scheduleNotificationTarget() {
+    if (ModalRoute.of(context)?.isCurrent == false) return;
+    final uri = _notificationPageUri();
+    if (uri != null &&
+        uri.path.startsWith('/yorks/projects/${widget.projectId}/accounts/') &&
+        uri.toString() != _openedNotificationTarget &&
+        uri.queryParameters.keys.any(
+          (key) => const ['invoice_id', 'claim_id', 'bill_id'].contains(key),
+        )) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_load());
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _notificationRouteInformation?.removeListener(_scheduleNotificationTarget);
+    super.dispose();
   }
 
   @override
@@ -375,6 +417,140 @@ class _YorksProjectAccountsScreenState
           );
     }
     await _loadTab(widget.initialTab, force: force);
+    if (mounted) await _openNotificationTarget();
+  }
+
+  Future<void> _openNotificationTarget() async {
+    final uri = _notificationPageUri();
+    if (uri == null ||
+        ModalRoute.of(context)?.isCurrent == false ||
+        !uri.path.startsWith('/yorks/projects/${widget.projectId}/accounts/') ||
+        _openedNotificationTarget == uri.toString()) {
+      return;
+    }
+    _openedNotificationTarget = uri.toString();
+    final owner = ref.read(yorksV1AuthUserIdProvider);
+    final projectId = widget.projectId;
+    final browserLocation = _notificationRouteInformation?.value.uri;
+    bool stillCurrent() =>
+        mounted &&
+        owner == ref.read(yorksV1AuthUserIdProvider) &&
+        projectId == widget.projectId &&
+        _notificationPageUri() == uri &&
+        _notificationRouteInformation?.value.uri == browserLocation;
+    String? id(String key) {
+      final value = uri.queryParameters[key];
+      return value != null &&
+              RegExp(
+                r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+                caseSensitive: false,
+              ).hasMatch(value)
+          ? value
+          : null;
+    }
+
+    Future<void> acknowledgeOpen() async {
+      final notificationId = id('notificationId');
+      if (owner == null || notificationId == null) return;
+      // The protected exact record has loaded and its sheet is now visible.
+      // A redirect, failed load or an account switch must retain unread state.
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted || !stillCurrent()) return;
+      try {
+        await ref
+            .read(yorksV1NotificationsProvider.notifier)
+            .markSeen(notificationId);
+      } catch (_) {
+        // Retain unread state; a later explicit open can retry acknowledgement.
+      }
+    }
+
+    final language = ref.read(languageProvider);
+    final invoice = id('invoice_id');
+    final claim = id('claim_id');
+    final bill = id('bill_id');
+    if (invoice != null &&
+        (widget.initialTab == YorksProjectAccountsTab.invoices ||
+            widget.initialTab == YorksProjectAccountsTab.receiptsPdc)) {
+      final provider = yorksAccountsReceivablesControllerProvider(projectId);
+      final loaded = await ref.read(provider.notifier).loadInvoice(invoice);
+      if (!mounted ||
+          !stillCurrent() ||
+          ModalRoute.of(context)?.isCurrent == false) {
+        return;
+      }
+      final detail = ref.read(provider).selectedInvoice;
+      final pdcId = id('pdc_id');
+      if (!loaded ||
+          detail?.projectId != projectId ||
+          detail?.invoice.invoiceId != invoice ||
+          (pdcId != null && !detail!.pdcs.any((pdc) => pdc.pdcId == pdcId))) {
+        _openedNotificationTarget = null;
+        return;
+      }
+      final sheet = showYorksAccountsInvoiceActionsSheet(
+        context,
+        projectId: projectId,
+        invoiceId: invoice,
+        initialPdcId: pdcId,
+        language: language,
+      );
+      await acknowledgeOpen();
+      await sheet;
+    } else if (claim != null &&
+        widget.initialTab == YorksProjectAccountsTab.invoices) {
+      final provider = yorksAccountsReceivablesControllerProvider(projectId);
+      final loaded = await ref.read(provider.notifier).loadClaim(claim);
+      if (!mounted ||
+          !stillCurrent() ||
+          ModalRoute.of(context)?.isCurrent == false) {
+        return;
+      }
+      final detail = ref.read(provider).selectedClaim;
+      final progress = ref
+          .read(yorksAccountsProjectControllerProvider(projectId))
+          .progress;
+      if (!loaded ||
+          detail?.projectId != projectId ||
+          detail?.claim.claimId != claim ||
+          progress == null) {
+        _openedNotificationTarget = null;
+        return;
+      }
+      final sheet = showYorksAccountsClaimActionsSheet(
+        context,
+        projectId: projectId,
+        claimId: claim,
+        progress: progress,
+        language: language,
+      );
+      await acknowledgeOpen();
+      await sheet;
+    } else if (bill != null &&
+        widget.initialTab == YorksProjectAccountsTab.supplierBills) {
+      final provider = yorksAccountsSupplierControllerProvider(projectId);
+      final loaded = await ref.read(provider.notifier).loadBill(bill);
+      if (!mounted ||
+          !stillCurrent() ||
+          ModalRoute.of(context)?.isCurrent == false) {
+        return;
+      }
+      final detail = ref.read(provider).selectedBill;
+      if (!loaded ||
+          detail?.projectId != projectId ||
+          detail?.supplierBill.supplierBillId != bill) {
+        _openedNotificationTarget = null;
+        return;
+      }
+      final sheet = showYorksAccountsSupplierBillActionsSheet(
+        context,
+        projectId: projectId,
+        supplierBillId: bill,
+        language: language,
+      );
+      await acknowledgeOpen();
+      await sheet;
+    }
   }
 
   Future<void> _loadTab(

@@ -21,6 +21,7 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.47.5'
           channel: stable
           cache: true
 
@@ -47,6 +48,12 @@ jobs:
           if (( ${#files[@]} > 0 )); then
             dart format --output=none --set-exit-if-changed "${files[@]}"
           fi
+
+      - name: Verify notification catalogue and browser worker
+        run: |
+          python3 tool/generate-notification-catalogue.py --check
+          python3 tool/notification_producer_inventory_test.py
+          node --test tool/firebase-messaging-sw.test.mjs tool/compact_web_javascript.test.mjs
 
       - name: Analyze
         run: flutter analyze
@@ -101,6 +108,7 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.47.5'
           channel: stable
           cache: true
 

@@ -28,6 +28,11 @@ final yorksV1NotificationPreferencesProvider =
         repository: sessionId == null || authUserId == null ? null : repository,
       );
       unawaited(notifier.refresh());
+      final timer = Timer.periodic(
+        const Duration(seconds: 30),
+        (_) => unawaited(notifier.refresh()),
+      );
+      ref.onDispose(timer.cancel);
       return notifier;
     });
 
@@ -36,7 +41,7 @@ final yorksV1ForegroundAlertsEnabledProvider = Provider<bool>((ref) {
           .watch(yorksV1NotificationPreferencesProvider)
           .valueOrNull
           ?.foregroundAlertsEnabled ??
-      true;
+      false;
 });
 
 final yorksV1NotificationSoundEnabledProvider = Provider<bool>((ref) {
@@ -44,13 +49,14 @@ final yorksV1NotificationSoundEnabledProvider = Provider<bool>((ref) {
           .watch(yorksV1NotificationPreferencesProvider)
           .valueOrNull
           ?.soundEnabled ??
-      true;
+      false;
 });
 
 class YorksV1NotificationPreferencesNotifier
     extends StateNotifier<AsyncValue<YorksV1NotificationPreferences>> {
   YorksV1NotificationPreferencesNotifier({
     required YorksV1NotificationPreferencesRepository? repository,
+    this.requestTimeout = const Duration(seconds: 15),
   }) : _repository = repository,
        super(
          repository == null
@@ -59,32 +65,53 @@ class YorksV1NotificationPreferencesNotifier
        );
 
   final YorksV1NotificationPreferencesRepository? _repository;
-  bool _refreshing = false;
+  final Duration requestTimeout;
+  Future<void>? _refresh;
+  int _requestGeneration = 0;
   bool _saving = false;
 
-  Future<void> refresh() async {
+  Future<void> refresh() {
     final repository = _repository;
-    if (repository == null || _refreshing) return;
-    _refreshing = true;
+    if (!mounted || repository == null || _saving) return Future<void>.value();
+    final pending = _refresh;
+    if (pending != null) return pending;
+    final generation = ++_requestGeneration;
+    late final Future<void> attempt;
+    attempt = _load(repository, generation).whenComplete(() {
+      if (identical(_refresh, attempt)) _refresh = null;
+    });
+    _refresh = attempt;
+    return attempt;
+  }
+
+  Future<void> _load(
+    YorksV1NotificationPreferencesRepository repository,
+    int generation,
+  ) async {
     final previous = state.valueOrNull;
     if (previous == null) state = const AsyncLoading();
     try {
-      state = AsyncData(await repository.loadMine());
+      final result = await repository.loadMine().timeout(requestTimeout);
+      if (!mounted || generation != _requestGeneration || _saving) return;
+      // The server revision is monotonic for this account. A delayed read must
+      // never re-enable delivery after a newer disabled choice was confirmed.
+      if (result.revision < (state.valueOrNull?.revision ?? 0)) return;
+      state = AsyncData(result);
     } catch (error, stackTrace) {
+      if (!mounted || generation != _requestGeneration || _saving) return;
       state = previous == null
           ? AsyncError(error, stackTrace)
           : AsyncValue<YorksV1NotificationPreferences>.error(
               error,
               stackTrace,
             ).copyWithPrevious(AsyncData(previous));
-    } finally {
-      _refreshing = false;
     }
   }
 
   Future<YorksV1NotificationPreferences> save(
     YorksV1NotificationPreferences desired,
   ) async {
+    if (!mounted) throw StateError('NOTIFICATION_PREFERENCES_UNAVAILABLE');
     if (_saving) throw StateError('NOTIFICATION_PREFERENCES_SAVE_IN_PROGRESS');
     final repository = _repository;
     final current = state.valueOrNull;
@@ -92,18 +119,26 @@ class YorksV1NotificationPreferencesNotifier
       throw StateError('NOTIFICATION_PREFERENCES_UNAVAILABLE');
     }
     _saving = true;
+    // Retire a read that began before this write. Its response (or error) may
+    // arrive after the confirmed update, while later reads get a fresh slot.
+    final generation = ++_requestGeneration;
+    _refresh = null;
     try {
-      final saved = await repository.updateMine(
-        desired: desired,
-        expectedRevision: current.revision,
-      );
+      final saved = await repository
+          .updateMine(desired: desired, expectedRevision: current.revision)
+          .timeout(requestTimeout);
+      if (!mounted || generation != _requestGeneration) {
+        throw StateError('NOTIFICATION_PREFERENCES_UNAVAILABLE');
+      }
       state = AsyncData(saved);
       return saved;
     } catch (error, stackTrace) {
-      state = AsyncValue<YorksV1NotificationPreferences>.error(
-        error,
-        stackTrace,
-      ).copyWithPrevious(AsyncData(current));
+      if (mounted && generation == _requestGeneration) {
+        state = AsyncValue<YorksV1NotificationPreferences>.error(
+          error,
+          stackTrace,
+        ).copyWithPrevious(AsyncData(current));
+      }
       rethrow;
     } finally {
       _saving = false;
