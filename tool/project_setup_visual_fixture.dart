@@ -10,6 +10,7 @@ import 'package:material_ledger/shared/models/app_user.dart';
 import 'package:material_ledger/shared/models/user_role.dart';
 import 'package:material_ledger/shared/models/yorks_v1_feature_flags.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project.dart';
+import 'package:material_ledger/shared/models/yorks_v1_project_strings.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_creation_draft.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_team_directory_member.dart';
 import 'package:material_ledger/shared/models/yorks_v1_role.dart';
@@ -25,6 +26,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_permission_provider.dart';
 import 'package:material_ledger/shared/models/yorks_v1_permission_management.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_permission_repository.dart';
+import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_project_setup_desktop_shell.dart';
+import 'project_setup_completion_fixture.dart';
 
 /// Actual setup presentation with synthetic read context and browser storage.
 /// No remote backend is configured and no live user/project write is possible.
@@ -37,7 +40,7 @@ Future<void> main() async {
   final session = Uri.base.queryParameters['session'] ?? 'review';
   final user = AppUser(
     id: 'setup-visual-person',
-    fullName: 'Project Engineer',
+    fullName: 'Sarah Ahmed',
     email: 'fixture@example.invalid',
     role: UserRole.engineer,
     yorksV1RoleCache: YorksV1Role.projectEngineer,
@@ -100,41 +103,121 @@ Future<void> main() async {
     container
         .read(yorksV1ProjectSetupCreationDraftProvider(user.id))
         .copyWith(
-          reference: 'YRA-324',
-          name: 'NEXUS Transmission Scheme Phase 1',
+          reference: 'YRA-322',
+          name: 'NEXUS — Four substations',
           clientName: 'TAQA Transmission',
           parties: const [
             YorksV1ProjectPartyInput(
               kind: YorksV1ProjectPartyKind.consultant,
-              name: 'Atkins',
+              name: 'AtkinsRéalis',
             ),
             YorksV1ProjectPartyInput(
               kind: YorksV1ProjectPartyKind.mainContractor,
-              name: 'L&T',
+              name: 'Balfour Beatty',
+            ),
+            YorksV1ProjectPartyInput(
+              kind: YorksV1ProjectPartyKind.subcontractor,
+              name: 'Northfield Electrical Ltd',
+            ),
+            YorksV1ProjectPartyInput(
+              kind: YorksV1ProjectPartyKind.subcontractor,
+              name: 'Delta Mechanical Services',
+            ),
+            YorksV1ProjectPartyInput(
+              kind: YorksV1ProjectPartyKind.otherContractor,
+              name: 'Siteworks UK',
+            ),
+            YorksV1ProjectPartyInput(
+              kind: YorksV1ProjectPartyKind.otherContractor,
+              name: 'Crane Hire Co.',
+            ),
+            YorksV1ProjectPartyInput(
+              kind: YorksV1ProjectPartyKind.otherContractor,
+              name: 'Safety Solutions',
             ),
           ],
-          jobOrContractReference: 'N-19957.1',
+          jobOrContractReference: 'C-4587',
           siteLocation: 'Al Dhafra, Abu Dhabi',
-          startDate: DateTime.utc(2026, 10, 2),
-          notes: 'Site mobilization and coordination notes.',
+          startDate: DateTime.utc(2024, 3, 12),
+          endDate: DateTime.utc(2024, 11, 30),
+          notes: 'Four new substations as part of the Nexus programme.',
+          attachments: [
+            const YorksV1ProjectAttachmentInput(
+              localId: 'fixture-file-1',
+              fileName: 'DF3W_General_Arrangement.pdf',
+              mimeType: 'application/pdf',
+              sizeBytes: 2400000,
+            ),
+            const YorksV1ProjectAttachmentInput(
+              localId: 'fixture-file-2',
+              fileName: 'Load_Calculations_DF3W.xlsx',
+              mimeType:
+                  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              sizeBytes: 1100000,
+            ),
+            const YorksV1ProjectAttachmentInput(
+              localId: 'fixture-file-3',
+              fileName: 'Programme_DF3W.docx',
+              mimeType:
+                  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+              sizeBytes: 856000,
+            ),
+            if (stage != YorksV1ProjectCreationStage.reviewAndCreate)
+              const YorksV1ProjectAttachmentInput(
+                localId: 'fixture-file-4',
+                fileName: 'Electrical_Schematics.pdf',
+                mimeType: 'application/pdf',
+                sizeBytes: 1800000,
+              ),
+          ],
+          rawEditorState: {
+            'reviewedOperationalFiles': [
+              'fixture-file-1:2400000',
+              'fixture-file-2:1100000',
+              'fixture-file-3:856000',
+              'fixture-file-4:1800000',
+            ],
+            if (stage == YorksV1ProjectCreationStage.buildings) ...{
+              'buildingLocalId': 'fixture-b1',
+              'buildingCode': 'DF3W',
+              'buildingName': 'DF3W substation',
+              'buildingFloors': 'Ground, Roof',
+              'buildingAddress': 'Al Dhafra, Abu Dhabi',
+              'buildingFrp': true,
+            },
+          },
           currentStage: stage,
-          visitedStages: YorksV1ProjectCreationStage.values.toSet(),
+          visitedStages: YorksV1ProjectCreationStage.values
+              .where((value) => value.index <= stage.index)
+              .toSet(),
           buildings: const [
             YorksV1ProjectBuildingInput(
               localRowId: 'fixture-b1',
-              code: 'DF1W',
-              name: '132/33kV Building',
-              floorsOrLevels: ['Ground', 'L1', 'Roof'],
+              code: 'DF3W',
+              name: 'DF3W substation',
+              floorsOrLevels: ['Ground', 'Roof'],
               deliveryAddress: 'Zone 1, metro depot',
               hasFrpRoom: true,
             ),
             YorksV1ProjectBuildingInput(
               localRowId: 'fixture-b2',
-              code: 'DF5W',
-              name: 'Control Building',
-              floorsOrLevels: ['Ground', 'L1'],
-              deliveryAddress: 'Zone 5, metro depot',
+              code: 'DF4W',
+              name: 'DF4W substation',
+              floorsOrLevels: ['Ground'],
+              deliveryAddress: 'Al Dhafra, Abu Dhabi',
               hasFrpRoom: false,
+            ),
+            YorksV1ProjectBuildingInput(
+              localRowId: 'fixture-b3',
+              code: 'DF6W',
+              name: 'DF6W substation',
+              floorsOrLevels: ['Ground', 'L1'],
+            ),
+            YorksV1ProjectBuildingInput(
+              localRowId: 'fixture-b4',
+              code: 'DF7W',
+              name: 'DF7W substation',
+              hasFrpRoom: true,
             ),
           ],
         ),
@@ -144,8 +227,15 @@ Future<void> main() async {
     routes: [
       GoRoute(
         path: RoutePaths.engineerCreateProject,
-        builder: (_, _) => const YorksV1WorkspaceShell(
-          child: YorksV1ProjectCreateFlowScreen(),
+        builder: (context, _) => LayoutBuilder(
+          builder: (context, constraints) => stageIndex == 5
+              ? const _VisualCompletionScreen()
+              : constraints.maxWidth >= 1100 &&
+                    MediaQuery.textScalerOf(context).scale(1) <= 1.1
+              ? const YorksV1ProjectCreateFlowScreen()
+              : const YorksV1WorkspaceShell(
+                  child: YorksV1ProjectCreateFlowScreen(),
+                ),
         ),
       ),
     ],
@@ -174,6 +264,53 @@ Future<void> main() async {
       ),
     ),
   );
+}
+
+class _VisualCompletionScreen extends ConsumerStatefulWidget {
+  const _VisualCompletionScreen();
+  @override
+  ConsumerState<_VisualCompletionScreen> createState() =>
+      _VisualCompletionScreenState();
+}
+
+class _VisualCompletionScreenState
+    extends ConsumerState<_VisualCompletionScreen> {
+  final _scroll = ScrollController();
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final language = ref.watch(languageProvider);
+    return YorksV1ProjectSetupDesktopShell(
+      language: language,
+      stage: YorksV1ProjectCreationStage.reviewAndCreate,
+      visitedStages: YorksV1ProjectCreationStage.values.toSet(),
+      completeStages: YorksV1ProjectCreationStage.values.toSet(),
+      reference: 'YRA-322',
+      projectName: 'NEXUS — Four substations',
+      localStatus: '',
+      saving: false,
+      readOnly: true,
+      completed: true,
+      body: buildProjectSetupCompletionFixture(
+        language: language,
+        onDismissBanner: () {},
+      ),
+      scrollController: _scroll,
+      onSelectStage: (_) {},
+      onSaveDraft: null,
+      onBack: () {},
+      onReturnToProjects: () {},
+      onContinue: null,
+      onSkip: null,
+      onFinalAction: null,
+      primaryLabel: YorksV1ProjectStrings.createProject,
+    );
+  }
 }
 
 const _fixtureCapabilities = <String>{

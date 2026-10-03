@@ -26,6 +26,7 @@ import '../../../../shared/models/yorks_v1_project_setup_operation.dart';
 import '../../../../shared/models/yorks_v1_project_portfolio.dart';
 import '../../../../shared/models/yorks_v1_project_creation_draft.dart';
 import '../../../../shared/models/yorks_v1_project_strings.dart';
+import '../../../../shared/models/yorks_v1_project_setup_desktop_strings.dart';
 import '../../../../shared/models/yorks_v1_project_team_directory_member.dart';
 import '../../../../shared/models/yorks_v1_permission_management.dart';
 import '../../../../shared/models/yorks_v1_role.dart';
@@ -43,6 +44,13 @@ import '../../../../shared/providers/yorks_v1_project_portfolio_provider.dart';
 import '../../../../shared/providers/yorks_v1_permission_provider.dart';
 import '../../../../shared/services/yorks_v1_document_file_service.dart';
 import '../../../materials/presentation/yorks_v1_feature_action_access.dart';
+import 'yorks_v1_project_setup_desktop_theme.dart';
+import '../widgets/yorks_v1_project_setup_completion.dart';
+import '../../../../shared/providers/yorks_v1_feature_flags_provider.dart';
+import 'yorks_v1_project_setup_desktop_shell.dart';
+import '../../../../shared/models/yorks_v1_project_setup_shell_strings.dart';
+
+part 'yorks_v1_project_setup_desktop_stages.dart';
 
 /// The normalized Yorks V1 R35 project creation experience.
 ///
@@ -184,6 +192,10 @@ class _YorksV1ProjectCreateFlowScreenState
   final _buildingNameController = TextEditingController();
   final _buildingFloorsController = TextEditingController();
   final _buildingDeliveryAddressController = TextEditingController();
+
+  YorksV1ProjectSetupOperation? _completedOperation;
+  bool _completedBannerVisible = true;
+  bool _localCleanupPending = false;
 
   bool _synchronizingEditor = false;
   bool _restoredEditor = false;
@@ -388,18 +400,20 @@ class _YorksV1ProjectCreateFlowScreenState
   void dispose() {
     // A text edit may still be inside the short debounce window when a route
     // is popped or the app is backgrounded.  Start the owner-scoped local save
-    // before tearing down the screen so a recovery session resumes exactly at
-    // the last entered value rather than the previous field value.
+    // from the captured final values. Riverpod listeners must be detached
+    // before save publishes a revision to avoid notifying a defunct element.
     _disposed = true;
     _draftSaveTimer?.cancel();
     final pending = _pendingDraft;
     _pendingDraft = null;
     if (pending != null && _liveDraftController != null) {
       final stable = _withLocalRowIds(pending);
+      final snapshot = stable.copyWith(rawEditorState: _rawEditorState(stable));
+      final controller = _liveDraftController!;
       unawaited(
-        _liveDraftController!
-            .save(stable.copyWith(rawEditorState: _rawEditorState(stable)))
-            .catchError((_) {}),
+        Future<void>.microtask(
+          () => controller.save(snapshot),
+        ).catchError((_) {}),
       );
     }
     _navigationService.unregister(_navigationGuard);
@@ -472,6 +486,9 @@ class _YorksV1ProjectCreateFlowScreenState
       _leaveAuthorizedGeneration = null;
       _leaveDecision = null;
       _confirmedContextResult = false;
+      _completedOperation = null;
+      _completedBannerVisible = true;
+      _localCleanupPending = false;
       _visitedStages.clear();
       _visitedStages.add(YorksV1ProjectCreationStage.projectDetails);
     }
@@ -569,7 +586,9 @@ class _YorksV1ProjectCreateFlowScreenState
         actions: {
           _SaveLocalDraftIntent: CallbackAction<_SaveLocalDraftIntent>(
             onInvoke: (_) {
-              unawaited(_saveDraft(_currentDraft()));
+              if (_completedOperation?.cleanupComplete != true) {
+                unawaited(_saveDraft(_currentDraft()));
+              }
               return null;
             },
           ),
@@ -613,7 +632,249 @@ class _YorksV1ProjectCreateFlowScreenState
                     creatorRole: role,
                     creatorAuthUserId: authUserId,
                     teamDirectory: teamDirectory,
+                    setupState: setupState,
                   );
+                  if (YorksProjectSetupDesktopTheme.isDesktop(context)) {
+                    final knownOperation =
+                        setupState.operation ?? _completedOperation;
+                    final showCompletion =
+                        knownOperation?.coreSucceeded == true &&
+                        draft.currentStage !=
+                            YorksV1ProjectCreationStage.attachments;
+                    final editorPending =
+                        (draft.currentStage ==
+                                YorksV1ProjectCreationStage.buildings &&
+                            _hasUnappliedBuildingEditor) ||
+                        (draft.currentStage ==
+                                YorksV1ProjectCreationStage.partiesAndAccess &&
+                            _hasUnappliedPartyEditor);
+                    final completeStages = {
+                      for (final stage in YorksV1ProjectCreationStage.values)
+                        if (stage !=
+                                YorksV1ProjectCreationStage.reviewAndCreate &&
+                            (_isEditing || _visitedStages.contains(stage)) &&
+                            _errorsForStage(stage, draft).isEmpty &&
+                            !(stage == YorksV1ProjectCreationStage.buildings &&
+                                _hasUnappliedBuildingEditor) &&
+                            !(stage ==
+                                    YorksV1ProjectCreationStage
+                                        .partiesAndAccess &&
+                                _hasUnappliedPartyEditor) &&
+                            !(stage ==
+                                    YorksV1ProjectCreationStage
+                                        .projectDetails &&
+                                _hasInvalidTypedDates) &&
+                            !(stage ==
+                                    YorksV1ProjectCreationStage.attachments &&
+                                _hasUnreviewedAttachments))
+                          stage,
+                    };
+                    return YorksV1ProjectSetupDesktopShell(
+                      language: language,
+                      stage: draft.currentStage,
+                      visitedStages: _isEditing
+                          ? YorksV1ProjectCreationStage.values.toSet()
+                          : _visitedStages,
+                      completeStages: completeStages,
+                      completed: showCompletion,
+                      reference: showCompletion
+                          ? knownOperation!.project!.reference
+                          : draft.reference,
+                      projectName: showCompletion
+                          ? knownOperation!.project!.name
+                          : draft.name,
+                      localStatus: localStatus.active(language),
+                      saving: saving,
+                      readOnly: readOnly,
+                      savedOnDevice: acknowledged,
+                      isEditing: _isEditing,
+                      scrollController: _scrollController,
+                      onSelectStage: _selectStage,
+                      onSaveDraft: saving || readOnly
+                          ? null
+                          : () => _saveDraft(_currentDraft()),
+                      onBack: _back,
+                      onReturnToProjects: () async {
+                        final generation = _contextGeneration;
+                        if (!await _prepareLeave() ||
+                            !mounted ||
+                            !context.mounted ||
+                            !_isCurrentContext(generation)) {
+                          return;
+                        }
+                        context.go(RoutePaths.yorksV1Projects);
+                      },
+                      onContinue: saving || readOnly || editorPending
+                          ? null
+                          : _continue,
+                      onSkip: saving || readOnly ? null : _skipAttachments,
+                      onFinalAction:
+                          permission.canWrite &&
+                              !readOnly &&
+                              (intentLocked ||
+                                  (!_hasUnreviewedAttachments &&
+                                      !_hasUnappliedBuildingEditor &&
+                                      !_hasUnappliedPartyEditor))
+                          ? _createProject
+                          : null,
+                      primaryLabel: intentLocked
+                          ? (setupState.outcomeUncertain
+                                ? YorksV1ProjectStrings.checkSavedStatus
+                                : YorksV1ProjectStrings.continueFileRecovery)
+                          : _isEditing
+                          ? YorksV1ProjectStrings.saveChanges
+                          : YorksV1ProjectStrings.createProject,
+                      footerHint: editorPending
+                          ? YorksV1ProjectSetupShellStrings.buildingEditPending
+                          : null,
+                      headerActions: [
+                        if (_ownershipCheckFailed)
+                          TextButton(
+                            onPressed: _verifyResumedOwnership,
+                            child: Text(
+                              YorksV1ProjectStrings.retry.active(language),
+                            ),
+                          ),
+                        if (ownedElsewhere)
+                          TextButton(
+                            onPressed: () async {
+                              final generation = _contextGeneration;
+                              _draftSaveTimer?.cancel();
+                              _pendingDraft = null;
+                              await _draftController(authUserId).takeOver();
+                              if (!_isCurrentContext(generation)) return;
+                              setState(() {
+                                _restoredEditor = false;
+                                _removedBuilding = null;
+                                _removedBuildingIndex = null;
+                                _buildingUndoRows = null;
+                                _removedParty = null;
+                                _removedPartyIndex = null;
+                                _restoredNavigationStage = null;
+                                _ownershipCheckFailed = false;
+                              });
+                            },
+                            child: Text(
+                              YorksV1ProjectStrings.takeOverDraft.active(
+                                language,
+                              ),
+                            ),
+                          ),
+                      ],
+                      notices: [
+                        YorksV1ActionAvailabilityNotice(
+                          access: permission,
+                          language: language,
+                          onRetry: () => ref
+                              .read(
+                                yorksV1CurrentPermissionSnapshotProvider
+                                    .notifier,
+                              )
+                              .retryVerification(),
+                        ),
+                        if (_validationErrors.isNotEmpty && !intentLocked)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  YorksV1ProjectStrings.stageNeedsAttention
+                                      .active(language),
+                                  style: AppTypography.titleSmall,
+                                ),
+                                for (final error in _validationErrors)
+                                  TextButton.icon(
+                                    onPressed: readOnly
+                                        ? null
+                                        : () => _focusInvalidField(error),
+                                    icon: const Icon(
+                                      Icons.error_outline,
+                                      size: 18,
+                                    ),
+                                    label: Text(
+                                      '${_validationTargetLabel(error).active(language)}: ${_messageForValidation({error}).active(language)}',
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        if (!showCompletion &&
+                            (setupState.operation != null ||
+                                setupState.recoveryError != null))
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            child: _ProjectSetupOutcomePanel(
+                              state: setupState,
+                              language: language,
+                              onRecover: _createProject,
+                              onOpen: setupState.project == null
+                                  ? null
+                                  : () => context.go(
+                                      RoutePaths.yorksV1ProjectPath(
+                                        setupState.project!.id,
+                                      ),
+                                    ),
+                              onReselect: () => _setStage(
+                                YorksV1ProjectCreationStage.attachments,
+                              ),
+                              onRetryFile: _retrySetupFile,
+                              onRemovePendingFile: _removePendingSetupFile,
+                            ),
+                          ),
+                        if (recoveryRequired)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            child: _DesktopPanel(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    YorksV1ProjectStrings.draftNeedsRecovery
+                                        .active(language),
+                                  ),
+                                  TextButton(
+                                    onPressed: _reviewRecoveredDraft,
+                                    child: Text(
+                                      YorksV1ProjectStrings.reviewRecoveredDraft
+                                          .active(language),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                      ],
+                      body: showCompletion
+                          ? _buildCompletion(
+                              knownOperation!,
+                              setupState,
+                              language,
+                              role,
+                              authUserId,
+                              saving,
+                            )
+                          : AbsorbPointer(
+                              absorbing:
+                                  saving ||
+                                  readOnly ||
+                                  (intentLocked &&
+                                      draft.currentStage !=
+                                          YorksV1ProjectCreationStage
+                                              .attachments),
+                              child:
+                                  intentLocked &&
+                                      draft.currentStage !=
+                                          YorksV1ProjectCreationStage
+                                              .attachments
+                                  ? _OriginalSetupIntentSummary(
+                                      operation: setupState.operation!,
+                                      language: language,
+                                    )
+                                  : content,
+                            ),
+                    );
+                  }
                   final stackHeader =
                       constraints.maxWidth < 600 &&
                       (MediaQuery.textScalerOf(context).scale(1) > 1.3 ||
@@ -1002,12 +1263,233 @@ class _YorksV1ProjectCreateFlowScreenState
     );
   }
 
+  Widget _buildCompletion(
+    YorksV1ProjectSetupOperation operation,
+    YorksV1ProjectSetupState setupState,
+    AppLanguage language,
+    YorksV1Role role,
+    String authUserId,
+    bool saving,
+  ) {
+    final project = operation.project!;
+    final confirmed = YorksV1ProjectCreationResult.fromRpcJson(
+      operation.core.result!,
+    );
+    final members = operation.mode == YorksV1ProjectSetupMode.edit
+        ? widget.editItem?.activeMembers ?? const <YorksV1ProjectMember>[]
+        : confirmed.members;
+    final activeMembers = members
+        .where((member) => member.isActiveAt(DateTime.now()))
+        .toList();
+    final ownMember = activeMembers.any(
+      (member) => member.memberAuthUserId == authUserId,
+    );
+    final engineeringAccess =
+        role == YorksV1Role.admin ||
+        role.isGlobalProjectEngineer ||
+        (role.isEngineering && ownMember);
+    final canManage =
+        role == YorksV1Role.admin ||
+        role.isGlobalProjectEngineer ||
+        (role.isEngineering &&
+            activeMembers.any(
+              (member) =>
+                  member.memberAuthUserId == authUserId &&
+                  member.projectRole ==
+                      YorksV1ProjectMembershipRole.projectEngineer,
+            ));
+    final flags = ref.watch(yorksV1FeatureFlagsProvider);
+    final permissionState = ref.watch(yorksV1CurrentPermissionSnapshotProvider);
+    bool allows(
+      String key, {
+      bool mutation = true,
+      required bool legacyAllowed,
+    }) {
+      final access = yorksV1FeatureActionAccess(
+        permissionState,
+        key,
+        legacyAllowed: legacyAllowed,
+        projectId: project.id,
+      );
+      return mutation ? access.canWrite : access.isVisible;
+    }
+
+    final open = allows(
+      YorksV1CapabilityKeys.projectsView,
+      mutation: false,
+      legacyAllowed:
+          engineeringAccess ||
+          (role == YorksV1Role.procurement &&
+              project.state == YorksV1ProjectLifecycle.active),
+    );
+    final edit = allows(
+      YorksV1CapabilityKeys.projectsEdit,
+      legacyAllowed: engineeringAccess,
+    );
+    final boq =
+        flags.boq &&
+        allows(YorksV1CapabilityKeys.boqEdit, legacyAllowed: engineeringAccess);
+    final team =
+        allows(
+          YorksV1CapabilityKeys.projectsManageTeam,
+          legacyAllowed: canManage,
+        ) &&
+        canManage;
+    final documents =
+        flags.documents &&
+        allows(
+          YorksV1CapabilityKeys.documentsUpload,
+          legacyAllowed: engineeringAccess,
+        );
+    final requests =
+        flags.requests &&
+        allows(
+          YorksV1CapabilityKeys.materialRequestsCreate,
+          legacyAllowed: engineeringAccess,
+        );
+    final physical = confirmed.scopes
+        .where((scope) => !scope.isCommon && scope.active)
+        .toList();
+    // The confirmed update acknowledges this exact reviewed payload. The
+    // original edit seed can differ after an added or renamed building.
+    final reviewedBuildings =
+        (operation.core.payload['buildings'] as List?)
+            ?.whereType<Map>()
+            .map(
+              (row) => YorksV1ProjectBuildingInput.fromDraftJson(
+                Map<String, dynamic>.from(row),
+              ),
+            )
+            .toList() ??
+        const <YorksV1ProjectBuildingInput>[];
+    final buildingLabels = operation.mode == YorksV1ProjectSetupMode.edit
+        ? reviewedBuildings
+              .map(
+                (building) =>
+                    building.code.isEmpty ? building.name : building.code,
+              )
+              .toList()
+        : physical.map((scope) => scope.code).toList();
+    String memberNames(YorksV1ProjectMembershipRole membershipRole) {
+      final scoped = activeMembers
+          .where((member) => member.projectRole == membershipRole)
+          .toList();
+      final names = scoped
+          .map((member) => member.displayName)
+          .whereType<String>()
+          .where((name) => name.trim().isNotEmpty && !name.contains('@'))
+          .toList();
+      return names.length == scoped.length && names.isNotEmpty
+          ? names.join(', ')
+          : '${scoped.length}';
+    }
+
+    void openProject() {
+      if (operation.mode == YorksV1ProjectSetupMode.edit &&
+          widget.onProjectUpdated != null) {
+        widget.onProjectUpdated!(project);
+      } else if (operation.mode == YorksV1ProjectSetupMode.create &&
+          widget.onProjectCreated != null) {
+        widget.onProjectCreated!(project);
+      } else {
+        context.go(RoutePaths.yorksV1ProjectPath(project.id));
+      }
+    }
+
+    return YorksV1ProjectSetupCompletion(
+      operation: operation,
+      copy: YorksV1ProjectSetupCompletionCopy.localized(language),
+      busy: saving,
+      showBanner: _completedBannerVisible,
+      onDismissBanner: () => setState(() => _completedBannerVisible = false),
+      localRecoveryPending:
+          setupState.recoveryError != null || _localCleanupPending,
+      permissions: YorksV1ProjectSetupCompletionPermissions(
+        canOpenProject: open,
+        canEditProject: edit,
+        canAddBoq: boq,
+        canInviteTeam: team,
+        canUploadDocuments: documents,
+        canCreateMaterialRequests: requests,
+        canReturnToProjects: allows(
+          YorksV1CapabilityKeys.projectsView,
+          mutation: false,
+          legacyAllowed: role != YorksV1Role.accountant,
+        ),
+      ),
+      summaryRows: [
+        YorksV1ProjectSetupSummaryRow(
+          label: YorksV1ProjectStrings.siteLocation.active(language),
+          value: project.siteLocation ?? '—',
+        ),
+        YorksV1ProjectSetupSummaryRow(
+          label: YorksV1ProjectStrings.projectEngineers.active(language),
+          value: memberNames(YorksV1ProjectMembershipRole.projectEngineer),
+        ),
+        YorksV1ProjectSetupSummaryRow(
+          label: YorksV1ProjectStrings.siteEngineers.active(language),
+          value: memberNames(YorksV1ProjectMembershipRole.siteEngineer),
+        ),
+        YorksV1ProjectSetupSummaryRow(
+          label: YorksV1ProjectStrings.buildings.active(language),
+          value:
+              '${buildingLabels.length}${buildingLabels.isEmpty ? '' : ' (${buildingLabels.join(', ')})'}',
+        ),
+        YorksV1ProjectSetupSummaryRow(
+          label: YorksV1ProjectStrings.attachments.active(language),
+          value:
+              '${operation.files.where((file) => file.status == YorksV1ProjectSetupFileStatus.ready).length} / ${operation.files.where((file) => file.status != YorksV1ProjectSetupFileStatus.removed).length}',
+        ),
+      ],
+      recoveryPanel:
+          operation.filesPending ||
+              operation.hasUnresolvedCommand ||
+              _localCleanupPending ||
+              setupState.recoveryError != null
+          ? _ProjectSetupOutcomePanel(
+              state: setupState,
+              language: language,
+              onRecover: _createProject,
+              onOpen: open ? openProject : null,
+              onReselect: () =>
+                  _setStage(YorksV1ProjectCreationStage.attachments),
+              onRetryFile: _retrySetupFile,
+              onRemovePendingFile: _removePendingSetupFile,
+            )
+          : null,
+      onOpenProject: open ? openProject : null,
+      onEditProject: edit
+          ? () {
+              final path = RoutePaths.yorksV1ProjectEditPath(project.id);
+              if (_isEditing) {
+                // Editing the confirmed result starts a new intent. A go to
+                // this same route can retain the completed form's old seed.
+                unawaited(context.push<void>(path));
+              } else {
+                context.go(path);
+              }
+            }
+          : null,
+      onAddBoq: boq
+          ? () => context.go(RoutePaths.yorksV1BoqGroupsPath(project.id))
+          : null,
+      onInviteTeam: team
+          ? () => context.go(RoutePaths.yorksV1ProjectPath(project.id))
+          : null,
+      onUploadDocuments: documents
+          ? () => context.go(RoutePaths.yorksV1ProjectDocumentsPath(project.id))
+          : null,
+      onReturnToProjects: () => context.go(RoutePaths.yorksV1Projects),
+    );
+  }
+
   Widget _buildStageContent({
     required YorksV1ProjectCreationDraft draft,
     required AppLanguage language,
     required YorksV1Role creatorRole,
     required String creatorAuthUserId,
     required AsyncValue<List<YorksV1ProjectTeamDirectoryMember>>? teamDirectory,
+    required YorksV1ProjectSetupState setupState,
   }) {
     final generation = _contextGeneration;
     final stage = draft.currentStage;
@@ -1158,10 +1640,13 @@ class _YorksV1ProjectCreateFlowScreenState
         },
         onRemoveAttachment: _removeAttachmentAt,
         pendingFiles: _selectedAttachmentFiles,
+        setupState: setupState,
+        onRetryFile: _retrySetupFile,
         onReviewClassification: _reviewAttachmentClassification,
       ),
       YorksV1ProjectCreationStage.reviewAndCreate => _ReviewStage(
         draft: draft,
+        pendingFiles: _selectedAttachmentFiles,
         language: language,
         validationErrors: _validationErrors,
         teamDirectory: teamDirectory!,
@@ -1306,7 +1791,8 @@ class _YorksV1ProjectCreateFlowScreenState
   }
 
   void _queueNavigationContext() {
-    if (_restoringNavigation ||
+    if (_completedOperation?.cleanupComplete == true ||
+        _restoringNavigation ||
         _synchronizingEditor ||
         _activeAuthUserId == null ||
         !_isCurrentContext(_contextGeneration)) {
@@ -1570,6 +2056,50 @@ class _YorksV1ProjectCreateFlowScreenState
     });
   }
 
+  Future<void> _finishResolvedRecovery(
+    YorksV1ProjectSetupCoordinator coordinator,
+    String owner,
+    int generation,
+  ) async {
+    await coordinator.captureKnownOutcome();
+    if (!_isCurrentContext(generation)) return;
+    final operation = coordinator.currentState.operation;
+    if (operation == null ||
+        !operation.coreSucceeded ||
+        operation.filesPending ||
+        operation.hasUnresolvedCommand ||
+        coordinator.currentState.recoveryError != null) {
+      return;
+    }
+    try {
+      await coordinator.markCleanupComplete();
+      if (!_isCurrentContext(generation)) return;
+      // Keep the confirmed result visible after retiring its active pointer.
+      setState(() => _completedOperation = coordinator.currentState.operation);
+      await _draftController(
+        owner,
+      ).retire(resultProjectId: operation.project!.id);
+      if (!_isCurrentContext(generation)) return;
+      _resetRetiredDraftProvider(owner);
+    } catch (_) {
+      if (_isCurrentContext(generation)) {
+        setState(() => _localCleanupPending = true);
+        _showMessage(YorksV1ProjectStrings.projectSavedHousekeeping);
+      }
+    }
+  }
+
+  void _resetRetiredDraftProvider(String owner) {
+    _draftSaveTimer?.cancel();
+    _pendingDraft = null;
+    _localCleanupPending = false;
+    if (_isEditing) {
+      ref.invalidate(yorksV1ProjectEditDraftProvider(_editContext(owner)));
+    } else {
+      ref.invalidate(yorksV1ProjectSetupCreationDraftProvider(owner));
+    }
+  }
+
   Future<void> _retrySetupFile(YorksV1ProjectSetupFile file) async {
     final generation = _contextGeneration;
     final draft = _currentDraft();
@@ -1591,15 +2121,20 @@ class _YorksV1ProjectCreateFlowScreenState
       return;
     }
     try {
-      await ref
-          .read(
-            yorksV1ProjectSetupCoordinatorProvider(_setupScope(draft)).notifier,
-          )
-          .uploadFile(
-            localId: file.localId,
-            bytes: bytes.bytes,
-            documents: ref.read(yorksV1DocumentsRepositoryProvider),
-          );
+      final coordinator = ref.read(
+        yorksV1ProjectSetupCoordinatorProvider(_setupScope(draft)).notifier,
+      );
+      await coordinator.uploadFile(
+        localId: file.localId,
+        bytes: bytes.bytes,
+        documents: ref.read(yorksV1DocumentsRepositoryProvider),
+      );
+      if (!_isCurrentContext(generation)) return;
+      await _finishResolvedRecovery(
+        coordinator,
+        draft.ownerAuthUserId,
+        generation,
+      );
     } catch (_) {
       if (!_isCurrentContext(generation)) return;
       _showMessage(YorksV1ProjectStrings.projectSavedFilesPending);
@@ -1623,6 +2158,12 @@ class _YorksV1ProjectCreateFlowScreenState
                 attachment.contentHash == file.contentHash),
       );
       if (index >= 0) await _removeAttachmentAt(index);
+      if (!_isCurrentContext(generation)) return;
+      await _finishResolvedRecovery(
+        coordinator,
+        draft.ownerAuthUserId,
+        generation,
+      );
     } catch (_) {
       if (_isCurrentContext(generation)) {
         _showMessage(
@@ -1879,6 +2420,13 @@ class _YorksV1ProjectCreateFlowScreenState
     await _flushPendingDraft();
     if (!_isCurrentContext(generation)) return;
     final draft = _currentDraft();
+    if ((draft.currentStage == YorksV1ProjectCreationStage.buildings &&
+            _hasUnappliedBuildingEditor) ||
+        (draft.currentStage == YorksV1ProjectCreationStage.partiesAndAccess &&
+            _hasUnappliedPartyEditor)) {
+      _showMessage(YorksV1ProjectStrings.unappliedInput);
+      return;
+    }
     final errors = _errorsForStage(draft.currentStage, draft);
     if (draft.currentStage == YorksV1ProjectCreationStage.projectDetails &&
         !(_detailsFormKey.currentState?.validate() ?? false)) {
@@ -2811,6 +3359,7 @@ class _YorksV1ProjectCreateFlowScreenState
       final failedFiles = await _uploadSelectedAttachments(coordinator);
       if (!_isCurrentContext(generation)) return;
       final latest = coordinator.currentState.operation!;
+      var draftRetired = false;
       await coordinator.captureKnownOutcome();
       if (!_isCurrentContext(generation)) return;
       if (!latest.filesPending &&
@@ -2819,15 +3368,25 @@ class _YorksV1ProjectCreateFlowScreenState
         try {
           await coordinator.markCleanupComplete();
           await draftController.retire(resultProjectId: project.id);
+          draftRetired = true;
         } catch (_) {
           if (_isCurrentContext(generation)) {
+            _localCleanupPending = true;
             _showMessage(YorksV1ProjectStrings.projectSavedHousekeeping);
           }
         }
       }
       ref.invalidate(yorksV1ProjectPortfolioProvider);
+      unawaited(
+        ref
+            .read(yorksV1CurrentPermissionSnapshotProvider.notifier)
+            .refresh(authorityMayHaveChanged: true),
+      );
       if (!_isCurrentContext(generation)) return;
-      setState(() => _isCreating = false);
+      setState(() {
+        _completedOperation = coordinator.currentState.operation;
+        _isCreating = false;
+      });
       if (failedFiles > 0) {
         _showMessage(YorksV1ProjectStrings.projectSavedFilesPending);
       } else if (project.state == YorksV1ProjectLifecycle.draft &&
@@ -2836,9 +3395,13 @@ class _YorksV1ProjectCreateFlowScreenState
       }
       if (latest.filesPending ||
           latest.hasUnresolvedCommand ||
-          coordinator.currentState.recoveryError != null) {
+          coordinator.currentState.recoveryError != null ||
+          _localCleanupPending) {
         return;
       }
+      if (draftRetired) _resetRetiredDraftProvider(draft.ownerAuthUserId);
+      if (!mounted) return;
+      if (YorksProjectSetupDesktopTheme.isDesktop(context)) return;
       if (_isEditing) {
         widget.onProjectUpdated?.call(project);
       } else if (widget.onProjectCreated != null) {
@@ -3427,6 +3990,9 @@ class _DetailsStage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (YorksProjectSetupDesktopTheme.isDesktop(context)) {
+      return _DesktopDetailsStage(this);
+    }
     final required = YorksV1ProjectStrings.requiredField.active(language);
     return Form(
       key: formKey,
@@ -3754,6 +4320,9 @@ class _PartiesAndAccessStage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (YorksProjectSetupDesktopTheme.isDesktop(context)) {
+      return _DesktopPartiesStage(this);
+    }
     final subcontractors = <_IndexedParty>[
       for (var index = 0; index < draft.parties.length; index++)
         if (draft.parties[index].kind == YorksV1ProjectPartyKind.subcontractor)
@@ -4449,6 +5018,9 @@ class _BuildingsStage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (YorksProjectSetupDesktopTheme.isDesktop(context)) {
+      return _DesktopBuildingsStage(this);
+    }
     final buildingError =
         validationErrors.contains(
           YorksV1ProjectValidationCode.missingBuilding,
@@ -4804,6 +5376,8 @@ class _AttachmentsStage extends StatelessWidget {
     required this.onRemoveAttachment,
     required this.pendingFiles,
     required this.onReviewClassification,
+    this.setupState,
+    this.onRetryFile,
   });
 
   final YorksV1ProjectCreationDraft draft;
@@ -4816,9 +5390,14 @@ class _AttachmentsStage extends StatelessWidget {
   final ValueChanged<int> onRemoveAttachment;
   final List<YorksV1SelectedDocument> pendingFiles;
   final void Function(int, bool) onReviewClassification;
+  final YorksV1ProjectSetupState? setupState;
+  final ValueChanged<YorksV1ProjectSetupFile>? onRetryFile;
 
   @override
   Widget build(BuildContext context) {
+    if (YorksProjectSetupDesktopTheme.isDesktop(context)) {
+      return _DesktopAttachmentsStage(this);
+    }
     return NexusSectionCard(
       title: YorksV1ProjectStrings.attachments.active(language),
       child: Column(
@@ -4994,59 +5573,73 @@ class _ProjectAttachmentDropzoneState
         borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
         child: CustomPaint(
           painter: _DashedAttachmentBorderPainter(
-            color: (_dragging ? AppColors.navy : AppColors.blue).withValues(
-              alpha: _dragging ? 0.9 : 0.55,
-            ),
+            color:
+                (_dragging
+                        ? AppColors.navy
+                        : YorksProjectSetupDesktopTheme.isDesktop(context)
+                        ? YorksProjectSetupDesktopTheme.blue
+                        : AppColors.blue)
+                    .withValues(alpha: _dragging ? 0.9 : 0.55),
             radius: AppSpacing.radiusMd,
           ),
           child: Container(
             decoration: BoxDecoration(
               color: _dragging
                   ? AppColors.blue.withValues(alpha: 0.06)
+                  : YorksProjectSetupDesktopTheme.isDesktop(context)
+                  ? const Color(0xFFF7FBFE)
                   : Colors.transparent,
               borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
             ),
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.xl,
-              vertical: AppSpacing.xxxl,
-            ),
-            child: Column(
-              children: [
-                const Icon(
-                  Icons.file_upload_outlined,
-                  size: 30,
-                  color: AppColors.muted,
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Text(
-                  _dragging
-                      ? YorksV1ProjectStrings.attachmentsDropzoneActive.active(
-                          widget.language,
-                        )
-                      : YorksV1ProjectStrings.attachmentsDropzoneTitle.active(
-                          widget.language,
-                        ),
-                  textAlign: TextAlign.center,
-                  style: AppTypography.titleMedium,
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Center(
-                  child: _LocalizedCopy(
-                    copy: YorksV1ProjectStrings.attachmentsDropzonePrompt,
+            padding: YorksProjectSetupDesktopTheme.isDesktop(context)
+                ? EdgeInsets.zero
+                : const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.xl,
+                    vertical: AppSpacing.xxxl,
+                  ),
+            child: YorksProjectSetupDesktopTheme.isDesktop(context)
+                ? _DesktopDropzoneContents(
                     language: widget.language,
-                    englishStyle: AppTypography.bodySmall,
+                    onPick: widget.onPick,
+                    dragging: _dragging,
+                  )
+                : Column(
+                    children: [
+                      const Icon(
+                        Icons.file_upload_outlined,
+                        size: 30,
+                        color: AppColors.muted,
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        _dragging
+                            ? YorksV1ProjectStrings.attachmentsDropzoneActive
+                                  .active(widget.language)
+                            : YorksV1ProjectStrings.attachmentsDropzoneTitle
+                                  .active(widget.language),
+                        textAlign: TextAlign.center,
+                        style: AppTypography.titleMedium,
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Center(
+                        child: _LocalizedCopy(
+                          copy: YorksV1ProjectStrings.attachmentsDropzonePrompt,
+                          language: widget.language,
+                          englishStyle: AppTypography.bodySmall,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      OutlinedButton.icon(
+                        onPressed: widget.onPick,
+                        icon: const Icon(Icons.add, size: 18),
+                        label: Text(
+                          YorksV1ProjectStrings.addAttachment.active(
+                            widget.language,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                OutlinedButton.icon(
-                  onPressed: widget.onPick,
-                  icon: const Icon(Icons.add, size: 18),
-                  label: Text(
-                    YorksV1ProjectStrings.addAttachment.active(widget.language),
-                  ),
-                ),
-              ],
-            ),
           ),
         ),
       ),
@@ -5212,6 +5805,7 @@ class _DashedAttachmentBorderPainter extends CustomPainter {
 
 class _ReviewStage extends StatelessWidget {
   const _ReviewStage({
+    this.pendingFiles = const [],
     required this.draft,
     required this.language,
     required this.validationErrors,
@@ -5232,9 +5826,13 @@ class _ReviewStage extends StatelessWidget {
   final String creatorAuthUserId;
   final ValueChanged<YorksV1ProjectCreationStage> onEdit;
   final YorksV1ProjectPortfolioItem? editItem;
+  final List<YorksV1SelectedDocument> pendingFiles;
   final VoidCallback onResolveConflict;
   @override
   Widget build(BuildContext context) {
+    if (YorksProjectSetupDesktopTheme.isDesktop(context)) {
+      return _DesktopReviewStage(this);
+    }
     final absent = YorksV1ProjectStrings.notProvided.active(language);
     String text(String? value) => _emptyToNull(value) ?? absent;
     String date(DateTime? value) =>

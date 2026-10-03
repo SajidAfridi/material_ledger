@@ -9,14 +9,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ledger/core/theme/app_theme.dart';
-import 'package:material_ledger/core/widgets/ledger_text_field.dart';
 import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_project_create_flow_screen.dart';
+import 'package:material_ledger/features/projects/presentation/widgets/yorks_v1_project_setup_completion.dart';
 import 'package:material_ledger/shared/models/yorks_v1_domain_error.dart';
 import 'package:material_ledger/shared/models/analytics_event.dart';
 import 'package:material_ledger/shared/models/app_language.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_portfolio.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_creation_draft.dart';
+import 'package:material_ledger/shared/models/yorks_v1_project_setup_operation.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_strings.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_team_directory_member.dart';
 import 'package:material_ledger/shared/models/yorks_v1_role.dart';
@@ -25,6 +26,7 @@ import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart
 import 'package:material_ledger/shared/providers/yorks_v1_document_file_service_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_permission_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_project_creation_draft_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_project_portfolio_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_project_repository_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_project_setup_coordinator_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_project_setup_navigation_provider.dart';
@@ -66,8 +68,10 @@ void main() {
     YorksV1ProjectTeamDirectoryRepository? teamDirectoryRepository,
     YorksV1DocumentFileService? documentFileService,
     AnalyticsService? analytics,
+    List<YorksV1ProjectPortfolioItem> Function()? portfolioItems,
   }) async {
     SharedPreferences.setMockInitialValues({});
+    repository.creatorRole = role;
     final preferences = await SharedPreferences.getInstance();
     final container = ProviderContainer(
       overrides: [
@@ -90,6 +94,10 @@ void main() {
           ),
         ),
         yorksV1ProjectRepositoryProvider.overrideWithValue(repository),
+        if (portfolioItems != null)
+          yorksV1ProjectPortfolioProvider.overrideWith(
+            (ref) async => portfolioItems(),
+          ),
         yorksV1ProjectReviewedCommandRepositoryProvider.overrideWithValue(
           ProjectSetupReviewedRepositoryAdapter(repository),
         ),
@@ -178,16 +186,24 @@ void main() {
         );
         await tester.pumpAndSettle();
       }
-      for (final element in find.byType(LedgerTextField).evaluate()) {
-        final field = element.widget as LedgerTextField;
-        expect(field.semanticsLabel, isNotEmpty);
-        final input = find.descendant(
-          of: find.byWidget(field),
-          matching: find.byType(TextFormField),
-        );
+      final inputs = find.byType(TextFormField);
+      expect(inputs, findsWidgets);
+      for (final element in inputs.evaluate()) {
+        final input = find.byWidget(element.widget);
+        String? visibleName;
+        element.visitAncestorElements((ancestor) {
+          final widget = ancestor.widget;
+          if (widget is Semantics &&
+              (widget.properties.label?.isNotEmpty ?? false)) {
+            visibleName = widget.properties.label;
+            return false;
+          }
+          return true;
+        });
+        expect(visibleName, isNotEmpty);
         final node = tester.getSemantics(input);
         expect(node.flagsCollection.isTextField, isTrue);
-        expect(node.label, contains(field.semanticsLabel!));
+        expect(node.label, contains(visibleName!));
       }
       expect(tester.takeException(), isNull);
     }
@@ -216,7 +232,7 @@ void main() {
       YorksV1ProjectStrings.editBuildings.primary,
       YorksV1ProjectStrings.editAttachments.primary,
     ]) {
-      final button = find.byTooltip(label);
+      final button = find.bySemanticsLabel(label);
       expect(button, findsOneWidget);
       final node = tester.getSemantics(button);
       expect(node.flagsCollection.isButton, isTrue);
@@ -266,12 +282,27 @@ void main() {
           final projectRole = role == YorksV1Role.siteEngineer
               ? YorksV1ProjectMembershipRole.siteEngineer
               : YorksV1ProjectMembershipRole.projectEngineer;
-          expect(
-            find.text(
-              '${YorksV1ProjectStrings.automaticCreatorMembership.primary} · ${YorksV1ProjectStrings.roleLabel(projectRole.wireValue).primary}',
-            ),
-            findsOneWidget,
-          );
+          if (stage == YorksV1ProjectCreationStage.partiesAndAccess) {
+            expect(
+              find.text(
+                YorksV1ProjectStrings.automaticCreatorMembership.primary,
+              ),
+              findsOneWidget,
+            );
+            expect(
+              find.text(
+                YorksV1ProjectStrings.roleLabel(projectRole.wireValue).primary,
+              ),
+              findsWidgets,
+            );
+          } else {
+            expect(
+              find.text(
+                '${YorksV1ProjectStrings.automaticCreatorMembership.primary} · ${YorksV1ProjectStrings.roleLabel(projectRole.wireValue).primary}',
+              ),
+              findsOneWidget,
+            );
+          }
         }
         if (stage == YorksV1ProjectCreationStage.reviewAndCreate) {
           expect(
@@ -582,9 +613,7 @@ void main() {
 
       await _pumpScreen(tester, container);
       expect(
-        find.textContaining(
-          YorksV1ProjectStrings.attachmentNeedsReselect.primary,
-        ),
+        find.textContaining(YorksV1ProjectStrings.fileReselect.primary),
         findsOneWidget,
       );
 
@@ -599,10 +628,7 @@ void main() {
       expect(restored.attachments, hasLength(2));
       expect(restored.attachments.first.sizeBytes, 1);
       expect(restored.attachments.last.sizeBytes, 3);
-      expect(
-        find.textContaining(YorksV1ProjectStrings.filesSelected.primary),
-        findsOneWidget,
-      );
+      expect(find.text('2 files'), findsOneWidget);
     },
   );
 
@@ -628,10 +654,17 @@ void main() {
 
     await _pumpScreen(tester, container, size: const Size(1366, 768));
 
-    await expectLater(
-      find.byType(YorksV1ProjectCreateFlowScreen),
-      matchesGoldenFile('goldens/r35/project_create_attachments_desktop.png'),
+    // The six full-shell desktop goldens live in the desktop interaction
+    // suite. This retained case verifies the smaller desktop viewport.
+    expect(
+      find.byKey(const ValueKey('project-setup-desktop-shell')),
+      findsOneWidget,
     );
+    expect(
+      find.byKey(const ValueKey('yorks-v1-attachment-dropzone')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('R35 project attachments stage — 360×800', (tester) async {
@@ -716,17 +749,20 @@ void main() {
     expect(find.text('CON-1100C450'), findsOneWidget);
     expect(find.text('Dubai South'), findsOneWidget);
     expect(
-      tester.widget<Text>(find.text('Dubai South')).textAlign,
+      tester.renderObject<RenderParagraph>(find.text('Dubai South')).textAlign,
       TextAlign.start,
     );
     expect(
       Directionality.of(tester.element(find.text('Dubai South'))),
       TextDirection.ltr,
     );
-    await expectLater(
-      find.byType(YorksV1ProjectCreateFlowScreen),
-      matchesGoldenFile('goldens/r35/project_create_review_desktop.png'),
-    );
+    expect(find.text('Yorks Client'), findsOneWidget);
+    expect(find.text('Akins'), findsOneWidget);
+    expect(find.text('York Contracting'), findsOneWidget);
+    expect(find.text('MEP Specialist'), findsOneWidget);
+    expect(find.text('approved-schedule.pdf'), findsOneWidget);
+    expect(find.text('Building One'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(
@@ -760,9 +796,7 @@ void main() {
       );
 
       await _pumpScreen(tester, container);
-      final editButton = find.byTooltip(
-        YorksV1ProjectStrings.editBuilding.primary,
-      );
+      final editButton = find.text('Tower One');
       await tester.ensureVisible(editButton);
       await tester.tap(editButton);
       await tester.pumpAndSettle();
@@ -784,7 +818,11 @@ void main() {
         find.byKey(const ValueKey('yorks-v1-building-name')),
         'Tower One Updated',
       );
-      await tester.tap(find.text(YorksV1ProjectStrings.updateBuilding.primary));
+      final apply = find.byKey(
+        const ValueKey('yorks-v1-desktop-apply-building'),
+      );
+      await tester.ensureVisible(apply);
+      await tester.tap(apply);
       await tester.pumpAndSettle();
 
       final updated = container
@@ -822,17 +860,16 @@ void main() {
       expect(
         tester
             .widget<CheckboxListTile>(
-              find.byKey(const ValueKey('yorks-v1-building-has-frp-room')),
+              find.byKey(const ValueKey('yorks-v1-desktop-building-frp')),
             )
             .value,
         isFalse,
       );
-      final duplicate = find.byTooltip(
+      await _buildingMenuAction(
+        tester,
+        updated,
         YorksV1ProjectStrings.addAnotherLikeThis.primary,
       );
-      await tester.ensureVisible(duplicate);
-      await tester.tap(duplicate);
-      await tester.pumpAndSettle();
       expect(
         tester
             .widget<EditableText>(
@@ -848,11 +885,23 @@ void main() {
       expect(
         tester
             .widget<CheckboxListTile>(
-              find.byKey(const ValueKey('yorks-v1-building-has-frp-room')),
+              find.byKey(const ValueKey('yorks-v1-desktop-building-frp')),
             )
             .value,
         isTrue,
       );
+      // Route teardown can occur before the duplication edit's debounce fires.
+      // It must acknowledge that unfinished editor without publishing into a
+      // Consumer element that has already been unmounted.
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      final retained = container.read(
+        yorksV1ProjectSetupCreationDraftProvider(_authUserId),
+      );
+      expect(retained.rawEditorState['buildingCode'], 'B02');
+      expect(retained.rawEditorState['buildingFrp'], isTrue);
+      expect(retained.isAcknowledged, isTrue);
+      expect(tester.takeException(), isNull);
     },
   );
 
@@ -959,10 +1008,17 @@ void main() {
           .toSet(),
       {repository.receivedCreationInputs.first.idempotencyKey},
     );
+    expect(createdProject, isNull);
+    final completion = tester.widget<YorksV1ProjectSetupCompletion>(
+      find.byType(YorksV1ProjectSetupCompletion),
+    );
+    expect(completion.operation.project!.reference, 'YRK-B2-001');
+    expect(completion.operation.project!.state, YorksV1ProjectLifecycle.draft);
+    await _openCompletion(tester);
     expect(createdProject?.reference, 'YRK-B2-001');
     expect(
       find.text(YorksV1ProjectStrings.projectCreated.primary),
-      findsNothing,
+      findsOneWidget,
     );
     final retiredProvider = yorksV1ProjectSetupCreationDraftProvider(
       _authUserId,
@@ -1043,7 +1099,7 @@ void main() {
   );
 
   testWidgets(
-    'opens the new project overview immediately after a committed create',
+    'desktop keeps the confirmed result until the explicit Open project action',
     (tester) async {
       final repository = _FakeProjectRepository();
       final container = await createContainer(
@@ -1083,6 +1139,10 @@ void main() {
         ],
       );
       await tester.binding.setSurfaceSize(const Size(1280, 900));
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1280, 900);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
       addTearDown(() => tester.binding.setSurfaceSize(null));
       await tester.pumpWidget(
         UncontrolledProviderScope(
@@ -1104,6 +1164,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(repository.receivedCreationInputs, hasLength(1));
+      expect(find.text('Opened project-b2-001'), findsNothing);
+      expect(find.byType(YorksV1ProjectSetupCompletion), findsOneWidget);
+      await _openCompletion(tester);
       expect(find.text('Opened project-b2-001'), findsOneWidget);
       expect(
         find.text(YorksV1ProjectStrings.projectCreated.primary),
@@ -1228,7 +1291,9 @@ void main() {
 
       expect(find.text('Amina Project Engineer'), findsOneWidget);
       expect(find.text('Bilal Site Engineer'), findsNothing);
-      final candidate = find.text('Amina Project Engineer');
+      final candidate = find.byKey(
+        const ValueKey('yorks-v1-desktop-directory-add-auth-project-engineer'),
+      );
       await tester.ensureVisible(candidate);
       await tester.tap(candidate);
       await tester.pumpAndSettle();
@@ -1297,7 +1362,15 @@ void main() {
       await tester.pumpWidget(const SizedBox());
       await tester.pumpAndSettle();
       await _pumpScreen(tester, container);
-      expect(tester.widget<TextFormField>(date).controller!.text, '12/10/');
+      expect(
+        tester
+            .widget<EditableText>(
+              find.descendant(of: date, matching: find.byType(EditableText)),
+            )
+            .controller
+            .text,
+        '12/10/',
+      );
     },
   );
 
@@ -1389,10 +1462,11 @@ void main() {
           );
       final original = container.read(provider).buildings.single.toDraftJson();
       await _pumpScreen(tester, container);
-      final remove = find.byTooltip(YorksV1ProjectStrings.remove.primary);
-      await tester.ensureVisible(remove);
-      await tester.tap(remove);
-      await tester.pumpAndSettle();
+      await _buildingMenuAction(
+        tester,
+        container.read(provider).buildings.single,
+        YorksV1ProjectStrings.remove.primary,
+      );
       expect(container.read(provider).buildings, isEmpty);
       final undo = find.text(YorksV1ProjectStrings.undoBuildingChange.primary);
       await tester.ensureVisible(undo);
@@ -1517,6 +1591,18 @@ void main() {
         repository.receivedCreationInputs.last.idempotencyKey,
         repository.receivedCreationInputs.first.idempotencyKey,
       );
+      expect(saved, isNull);
+      expect(
+        tester
+            .widget<YorksV1ProjectSetupCompletion>(
+              find.byType(YorksV1ProjectSetupCompletion),
+            )
+            .operation
+            .project!
+            .name,
+        'Original reviewed project',
+      );
+      await _openCompletion(tester);
       expect(saved!.name, 'Original reviewed project');
     },
   );
@@ -1540,6 +1626,7 @@ void main() {
                   reference: 'YRA-FILES-PENDING',
                   name: 'Files pending project',
                   currentStage: YorksV1ProjectCreationStage.reviewAndCreate,
+                  visitedStages: YorksV1ProjectCreationStage.values.toSet(),
                   buildings: const [
                     YorksV1ProjectBuildingInput(name: 'Main building'),
                   ],
@@ -1560,9 +1647,14 @@ void main() {
         onProjectCreated: (value) => created = value,
       );
       final submit = find.byKey(const ValueKey('yorks-v1-project-create'));
-      await tester.tap(submit);
-      await tester.pumpAndSettle();
+      expect(tester.widget<FilledButton>(submit).onPressed, isNull);
       expect(repository.receivedCreationInputs, isEmpty);
+      final editAttachments = find.bySemanticsLabel(
+        YorksV1ProjectStrings.editAttachments.primary,
+      );
+      await tester.ensureVisible(editAttachments);
+      await tester.tap(editAttachments);
+      await tester.pumpAndSettle();
       expect(
         container.read(provider).currentStage,
         YorksV1ProjectCreationStage.attachments,
@@ -1571,7 +1663,7 @@ void main() {
         find.text(YorksV1ProjectStrings.operationalFilesOnly.primary),
         findsOneWidget,
       );
-      await tester.tap(find.byType(CheckboxListTile));
+      await tester.tap(find.byType(Checkbox));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('yorks-v1-project-continue')));
       await tester.pumpAndSettle();
@@ -1591,24 +1683,90 @@ void main() {
         find.text(YorksV1ProjectStrings.fileReselect.primary),
         findsWidgets,
       );
-      expect(
-        find.text(YorksV1ProjectStrings.openSavedProject.primary),
-        findsOneWidget,
-      );
+      expect(find.byType(YorksV1ProjectSetupCompletion), findsOneWidget);
       expect(container.read(provider).reference, 'YRA-FILES-PENDING');
+      final originalOperation = tester
+          .widget<YorksV1ProjectSetupCompletion>(
+            find.byType(YorksV1ProjectSetupCompletion),
+          )
+          .operation;
+      final originalDraftId = container.read(provider).draftId;
+      final storageKey = container.read(provider.notifier).storageKey;
       final remove = find.byTooltip(
         YorksV1ProjectStrings.removePendingFile.primary,
       );
       await tester.ensureVisible(remove);
       await tester.tap(remove);
       await tester.pumpAndSettle();
+      final settled = tester
+          .widget<YorksV1ProjectSetupCompletion>(
+            find.byType(YorksV1ProjectSetupCompletion),
+          )
+          .operation;
       expect(
-        find.text(YorksV1ProjectStrings.fileRemoved.primary),
-        findsOneWidget,
+        settled.files.single.status,
+        YorksV1ProjectSetupFileStatus.removed,
+      );
+      expect(settled.filesPending, isFalse);
+      expect(settled.cleanupComplete, isTrue);
+      expect(
+        find.byKey(const ValueKey('yorks-v1-project-operation-outcome')),
+        findsNothing,
       );
       expect(container.read(provider).attachments, isEmpty);
-      await tester.tap(submit);
+      await container.read(provider.notifier).initialized;
       await tester.pumpAndSettle();
+      final nextDraft = container.read(provider);
+      expect(nextDraft.draftId, isNot(originalDraftId));
+      expect(nextDraft.reference, isEmpty);
+      expect(nextDraft.attachments, isEmpty);
+      final preferences = container.read(sharedPreferencesProvider);
+      final active =
+          jsonDecode(preferences.getString(storageKey)!)
+              as Map<String, dynamic>;
+      expect(active['retired'], isFalse);
+      expect(
+        YorksV1ProjectCreationDraft.fromJson(
+          Map<String, dynamic>.from(active['draft'] as Map),
+        ).draftId,
+        nextDraft.draftId,
+      );
+      final retired =
+          jsonDecode(
+                preferences.getString('$storageKey:retired:$originalDraftId')!,
+              )
+              as Map<String, dynamic>;
+      expect(retired['retired'], isTrue);
+      expect(retired['resultProjectId'], settled.project!.id);
+      expect(
+        YorksV1ProjectCreationDraft.fromJson(
+          Map<String, dynamic>.from(retired['draft'] as Map),
+        ).draftId,
+        originalDraftId,
+      );
+      final persistedOperation = YorksV1ProjectSetupOperation.fromJson(
+        Map<String, dynamic>.from(
+          jsonDecode(
+                preferences.getString('$storageKey:journal:$originalDraftId')!,
+              )
+              as Map,
+        ),
+      );
+      expect(persistedOperation.cleanupComplete, isTrue);
+      expect(
+        persistedOperation.files.single.status,
+        YorksV1ProjectSetupFileStatus.removed,
+      );
+      expect(
+        persistedOperation.core.canonicalPayload,
+        originalOperation.core.canonicalPayload,
+      );
+      expect(
+        persistedOperation.core.idempotencyKey,
+        originalOperation.core.idempotencyKey,
+      );
+      expect(persistedOperation.core.result, originalOperation.core.result);
+      await _openCompletion(tester);
       expect(created?.reference, 'YRA-FILES-PENDING');
       expect(repository.receivedCreationInputs, hasLength(1));
     },
@@ -1640,10 +1798,11 @@ void main() {
               ),
         );
     await _pumpScreen(tester, container);
-    final remove = find.byTooltip(YorksV1ProjectStrings.remove.primary);
-    await tester.ensureVisible(remove);
-    await tester.tap(remove);
-    await tester.pumpAndSettle();
+    await _buildingMenuAction(
+      tester,
+      container.read(provider).buildings.single,
+      YorksV1ProjectStrings.remove.primary,
+    );
     expect(
       find.text(YorksV1ProjectStrings.undoBuildingChange.primary),
       findsOneWidget,
@@ -2027,15 +2186,11 @@ void main() {
                 ),
           );
       await _pumpScreen(tester, container);
-      final move = find.descendant(
-        of: find.byKey(const ValueKey('row-a')),
-        matching: find.byTooltip(
-          YorksV1ProjectStrings.moveBuildingDown.primary,
-        ),
+      await _buildingMenuAction(
+        tester,
+        container.read(provider).buildings.first,
+        YorksV1ProjectStrings.moveBuildingDown.primary,
       );
-      await tester.ensureVisible(move);
-      await tester.tap(move);
-      await tester.pumpAndSettle();
       expect(
         container
             .read(provider)
@@ -2110,6 +2265,258 @@ void main() {
   });
 
   testWidgets(
+    'completed edit shortcuts preserve the blank draft and Edit opens the confirmed version',
+    (tester) async {
+      final repository = _FakeProjectRepository();
+      final now = DateTime.utc(2026, 8, 1);
+      final item = YorksV1ProjectPortfolioItem(
+        project: YorksV1Project(
+          id: 'edited-project',
+          reference: 'YRA-EDITED',
+          name: 'Original project name',
+          state: YorksV1ProjectLifecycle.active,
+          version: 4,
+          createdAt: now,
+          updatedAt: now,
+          siteLocation: 'Original site',
+          notes: 'Original notes',
+        ),
+        activeBuildingCount: 1,
+        activeProjectEngineerCount: 1,
+        activeSiteEngineerCount: 0,
+        activeMembers: [
+          YorksV1ProjectMember(
+            id: 'edit-membership',
+            projectId: 'edited-project',
+            memberAuthUserId: _authUserId,
+            projectRole: YorksV1ProjectMembershipRole.projectEngineer,
+            effectiveFrom: now,
+            createdAt: now,
+          ),
+        ],
+        buildings: const [
+          YorksV1ProjectBuildingInput(
+            sourceScopeId: 'edit-building',
+            name: 'Original building',
+            hasFrpRoom: true,
+          ),
+        ],
+      );
+      final container = await createContainer(
+        role: YorksV1Role.projectEngineer,
+        repository: repository,
+        portfolioItems: () => [
+          YorksV1ProjectPortfolioItem(
+            project: repository._updatedProject ?? item.project,
+            activeBuildingCount: item.activeBuildingCount,
+            activeProjectEngineerCount: item.activeProjectEngineerCount,
+            activeSiteEngineerCount: item.activeSiteEngineerCount,
+            activeMembers: item.activeMembers,
+            buildings: item.buildings,
+          ),
+        ],
+      );
+      final router = GoRouter(
+        initialLocation: '/yorks/projects/edited-project/edit',
+        routes: [
+          GoRoute(
+            path: '/yorks/projects/:projectId/edit',
+            pageBuilder: (_, state) => MaterialPage<void>(
+              key: state.pageKey,
+              child: YorksV1ProjectEditFlowScreen(
+                projectId: state.pathParameters['projectId']!,
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/yorks/projects/:projectId',
+            builder: (_, _) => Scaffold(
+              body: Text(
+                'Opened ${repository._updatedProject?.name} '
+                'version ${repository._updatedProject?.version}',
+              ),
+            ),
+          ),
+        ],
+      );
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1280, 900);
+      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      addTearDown(() async {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+        router.dispose();
+      });
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp.router(
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
+            routerConfig: router,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final initialEditorState = tester.state(
+        find.byType(YorksV1ProjectCreateFlowScreen),
+      );
+      final provider = yorksV1ProjectEditDraftProvider(
+        const YorksV1ProjectEditDraftContext(
+          ownerAuthUserId: _authUserId,
+          projectId: 'edited-project',
+        ),
+      );
+      await container.read(provider.notifier).initialized;
+      final originalDraftId = container.read(provider).draftId;
+      final storageKey = container.read(provider.notifier).storageKey;
+      expect(container.read(provider).baseVersion, 4);
+      await tester.enterText(
+        find.byKey(const ValueKey('yorks-v1-project-name')),
+        'Reviewed project name',
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('yorks-v1-project-stage-reviewAndCreate')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('yorks-v1-project-create')));
+      await tester.pumpAndSettle();
+      expect(find.byType(YorksV1ProjectSetupCompletion), findsOneWidget);
+      final completed = tester
+          .widget<YorksV1ProjectSetupCompletion>(
+            find.byType(YorksV1ProjectSetupCompletion),
+          )
+          .operation;
+      expect(completed.cleanupComplete, isTrue);
+      expect(completed.coreSucceeded, isTrue);
+      expect(completed.project?.name, 'Reviewed project name');
+      expect(completed.project?.version, 5);
+      expect(repository.updateCalls, 1);
+      expect(repository.receivedCreationInputs, isEmpty);
+      expect(router.canPop(), isFalse);
+      await container.read(provider.notifier).initialized;
+      await tester.pumpAndSettle();
+      final freshDraftId = container.read(provider).draftId;
+      expect(freshDraftId, isNot(originalDraftId));
+      final preferences = container.read(sharedPreferencesProvider);
+      final freshEnvelope = preferences.getString(storageKey)!;
+      final tombstoneKey = '$storageKey:retired:$originalDraftId';
+      final tombstoneJson = preferences.getString(tombstoneKey)!;
+      final tombstone = jsonDecode(tombstoneJson) as Map<String, dynamic>;
+      expect(tombstone['retired'], isTrue);
+      expect(tombstone['resultProjectId'], 'edited-project');
+      final retiredDraft = YorksV1ProjectCreationDraft.fromJson(
+        Map<String, dynamic>.from(tombstone['draft'] as Map),
+      );
+      expect(retiredDraft.draftId, originalDraftId);
+      expect(retiredDraft.baseVersion, 4);
+      expect(retiredDraft.name, 'Reviewed project name');
+
+      void expectFreshDraftPreserved() {
+        final fresh = container.read(provider);
+        expect(fresh.draftId, freshDraftId);
+        expect(fresh.mode, YorksV1ProjectDraftMode.edit);
+        expect(fresh.projectId, 'edited-project');
+        expect(fresh.baseVersion, isNull);
+        expect(fresh.baseSnapshot, isEmpty);
+        expect(fresh.reference, isEmpty);
+        expect(fresh.name, isEmpty);
+        expect(fresh.siteLocation, isNull);
+        expect(fresh.notes, isNull);
+        expect(fresh.buildings, isEmpty);
+        expect(fresh.parties, isEmpty);
+        expect(fresh.attachments, isEmpty);
+        expect(fresh.rawEditorState, isEmpty);
+        expect(preferences.getString(storageKey), freshEnvelope);
+        expect(preferences.getString(tombstoneKey), tombstoneJson);
+      }
+
+      expectFreshDraftPreserved();
+      final open = find.text(
+        YorksV1ProjectSetupCompletionCopy.localized(
+          AppLanguage.english,
+        )[YorksV1ProjectSetupCompletionText.openProject],
+      );
+      await tester.ensureVisible(open);
+      final completionFocus = Focus.of(tester.element(open));
+      completionFocus.requestFocus();
+      await tester.pumpAndSettle();
+      expect(FocusManager.instance.primaryFocus, same(completionFocus));
+      for (final modifier in [
+        LogicalKeyboardKey.controlLeft,
+        LogicalKeyboardKey.metaLeft,
+      ]) {
+        await tester.sendKeyDownEvent(modifier);
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyS);
+        await tester.sendKeyUpEvent(modifier);
+        await tester.pumpAndSettle();
+        expectFreshDraftPreserved();
+        expect(repository.updateCalls, 1);
+        expect(repository.receivedCreationInputs, isEmpty);
+        expect(tester.takeException(), isNull);
+      }
+      final edit = find.descendant(
+        of: find.byType(YorksV1ProjectSetupCompletion),
+        matching: find.text(
+          YorksV1ProjectSetupCompletionCopy.localized(
+            AppLanguage.english,
+          )[YorksV1ProjectSetupCompletionText.editProject],
+        ),
+      );
+      await tester.ensureVisible(edit);
+      await tester.tap(edit);
+      await tester.pumpAndSettle();
+      expect(router.canPop(), isTrue);
+      expect(find.byType(YorksV1ProjectSetupCompletion), findsNothing);
+      expect(
+        tester.state(find.byType(YorksV1ProjectCreateFlowScreen)),
+        isNot(same(initialEditorState)),
+      );
+      final nextProposal = container.read(provider);
+      expect(nextProposal.draftId, freshDraftId);
+      expect(nextProposal.baseVersion, 5);
+      expect(nextProposal.name, 'Reviewed project name');
+      expect(nextProposal.reference, 'YRA-EDITED');
+      expect(
+        nextProposal.currentStage,
+        YorksV1ProjectCreationStage.projectDetails,
+      );
+      final nextBase = YorksV1ProjectCreationDraft.fromJson(
+        nextProposal.baseSnapshot,
+      );
+      expect(nextBase.baseVersion, 5);
+      expect(nextBase.name, 'Reviewed project name');
+      expect(
+        nextProposal.toCreationInput().toRpcPayload()
+          ..remove('idempotency_key'),
+        nextBase.toCreationInput().toRpcPayload()..remove('idempotency_key'),
+      );
+      final nameEditor = tester.widget<EditableText>(
+        find.descendant(
+          of: find.byKey(const ValueKey('yorks-v1-project-name')),
+          matching: find.byType(EditableText),
+        ),
+      );
+      expect(nameEditor.controller.text, 'Reviewed project name');
+      expect(repository.updateCalls, 1);
+      expect(repository.receivedCreationInputs, isEmpty);
+      expect(preferences.getString(tombstoneKey), tombstoneJson);
+      expect(tester.takeException(), isNull);
+      router.pop();
+      await tester.pumpAndSettle();
+      expect(find.byType(YorksV1ProjectSetupCompletion), findsOneWidget);
+      await _openCompletion(tester);
+      expect(
+        find.text('Opened Reviewed project name version 5'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
     'throwing analytics cannot block navigation or its saved checkpoint',
     (tester) async {
       final container = await createContainer(
@@ -2171,6 +2578,17 @@ Future<void> _pumpScreen(
   TextScaler textScaler = TextScaler.noScaling,
   TextDirection textDirection = TextDirection.ltr,
 }) async {
+  if (size.width >= 1100) {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = size;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+  } else {
+    // Retain the established compact/mobile golden viewport. Desktop cases
+    // explicitly set the view so MediaQuery exercises the new desktop branch.
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  }
   await tester.binding.setSurfaceSize(size);
   addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(
@@ -2200,11 +2618,46 @@ Future<void> _pumpScreen(
   });
 }
 
+Future<void> _openCompletion(WidgetTester tester) async {
+  final open = find.text(
+    YorksV1ProjectSetupCompletionCopy.localized(
+      AppLanguage.english,
+    )[YorksV1ProjectSetupCompletionText.openProject],
+  );
+  expect(open, findsOneWidget);
+  await tester.ensureVisible(open);
+  await tester.tap(open);
+  await tester.pumpAndSettle();
+}
+
+Future<void> _buildingMenuAction(
+  WidgetTester tester,
+  YorksV1ProjectBuildingInput building,
+  String action,
+) async {
+  final identity = building.localRowId ?? building.sourceScopeId ?? '0';
+  final menu = find.byKey(ValueKey('yorks-v1-desktop-building-menu-$identity'));
+  expect(menu, findsOneWidget);
+  await tester.ensureVisible(menu);
+  await tester.tap(menu);
+  await tester.pumpAndSettle();
+  final item = find.descendant(
+    of: find.byType(PopupMenuItem<String>),
+    matching: find.text(action),
+  );
+  expect(item, findsOneWidget);
+  await tester.tap(item);
+  await tester.pumpAndSettle();
+}
+
 class _FakeProjectRepository implements YorksV1ProjectRepository {
   _FakeProjectRepository({this.failFirstCreate = false, this.createDelay});
 
   final bool failFirstCreate;
   final Completer<void>? createDelay;
+  YorksV1Role? creatorRole;
+  YorksV1Project? _createdProject;
+  YorksV1Project? _updatedProject;
   int updateCalls = 0;
   final List<YorksV1ProjectCreationInput> receivedCreationInputs = [];
 
@@ -2232,10 +2685,26 @@ class _FakeProjectRepository implements YorksV1ProjectRepository {
       jobOrContractReference: input.jobOrContractReference,
       siteLocation: input.siteLocation,
     );
+    _createdProject = project;
+    final creatorProjectRole = creatorRole == YorksV1Role.siteEngineer
+        ? YorksV1ProjectMembershipRole.siteEngineer
+        : creatorRole?.isEngineering == true
+        ? YorksV1ProjectMembershipRole.projectEngineer
+        : null;
     return YorksV1ProjectCreationResult(
       project: project,
       scopes: const [],
-      members: const [],
+      members: [
+        if (creatorProjectRole != null)
+          YorksV1ProjectMember(
+            id: 'creator-membership',
+            projectId: project.id,
+            memberAuthUserId: _authUserId,
+            projectRole: creatorProjectRole,
+            effectiveFrom: now,
+            createdAt: now,
+          ),
+      ],
       parties: input.parties,
       attachments: input.attachments,
       idempotencyKey: input.idempotencyKey,
@@ -2260,13 +2729,41 @@ class _FakeProjectRepository implements YorksV1ProjectRepository {
   Future<YorksV1Project> setProjectState(
     YorksV1SetProjectStateInput input,
   ) async {
-    throw UnimplementedError();
+    final project = _createdProject!;
+    return YorksV1Project(
+      id: project.id,
+      reference: project.reference,
+      name: project.name,
+      state: input.targetState,
+      version: input.expectedProjectVersion + 1,
+      createdAt: project.createdAt,
+      updatedAt: DateTime.utc(2026, 10, 4),
+      clientName: project.clientName,
+      jobOrContractReference: project.jobOrContractReference,
+      siteLocation: project.siteLocation,
+    );
   }
 
   @override
   Future<YorksV1Project> updateProject(YorksV1ProjectUpdateInput input) async {
     updateCalls++;
-    throw UnimplementedError();
+    final project = YorksV1Project(
+      id: input.projectId,
+      reference: input.project.reference,
+      name: input.project.name,
+      state: YorksV1ProjectLifecycle.active,
+      version: input.expectedProjectVersion + 1,
+      createdAt: DateTime.utc(2026, 8, 1),
+      updatedAt: DateTime.utc(2026, 10, 4),
+      clientName: input.project.clientName,
+      jobOrContractReference: input.project.jobOrContractReference,
+      siteLocation: input.project.siteLocation,
+      startDate: input.project.startDate,
+      endDate: input.project.endDate,
+      notes: input.project.notes,
+    );
+    _updatedProject = project;
+    return project;
   }
 
   @override

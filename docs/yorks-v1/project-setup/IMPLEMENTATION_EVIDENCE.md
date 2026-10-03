@@ -1,5 +1,79 @@
 # Project setup candidate evidence
 
+## Desktop reference update — 4 October 2026
+
+The later six supplied browser references supersede the earlier presentation.
+The [measured comparison](DESKTOP_DESIGN_2026-10-04.md) records each original
+image hash, screen geometry, actual golden and intentional policy differences.
+This update implements the dedicated navy header, five-stage setup rail,
+details/help split, searchable team selection, building table with independent
+Apply/Cancel editor, document table, compact review and confirmed result screen.
+Smaller screens retain the established readable compact flow; final mobile
+design matching follows the owner's forthcoming mobile references. Enlarged
+text also selects that flow, without changing operating-system text scaling.
+
+The result screen retains known Draft/Active state and separate activation,
+document and device-cleanup outcomes. Its actions require actual protected
+capabilities and structural role/membership eligibility. It remains visible
+until an explicit next action. Successful final file retry/removal acknowledges
+cleanup and retires the active draft; a fresh form can be started in the same
+session. Historical command receipts and file tombstones remain available.
+Pending input is captured before teardown and saved after Riverpod listeners
+detach. Failed local housekeeping stays visible as recovery work.
+
+Document finalization now validates the exact returned document/version/revision
+receipt, preserves original-key recovery after an uncertain response, and
+isolates thrown analytics from dispatch and confirmed business success. Existing
+server functions, RLS and quantity/Accounts contracts remain authoritative.
+No new SQL, remote database write or rollout change is part of this update.
+
+The fresh local database reset and database suite passed on Postgres
+**15.19.0.002**, matching the tracked major 15: **122 files / 3,546 assertions**.
+The October 3 major-17 observation below is historical and does not describe
+this latest local gate.
+
+### Final checks for this desktop update
+
+| Gate | Result / scope |
+| --- | --- |
+| `flutter pub get` | Passed; tracked lockfile unchanged. |
+| Changed Dart format gate | 17 files passed, zero formatting changes after formatting. |
+| `flutter analyze` | Passed, no issues. |
+| Full `flutter test` | **2,219 passed / four retained skips**, after final footer, web dropzone and completed-edit shortcut and fresh-edit navigation fixes. |
+| Desktop interaction / layout suite | **17 passed**; six full-shell 1536×1024 snapshots. Primary action bounds include visible Buildings/Review hints; dropzone width/height is asserted. Same-container remount starts a blank new draft without manual invalidation or duplicate commands. |
+| Existing setup UI suite | **45 passed**, including completed-edit Ctrl/Cmd+S leaving the new active draft blank and the historical tombstone unchanged, plus Edit again routing to a fresh proposal based on confirmed version 5 without a duplicate command. |
+| Completion / document finalization suites | **10 / 15 passed**, included in the full suite; capability-negative actions, lifecycle outcomes, malformed receipts and analytics exceptions are covered. |
+| Local `supabase db reset --local --yes` / `supabase test db --local` | Passed on Postgres 15.19.0.002; 122 files / 3,546 assertions. No new SQL in this update. |
+| CI web, candidate flag explicitly true | Passed; `main.dart.js` 9,943,756 bytes; startup verifier gzip 2,864,579 bytes; budget passed. |
+| CI APK, candidate flag true and ephemeral signing | Passed; 110,074,844 bytes; `apksigner verify --print-certs` confirmed Yorks CI Ephemeral. This is a verification artifact, not a production signing identity. |
+| Source hashes, internal document links and `git diff --check` | Passed. |
+
+Logs: `/tmp/yorks-setup-desktop-final-analyze.log`,
+`/tmp/yorks-setup-desktop-final-full-tests.log`,
+`/tmp/yorks-setup-desktop-final-bounds-tests.log`,
+`/tmp/yorks-existing-setup-ui-completed-edit-routing.log`,
+`/tmp/yorks-project-setup-db-reset-final.log`,
+`/tmp/yorks-project-setup-db-tests-final.log`,
+`/tmp/yorks-setup-desktop-final-build-web.log` and
+`/tmp/yorks-setup-desktop-final-build-apk.log`.
+
+Current verification artifacts were built from this validated working tree:
+
+- Web JavaScript SHA256: `d66b8e5c56306e0e3199ce4091a3182388dd955063d860724c53c212e4e11128`.
+- APK SHA256: `9d8fc820bee134f41aadd23fb37d99383b05c69c2cb10b6cea4b6e718493ce61`.
+
+Actual routed-browser views for all six desktop states, a compact mobile review,
+a tablet building editor and Arabic details at 200% text are retained in
+[the browser evidence](visual-evidence/desktop-2026-10-04/README.md). The fixture
+has synthetic permitted context and no configured remote backend. This does not
+prove live creation/upload, production personas or cross-session server recovery.
+
+This remains PR #44's default-off candidate. Production deployment, real
+personas/uploads, user trials and production Android signing are separate
+acceptance gates.
+
+## Earlier candidate evidence — 3 October 2026
+
 Date: 3 October 2026. Branch: `codex/project-creation-ux` in the attached project-creation-ux worktree. Initial code baseline: `7a3f1935724f1d4284fc0c662508175f50d2c028`. Current parent: `1cbfaec` (PR #43 merge); those two commits have identical tracked trees. Unrelated primary-checkout work was preserved.
 
 This is an implemented, default-off web candidate. No production deployment, migration, data write or rollout flag change occurred. The complete [68-scenario map](CANDIDATE_ACCEPTANCE.md) distinguishes automated subcases from full release/user acceptance. The supplied 130 requirements and 68 original acceptance rows remain unchanged and their source hashes verify.

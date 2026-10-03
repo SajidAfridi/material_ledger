@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/constants/constants.dart';
+import '../core/zoom/yorks_workspace_zoom.dart';
 
 import '../features/admin/presentation/screens/access_roles_screen.dart';
 import '../features/leave/presentation/screens/leave_requests_screen.dart';
@@ -541,6 +542,20 @@ Page<void> _slide(
 /// their behavior by accident.
 Page<void> _yorksV1Slide(LocalKey key, Widget child) =>
     _slide(key, YorksV1WorkspaceShell(child: child));
+
+/// The approved desktop setup owns its dedicated header and stage rail. Small
+/// screens keep the established workspace framing and focused form until their
+/// separately supplied design is applied.
+Page<void> _yorksV1ProjectSetupSlide(LocalKey key, Widget child) => _slide(
+  key,
+  LayoutBuilder(
+    builder: (context, constraints) =>
+        constraints.maxWidth >= 1100 &&
+            MediaQuery.textScalerOf(context).scale(1) <= 1.1
+        ? YorksWorkspaceZoomHost(routeKey: 'project-setup', child: child)
+        : YorksV1WorkspaceShell(child: child),
+  ),
+);
 
 /// Slide-in page for screens that were originally office-shell *tabs* and so
 /// have no `Scaffold`/`Material` of their own. When reached as a full-screen
@@ -1555,7 +1570,12 @@ GoRouter createAppRouter({
         onExit: (context, state) async =>
             !yorksV1ProjectSetupEnabled ||
             await (onLeaveYorksProjectSetup?.call() ?? Future.value(true)),
-        pageBuilder: (context, state) => yorksV1ProjectsEnabled
+        pageBuilder: (context, state) => yorksV1ProjectSetupEnabled
+            ? _yorksV1ProjectSetupSlide(
+                state.pageKey,
+                const EngineerCreateProjectScreen(),
+              )
+            : yorksV1ProjectsEnabled
             ? _yorksV1Slide(state.pageKey, const EngineerCreateProjectScreen())
             : _slide(state.pageKey, const EngineerCreateProjectScreen()),
       ),
@@ -1779,16 +1799,19 @@ GoRouter createAppRouter({
         onExit: (context, state) async =>
             !yorksV1ProjectSetupEnabled ||
             await (onLeaveYorksProjectSetup?.call() ?? Future.value(true)),
-        pageBuilder: (context, state) => _yorksV1Slide(
-          state.pageKey,
-          yorksV1ProjectSetupEnabled
-              ? YorksV1ProjectEditFlowScreen(
-                  projectId: state.pathParameters['projectId'] ?? '',
-                )
-              : YorksV1LegacyProjectEditFlowScreen(
+        pageBuilder: (context, state) => yorksV1ProjectSetupEnabled
+            ? _yorksV1ProjectSetupSlide(
+                state.pageKey,
+                YorksV1ProjectEditFlowScreen(
                   projectId: state.pathParameters['projectId'] ?? '',
                 ),
-        ),
+              )
+            : _yorksV1Slide(
+                state.pageKey,
+                YorksV1LegacyProjectEditFlowScreen(
+                  projectId: state.pathParameters['projectId'] ?? '',
+                ),
+              ),
       ),
       GoRoute(
         path: RoutePaths.yorksV1Project,
