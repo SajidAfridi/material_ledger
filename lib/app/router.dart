@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/constants/constants.dart';
+import '../core/zoom/yorks_workspace_zoom.dart';
 
 import '../features/admin/presentation/screens/access_roles_screen.dart';
 import '../features/leave/presentation/screens/leave_requests_screen.dart';
@@ -66,6 +67,7 @@ import '../features/procurement/presentation/screens/procurement_workspace_scree
 import '../features/projects/presentation/screens/project_workspace_screen.dart';
 import '../features/projects/presentation/screens/yorks_v1_boq_screens.dart';
 import '../features/projects/presentation/screens/yorks_v1_project_create_flow_screen.dart';
+import '../features/projects/presentation/screens/yorks_v1_project_legacy_flow_screen.dart';
 import '../features/projects/presentation/screens/yorks_v1_documents_screen.dart';
 import '../features/projects/presentation/screens/yorks_v1_projects_screen.dart';
 import '../features/rentals/presentation/screens/rental_unit_detail_screen.dart';
@@ -540,6 +542,20 @@ Page<void> _slide(
 /// their behavior by accident.
 Page<void> _yorksV1Slide(LocalKey key, Widget child) =>
     _slide(key, YorksV1WorkspaceShell(child: child));
+
+/// The approved desktop setup owns its dedicated header and stage rail. Small
+/// screens keep the established workspace framing and focused form until their
+/// separately supplied design is applied.
+Page<void> _yorksV1ProjectSetupSlide(LocalKey key, Widget child) => _slide(
+  key,
+  LayoutBuilder(
+    builder: (context, constraints) =>
+        constraints.maxWidth >= 1100 &&
+            MediaQuery.textScalerOf(context).scale(1) <= 1.1
+        ? YorksWorkspaceZoomHost(routeKey: 'project-setup', child: child)
+        : YorksV1WorkspaceShell(child: child),
+  ),
+);
 
 /// Slide-in page for screens that were originally office-shell *tabs* and so
 /// have no `Scaffold`/`Material` of their own. When reached as a full-screen
@@ -1076,6 +1092,8 @@ GoRouter createAppRouter({
   /// legacy shell role is a compatibility presentation value only and must not
   /// turn a legacy Engineer into a Project Engineer.
   bool yorksV1ProjectsEnabled = false,
+  bool yorksV1ProjectSetupEnabled = false,
+  Future<bool> Function()? onLeaveYorksProjectSetup,
   bool yorksV1BoqEnabled = false,
   bool yorksV1RequestsEnabled = false,
   bool yorksV1CompanyMaterialRequestsEnabled = false,
@@ -1549,7 +1567,15 @@ GoRouter createAppRouter({
       // lives INSIDE the shell as a branch (see above), so it's not here.
       GoRoute(
         path: RoutePaths.engineerCreateProject,
-        pageBuilder: (context, state) => yorksV1ProjectsEnabled
+        onExit: (context, state) async =>
+            !yorksV1ProjectSetupEnabled ||
+            await (onLeaveYorksProjectSetup?.call() ?? Future.value(true)),
+        pageBuilder: (context, state) => yorksV1ProjectSetupEnabled
+            ? _yorksV1ProjectSetupSlide(
+                state.pageKey,
+                const EngineerCreateProjectScreen(),
+              )
+            : yorksV1ProjectsEnabled
             ? _yorksV1Slide(state.pageKey, const EngineerCreateProjectScreen())
             : _slide(state.pageKey, const EngineerCreateProjectScreen()),
       ),
@@ -1770,12 +1796,22 @@ GoRouter createAppRouter({
       ),
       GoRoute(
         path: RoutePaths.yorksV1ProjectEdit,
-        pageBuilder: (context, state) => _yorksV1Slide(
-          state.pageKey,
-          YorksV1ProjectEditFlowScreen(
-            projectId: state.pathParameters['projectId'] ?? '',
-          ),
-        ),
+        onExit: (context, state) async =>
+            !yorksV1ProjectSetupEnabled ||
+            await (onLeaveYorksProjectSetup?.call() ?? Future.value(true)),
+        pageBuilder: (context, state) => yorksV1ProjectSetupEnabled
+            ? _yorksV1ProjectSetupSlide(
+                state.pageKey,
+                YorksV1ProjectEditFlowScreen(
+                  projectId: state.pathParameters['projectId'] ?? '',
+                ),
+              )
+            : _yorksV1Slide(
+                state.pageKey,
+                YorksV1LegacyProjectEditFlowScreen(
+                  projectId: state.pathParameters['projectId'] ?? '',
+                ),
+              ),
       ),
       GoRoute(
         path: RoutePaths.yorksV1Project,

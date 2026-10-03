@@ -1,84 +1,550 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../models/analytics_event.dart';
 import '../models/yorks_v1_domain_error.dart';
 import '../models/yorks_v1_project_creation_draft.dart';
-import '../repositories/collection_store.dart';
+import '../repositories/yorks_v1_project_draft_store.dart';
+import '../services/analytics_service.dart';
 
-/// Local-only recovery controller for the five-stage V1 project creation form.
-/// Its persisted record is private input on this device; it never writes a
-/// project or membership through the legacy generic collection sync path.
+/// Complete local proposals, serialized acknowledgments and fenced ownership.
+/// This controller never changes a live project or uploads selected file bytes.
 class YorksV1ProjectCreationDraftController
     extends StateNotifier<YorksV1ProjectCreationDraft> {
   YorksV1ProjectCreationDraftController({
     required String ownerAuthUserId,
-    required CollectionStore<YorksV1ProjectCreationDraft> store,
+    required String backendIdentity,
+    required this.storageKey,
+    required ProjectDraftAtomicStorage storage,
     required String Function() idempotencyKeyFactory,
+    YorksV1ProjectDraftMode mode = YorksV1ProjectDraftMode.create,
+    String? projectId,
+    String? legacyRaw,
+    AnalyticsService analytics = const NoopAnalyticsService(),
   }) : _ownerAuthUserId = ownerAuthUserId,
-       _store = store,
+       _backendIdentity = backendIdentity,
+       _storage = storage,
        _idempotencyKeyFactory = idempotencyKeyFactory,
+       _writerId = idempotencyKeyFactory(),
+       _analytics = analytics,
+       _legacyRaw = legacyRaw,
        super(
          _restoreOrEmpty(
            ownerAuthUserId: ownerAuthUserId,
-           store: store,
+           backendIdentity: backendIdentity,
+           mode: mode,
+           projectId: projectId,
+           storage: storage,
+           storageKey: storageKey,
            idempotencyKeyFactory: idempotencyKeyFactory,
+           legacyRaw: legacyRaw,
          ),
-       );
+       ) {
+    _initialization = _claim(legacyRaw: legacyRaw);
+  }
 
   final String _ownerAuthUserId;
-  final CollectionStore<YorksV1ProjectCreationDraft> _store;
+  final String _backendIdentity;
+  final ProjectDraftAtomicStorage _storage;
   final String Function() _idempotencyKeyFactory;
+  final String _writerId;
+  final AnalyticsService _analytics;
+  final String? _legacyRaw;
+  final String storageKey;
+  late final Future<void> _initialization;
+  YorksV1ProjectCreationDraft? _pending;
+  Future<void>? _draining;
+  final List<({int revision, Completer<void> completion})> _waiters = [];
+  bool _disposed = false;
+  bool _reportedSaved = false;
+
+  Future<void> get initialized => _initialization;
+
+  bool get writable =>
+      !state.isReadOnly &&
+      state.storageState != YorksV1ProjectDraftStorageState.initializing;
+  bool get hasCrossProcessOwnership => _storage.supportsAtomicOwnership;
 
   static YorksV1ProjectCreationDraft _restoreOrEmpty({
     required String ownerAuthUserId,
-    required CollectionStore<YorksV1ProjectCreationDraft> store,
+    required String backendIdentity,
+    required YorksV1ProjectDraftMode mode,
+    required String? projectId,
+    required ProjectDraftAtomicStorage storage,
+    required String storageKey,
     required String Function() idempotencyKeyFactory,
+    required String? legacyRaw,
   }) {
-    final stored = store.readAll();
-    if (stored.length == 1 &&
-        stored.single.ownerAuthUserId == ownerAuthUserId) {
-      final draft = stored.single;
-      if (draft.creationIdempotencyKey.trim().isNotEmpty) return draft;
-      // Preserve recoverable form input from an interrupted pre-command save;
-      // only the client idempotency token needs regeneration.
-      return draft.copyWith(creationIdempotencyKey: idempotencyKeyFactory());
-    }
-    return YorksV1ProjectCreationDraft.empty(
+    final empty = YorksV1ProjectCreationDraft.empty(
       ownerAuthUserId: ownerAuthUserId,
       creationIdempotencyKey: idempotencyKeyFactory(),
+      backendIdentity: backendIdentity,
+      mode: mode,
+      projectId: projectId,
+    );
+    try {
+      final raw = storage.read(storageKey);
+      if (raw == null) {
+        // Old keys contain no verified backend provenance. Preserve them for
+        // explicit recovery; assigning them to the active backend could leak a
+        // staging proposal into production.
+        if (legacyRaw != null && legacyRaw.isNotEmpty && legacyRaw != '[]') {
+          return empty.copyWith(
+            storageState: YorksV1ProjectDraftStorageState.recoveryRequired,
+          );
+        }
+        return empty.copyWith(
+          storageState: YorksV1ProjectDraftStorageState.initializing,
+        );
+      }
+      final record = _record(raw);
+      if (record['retired'] == true) {
+        return empty.copyWith(
+          writerEpoch: (record['writerEpoch'] as int? ?? 0) + 1,
+          storageState: YorksV1ProjectDraftStorageState.initializing,
+        );
+      }
+      final draft = _draftFromRecord(record);
+      if (draft.ownerAuthUserId != ownerAuthUserId ||
+          draft.backendIdentity != backendIdentity ||
+          draft.mode != mode ||
+          draft.projectId != projectId) {
+        throw const FormatException('Project draft context mismatch');
+      }
+      return draft.copyWith(
+        storageState: YorksV1ProjectDraftStorageState.initializing,
+      );
+    } catch (_) {
+      return empty.copyWith(
+        storageState: YorksV1ProjectDraftStorageState.recoveryRequired,
+      );
+    }
+  }
+
+  Future<void> _claim({String? legacyRaw, bool takeOver = false}) async {
+    try {
+      if (state.storageState ==
+          YorksV1ProjectDraftStorageState.recoveryRequired) {
+        await _storage.transaction(storageKey, (tx) {
+          final raw = tx.read(storageKey) ?? legacyRaw;
+          if (raw != null) {
+            // Raw data and the original key are retained. No parse/coercion is
+            // attempted when its version or provenance is unsupported.
+            tx.write(
+              '$storageKey:quarantine',
+              jsonEncode({
+                'raw': raw,
+                'ownerAuthUserId': _ownerAuthUserId,
+                'backendIdentity': _backendIdentity,
+                'capturedAt': DateTime.now().toUtc().toIso8601String(),
+              }),
+            );
+          }
+        });
+        return;
+      }
+      final claimed = await _storage.transaction(storageKey, (tx) {
+        final raw = tx.read(storageKey);
+        final record = raw == null ? <String, dynamic>{} : _record(raw);
+        final owner = record['ownerWriterId'] as String?;
+        final epoch = record['writerEpoch'] as int? ?? 0;
+        if (record['retired'] != true &&
+            owner != null &&
+            owner != _writerId &&
+            !takeOver) {
+          return (draft: _draftFromRecord(record), acquired: false);
+        }
+        // Initial restoration may race the previous owner's last save/release.
+        // Every ownership acquisition reads the latest proposal under the lock.
+        final latest = raw != null && record['retired'] != true
+            ? _draftFromRecord(record)
+            : state;
+        final draft = latest.copyWith(writerEpoch: epoch + 1);
+        if (record['retired'] == true) {
+          tx.write(
+            '$storageKey:retired:${_draftFromRecord(record).draftId}',
+            raw!,
+          );
+        }
+        tx.write(storageKey, _encodeRecord(draft));
+        return (draft: draft, acquired: true);
+      });
+      if (_disposed) return;
+      if (!claimed.acquired) {
+        state = claimed.draft.copyWith(
+          storageState: YorksV1ProjectDraftStorageState.ownedElsewhere,
+        );
+        _capture(AnalyticsEvent.projectSetupConflictDetected, {
+          AnalyticsProperty.mode: state.mode.name,
+          AnalyticsProperty.conflictType: 'local_owner',
+        });
+        return;
+      }
+      final changedWhileInitializing =
+          !takeOver && state.revision > claimed.draft.revision;
+      state = (changedWhileInitializing ? state : claimed.draft).copyWith(
+        writerEpoch: claimed.draft.writerEpoch,
+        storageState: changedWhileInitializing
+            ? YorksV1ProjectDraftStorageState.dirty
+            : (claimed.draft.acknowledgedRevision == claimed.draft.revision &&
+                  claimed.draft.revision > 0)
+            ? YorksV1ProjectDraftStorageState.saved
+            : YorksV1ProjectDraftStorageState.dirty,
+      );
+      if (claimed.draft.hasRecoverableContent && !changedWhileInitializing) {
+        _capture(AnalyticsEvent.projectDraftRestored, {
+          AnalyticsProperty.mode: state.mode.name,
+          AnalyticsProperty.source: 'device',
+          AnalyticsProperty.step: _stepName(state.currentStage),
+        });
+      }
+    } catch (_) {
+      if (!_disposed) {
+        state = state.copyWith(
+          storageState: YorksV1ProjectDraftStorageState.failed,
+        );
+      }
+    }
+  }
+
+  /// The same lock and fencing check can protect an operation journal write.
+  /// The callback must remain synchronous and contain local operations only.
+  Future<T> atomicOwned<T>(
+    T Function(ProjectDraftAtomicTransaction tx) work,
+  ) async {
+    await _initialization;
+    return _storage.transaction(storageKey, (tx) {
+      final raw = tx.read(storageKey);
+      if (raw == null) {
+        throw const ProjectDraftStorageException('owner_missing');
+      }
+      final record = _record(raw);
+      if (record['ownerWriterId'] != _writerId ||
+          record['writerEpoch'] != state.writerEpoch ||
+          record['retired'] == true ||
+          _draftFromRecord(record).draftId != state.draftId) {
+        if (!_disposed) {
+          state = state.copyWith(
+            storageState: YorksV1ProjectDraftStorageState.ownedElsewhere,
+          );
+        }
+        throw const ProjectDraftStorageException('writer_fenced');
+      }
+      return work(tx);
+    });
+  }
+
+  Future<void> verifyOwnership() => atomicOwned((_) {});
+
+  Future<void> takeOver() async {
+    await _initialization;
+    await _claim(takeOver: true);
+  }
+
+  /// Available only for a supported legacy payload whose owner is verified.
+  /// The UI must show its contents and request an explicit backend rebind.
+  YorksV1ProjectCreationDraft? readQuarantinedProposal() {
+    if (state.storageState !=
+            YorksV1ProjectDraftStorageState.recoveryRequired ||
+        _legacyRaw == null) {
+      return null;
+    }
+    try {
+      final decoded = jsonDecode(_legacyRaw);
+      if (decoded is! List || decoded.length != 1 || decoded.single is! Map) {
+        return null;
+      }
+      final draft = YorksV1ProjectCreationDraft.fromJson(
+        Map<String, dynamic>.from(decoded.single as Map),
+      );
+      return draft.ownerAuthUserId == _ownerAuthUserId ? draft : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> adoptQuarantinedProposal() async {
+    await _initialization;
+    final proposal = readQuarantinedProposal();
+    if (proposal == null) {
+      throw const ProjectDraftStorageException('unsupported_legacy_recovery');
+    }
+    // Rebinding is deliberate. Provenance and original raw data are retained.
+    state = proposal.copyWith(
+      backendIdentity: _backendIdentity,
+      mode: state.mode,
+      projectId: state.projectId,
+      draftId: state.draftId,
+      creationIdempotencyKey: state.creationIdempotencyKey,
+      revision: 0,
+      acknowledgedRevision: 0,
+      retainedFields: {
+        ...proposal.retainedFields,
+        'legacyRecoveryProvenance': 'owner-key-with-unverified-backend',
+      },
+      storageState: YorksV1ProjectDraftStorageState.dirty,
+    );
+    await _claim(takeOver: true);
+    await save(state);
+  }
+
+  /// Restore an existing edit proposal or persist its immutable starting base.
+  Future<void> initializeEdit(YorksV1ProjectCreationDraft seed) async {
+    await _initialization;
+    if (state.mode != YorksV1ProjectDraftMode.edit ||
+        seed.ownerAuthUserId != _ownerAuthUserId ||
+        seed.projectId != state.projectId ||
+        seed.baseVersion == null) {
+      throw const YorksV1DomainException(YorksV1DomainErrorCode.invalidInput);
+    }
+    if (state.baseVersion != null || state.isReadOnly) return;
+    await save(
+      seed.copyWith(
+        backendIdentity: _backendIdentity,
+        mode: state.mode,
+        draftId: state.draftId,
+        creationIdempotencyKey: state.creationIdempotencyKey,
+        writerEpoch: state.writerEpoch,
+      ),
     );
   }
 
-  /// Autosave a whole immutable draft snapshot. The creation idempotency key is
-  /// preserved so a create retry refers to the same pending command.
-  Future<void> save(YorksV1ProjectCreationDraft draft) async {
+  Future<void> save(
+    YorksV1ProjectCreationDraft draft, {
+    String saveTrigger = 'checkpoint',
+  }) {
     if (draft.ownerAuthUserId != _ownerAuthUserId ||
-        draft.creationIdempotencyKey.trim().isEmpty) {
-      throw const YorksV1DomainException(YorksV1DomainErrorCode.invalidInput);
+        draft.creationIdempotencyKey.trim().isEmpty ||
+        draft.mode != state.mode ||
+        draft.projectId != state.projectId ||
+        state.isReadOnly ||
+        _disposed) {
+      return Future.error(
+        const ProjectDraftStorageException('draft_not_writable'),
+      );
     }
-    final stamped = draft.copyWith(updatedAt: DateTime.now().toUtc());
+    final stamped = draft.copyWith(
+      backendIdentity: _backendIdentity,
+      draftId: state.draftId,
+      writerEpoch: state.writerEpoch,
+      revision: state.revision + 1,
+      acknowledgedRevision: state.acknowledgedRevision,
+      updatedAt: DateTime.now().toUtc(),
+      storageState: YorksV1ProjectDraftStorageState.dirty,
+      buildings: [
+        for (final building in draft.buildings)
+          building.localRowId == null
+              ? building.copyWith(localRowId: _idempotencyKeyFactory())
+              : building,
+      ],
+    );
     state = stamped;
-    await _store.writeAll([stamped]);
+    _pending = stamped;
+    final waiter = Completer<void>();
+    _waiters.add((revision: stamped.revision, completion: waiter));
+    _startDrain(saveTrigger);
+    return waiter.future;
+  }
+
+  void _startDrain(String saveTrigger) {
+    if (_draining != null) return;
+    _draining = _drain(saveTrigger).whenComplete(() {
+      _draining = null;
+      if (_pending != null && !_disposed) _startDrain(saveTrigger);
+    });
+  }
+
+  Future<void> _drain(String saveTrigger) async {
+    await _initialization;
+    while (_pending != null && !_disposed) {
+      final snapshot = _pending!.copyWith(writerEpoch: state.writerEpoch);
+      _pending = null;
+      state = state.copyWith(
+        storageState: YorksV1ProjectDraftStorageState.saving,
+      );
+      try {
+        final acknowledged = snapshot.copyWith(
+          acknowledgedRevision: snapshot.revision,
+        );
+        await atomicOwned(
+          (tx) => tx.write(storageKey, _encodeRecord(acknowledged)),
+        );
+        if (_disposed) break;
+        state = state.copyWith(
+          acknowledgedRevision: snapshot.revision,
+          storageState: state.revision == snapshot.revision
+              ? YorksV1ProjectDraftStorageState.saved
+              : YorksV1ProjectDraftStorageState.dirty,
+        );
+        final completed = _waiters
+            .where((item) => item.revision <= snapshot.revision)
+            .toList();
+        _waiters.removeWhere((item) => item.revision <= snapshot.revision);
+        for (final waiter in completed) {
+          waiter.completion.complete();
+        }
+        if (!_reportedSaved ||
+            saveTrigger == 'manual' ||
+            saveTrigger == 'navigation') {
+          _capture(AnalyticsEvent.projectDraftSaved, {
+            AnalyticsProperty.mode: state.mode.name,
+            AnalyticsProperty.storageScope: 'device',
+            AnalyticsProperty.saveTrigger: saveTrigger,
+          });
+          _reportedSaved = true;
+        }
+      } catch (error, stack) {
+        if (!_disposed && !state.isReadOnly) {
+          state = state.copyWith(
+            storageState: YorksV1ProjectDraftStorageState.failed,
+          );
+        }
+        _pending = null;
+        for (final waiter in _waiters) {
+          waiter.completion.completeError(error, stack);
+        }
+        _waiters.clear();
+        _capture(AnalyticsEvent.projectDraftSaveFailed, {
+          AnalyticsProperty.mode: state.mode.name,
+          AnalyticsProperty.errorCategory: 'storage',
+        });
+        return;
+      }
+    }
+  }
+
+  Future<void> flush({String saveTrigger = 'navigation'}) async {
+    await _initialization;
+    if (state.isReadOnly) {
+      throw const ProjectDraftStorageException('draft_not_writable');
+    }
+    if (state.acknowledgedRevision < state.revision &&
+        _pending == null &&
+        _draining == null) {
+      _pending = state;
+      final waiter = Completer<void>();
+      _waiters.add((revision: state.revision, completion: waiter));
+      _startDrain(saveTrigger);
+      await waiter.future;
+    }
+    await _draining;
+    if (state.storageState == YorksV1ProjectDraftStorageState.failed) {
+      throw const ProjectDraftStorageException('write_failed');
+    }
   }
 
   Future<void> update(
     YorksV1ProjectCreationDraft Function(YorksV1ProjectCreationDraft current)
     transform,
-  ) {
-    return save(transform(state));
+  ) => save(transform(state));
+
+  Future<void> setStage(YorksV1ProjectCreationStage stage) => save(
+    state.copyWith(
+      currentStage: stage,
+      visitedStages: {...state.visitedStages, stage},
+    ),
+    saveTrigger: 'navigation',
+  );
+
+  /// A durable tombstone is written before resetting the active form. Journals
+  /// and file follow-up manifests are intentionally independent of retirement.
+  Future<void> retire({required String resultProjectId}) async {
+    await flush();
+    await atomicOwned((tx) {
+      final tombstone = jsonEncode({
+        'recordVersion': 1,
+        'ownerWriterId': _writerId,
+        'writerEpoch': state.writerEpoch,
+        'retired': true,
+        'draft': state.toJson(),
+        'resultProjectId': resultProjectId,
+        'retiredAt': DateTime.now().toUtc().toIso8601String(),
+      });
+      // Retire the active envelope first. A quota/crash failure while copying
+      // its historical tombstone then still fences the old writer. A new claim
+      // copies the retired envelope before reusing this slot.
+      tx.write(storageKey, tombstone);
+      tx.write('$storageKey:retired:${state.draftId}', tombstone);
+    });
   }
 
-  Future<void> setStage(YorksV1ProjectCreationStage stage) {
-    return update((current) => current.copyWith(currentStage: stage));
-  }
-
-  /// Clears local input only after the user explicitly abandons it or the
-  /// corresponding connected create command has returned successfully.
   Future<void> discard() async {
-    final fresh = YorksV1ProjectCreationDraft.empty(
+    await retire(resultProjectId: 'explicit_discard');
+    if (_disposed) return;
+    state = YorksV1ProjectCreationDraft.empty(
       ownerAuthUserId: _ownerAuthUserId,
       creationIdempotencyKey: _idempotencyKeyFactory(),
+      backendIdentity: _backendIdentity,
+      mode: state.mode,
+      projectId: state.projectId,
     );
-    state = fresh;
-    await _store.writeAll(const []);
+    await _claim(takeOver: true);
+  }
+
+  String _encodeRecord(YorksV1ProjectCreationDraft draft) => jsonEncode({
+    'recordVersion': 1,
+    'ownerWriterId': _writerId,
+    'writerEpoch': draft.writerEpoch,
+    'retired': false,
+    'draft': draft.toJson(),
+  });
+
+  void _capture(AnalyticsEvent event, AnalyticsProperties properties) {
+    // Recovery is independent of analytics availability and transport errors.
+    try {
+      _analytics.capture(event, properties: properties);
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    for (final waiter in _waiters) {
+      if (!waiter.completion.isCompleted) {
+        waiter.completion.completeError(
+          const ProjectDraftStorageException('controller_disposed'),
+        );
+      }
+    }
+    _waiters.clear();
+    unawaited(
+      _storage
+          .transaction(storageKey, (tx) {
+            final raw = tx.read(storageKey);
+            if (raw == null) return;
+            final record = _record(raw);
+            if (record['ownerWriterId'] == _writerId) {
+              record['ownerWriterId'] = null;
+              tx.write(storageKey, jsonEncode(record));
+            }
+          })
+          .catchError((Object _) {}),
+    );
+    super.dispose();
   }
 }
+
+Map<String, dynamic> _record(String raw) {
+  final decoded = jsonDecode(raw);
+  if (decoded is! Map ||
+      decoded['recordVersion'] != 1 ||
+      decoded['draft'] is! Map) {
+    throw const FormatException('Unsupported project recovery record');
+  }
+  return Map<String, dynamic>.from(decoded);
+}
+
+YorksV1ProjectCreationDraft _draftFromRecord(Map<String, dynamic> record) =>
+    YorksV1ProjectCreationDraft.fromJson(
+      Map<String, dynamic>.from(record['draft'] as Map),
+    );
+
+String _stepName(YorksV1ProjectCreationStage stage) => switch (stage) {
+  YorksV1ProjectCreationStage.projectDetails => 'project_details',
+  YorksV1ProjectCreationStage.partiesAndAccess => 'parties_and_access',
+  YorksV1ProjectCreationStage.buildings => 'buildings',
+  YorksV1ProjectCreationStage.attachments => 'attachments',
+  YorksV1ProjectCreationStage.reviewAndCreate => 'review',
+};
