@@ -1,12 +1,10 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router.dart';
-import '../../../../app/yorks_v1_workspace_search_launcher.dart';
+import '../../../../app/yorks_v1_workspace_navigation_scope.dart';
 import '../../../../app/yorks_v1_workspace_shell.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../core/zoom/yorks_workspace_zoom.dart';
@@ -76,7 +74,6 @@ class YorksV1ProjectSetupDesktopShell extends ConsumerStatefulWidget {
 
 class _YorksV1ProjectSetupDesktopShellState
     extends ConsumerState<YorksV1ProjectSetupDesktopShell> {
-  bool _railExpanded = true;
   final _menu = MenuController();
   final _nodes = [
     for (final stage in YorksV1ProjectCreationStage.values)
@@ -108,20 +105,23 @@ class _YorksV1ProjectSetupDesktopShellState
     color: color,
   );
 
-  void _openSearch() => unawaited(
-    showYorksV1WorkspaceSearch(
-      context,
-      targets: const [
-        YorksV1SearchNavigationTarget(
-          label: YorksV1ProjectStrings.projects,
-          icon: Icons.folder_outlined,
-          path: RoutePaths.yorksV1Projects,
-        ),
-      ],
-      language: widget.language,
-      role: ref.read(yorksV1CurrentRoleProvider),
-    ),
-  );
+  void _openNavigation() {
+    final workspace = YorksV1WorkspaceNavigationScope.maybeOf(context);
+    if (workspace != null) {
+      workspace.openNavigation();
+    } else {
+      context.go(RoutePaths.yorksV1MobileMore);
+    }
+  }
+
+  void _openSearch() {
+    final workspace = YorksV1WorkspaceNavigationScope.maybeOf(context);
+    if (workspace != null) {
+      workspace.openSearch();
+    } else {
+      context.go(RoutePaths.yorksV1MobileMore);
+    }
+  }
 
   void _closeThenGo(String path) {
     _menu.close();
@@ -222,14 +222,13 @@ class _YorksV1ProjectSetupDesktopShellState
                     child: Row(
                       children: [
                         IconButton(
-                          key: const ValueKey('project-setup-rail-toggle'),
-                          tooltip:
-                              (_railExpanded
-                                      ? YorksV1ShellStrings.collapsePanel
-                                      : YorksV1ShellStrings.expandPanel)
-                                  .active(language),
-                          onPressed: () =>
-                              setState(() => _railExpanded = !_railExpanded),
+                          key: const ValueKey(
+                            'project-setup-workspace-navigation',
+                          ),
+                          tooltip: YorksV1ShellStrings.quickNavigation.active(
+                            language,
+                          ),
+                          onPressed: _openNavigation,
                           icon: const Icon(
                             Icons.menu,
                             color: Colors.white,
@@ -367,76 +366,74 @@ class _YorksV1ProjectSetupDesktopShellState
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    if (_railExpanded)
-                      Container(
-                        key: const ValueKey('project-setup-desktop-rail'),
-                        width: 232,
-                        decoration: const BoxDecoration(
-                          color: _rail,
-                          border: BorderDirectional(
-                            end: BorderSide(color: _line),
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Padding(
-                              padding: EdgeInsetsDirectional.fromSTEB(
-                                26,
-                                28,
-                                12,
-                                widget.stage ==
-                                            YorksV1ProjectCreationStage
-                                                .projectDetails &&
-                                        widget.visitedStages.length == 1
-                                    ? 14
-                                    : 10,
-                              ),
-                              child: Text(
-                                YorksV1ProjectSetupShellStrings.setup.active(
-                                  language,
-                                ),
-                                style: _text(12, weight: FontWeight.w600),
-                              ),
-                            ),
-                            FocusTraversalGroup(
-                              policy: OrderedTraversalPolicy(),
-                              child: Focus(
-                                canRequestFocus: false,
-                                onKeyEvent: _moveFocus,
-                                child: Column(
-                                  children: [
-                                    for (final stage
-                                        in YorksV1ProjectCreationStage.values)
-                                      _stageItem(stage),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const Spacer(),
-                            Padding(
-                              padding: const EdgeInsetsDirectional.fromSTEB(
-                                18,
-                                12,
-                                10,
-                                20,
-                              ),
-                              child: TextButton.icon(
-                                onPressed: widget.saving
-                                    ? null
-                                    : widget.onReturnToProjects,
-                                icon: const Icon(Icons.arrow_back, size: 21),
-                                label: Text(
-                                  YorksV1ProjectSetupShellStrings
-                                      .returnToProjects
-                                      .active(language),
-                                  style: _text(14, color: _muted),
-                                ),
-                              ),
-                            ),
-                          ],
+                    Container(
+                      key: const ValueKey('project-setup-desktop-rail'),
+                      width: 232,
+                      decoration: const BoxDecoration(
+                        color: _rail,
+                        border: BorderDirectional(
+                          end: BorderSide(color: _line),
                         ),
                       ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Padding(
+                            padding: EdgeInsetsDirectional.fromSTEB(
+                              26,
+                              28,
+                              12,
+                              widget.stage ==
+                                          YorksV1ProjectCreationStage
+                                              .projectDetails &&
+                                      widget.visitedStages.length == 1
+                                  ? 14
+                                  : 10,
+                            ),
+                            child: Text(
+                              YorksV1ProjectSetupShellStrings.setup.active(
+                                language,
+                              ),
+                              style: _text(12, weight: FontWeight.w600),
+                            ),
+                          ),
+                          FocusTraversalGroup(
+                            policy: OrderedTraversalPolicy(),
+                            child: Focus(
+                              canRequestFocus: false,
+                              onKeyEvent: _moveFocus,
+                              child: Column(
+                                children: [
+                                  for (final stage
+                                      in YorksV1ProjectCreationStage.values)
+                                    _stageItem(stage),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const Spacer(),
+                          Padding(
+                            padding: const EdgeInsetsDirectional.fromSTEB(
+                              18,
+                              12,
+                              10,
+                              20,
+                            ),
+                            child: TextButton.icon(
+                              onPressed: widget.saving
+                                  ? null
+                                  : widget.onReturnToProjects,
+                              icon: const Icon(Icons.arrow_back, size: 21),
+                              label: Text(
+                                YorksV1ProjectSetupShellStrings.returnToProjects
+                                    .active(language),
+                                style: _text(14, color: _muted),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,

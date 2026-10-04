@@ -16,5 +16,6 @@ General project imports, building-paste mappings, cloud/collaborative drafts, mu
 - [Six-screen mobile design, responsive verification and captures](MOBILE_DESIGN_2026-10-04.md)
 - [Final mobile validation and browser evidence](MOBILE_VALIDATION_2026-10-04.md)
 - [Owner-authorized staging preview and release evidence](STAGING_RELEASE_2026-10-04.md)
+- [Workspace integration correction, staging alias and validation boundaries](WORKSPACE_INTEGRATION_2026-10-04.md)
 
 The source acceptance catalogue retains its original Not run status. Candidate evidence and unresolved gates are recorded separately in IMPLEMENTATION_EVIDENCE.md; source requirements must not be silently rewritten into passes.

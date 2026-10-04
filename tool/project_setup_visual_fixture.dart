@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ledger/app/router.dart';
+import 'package:material_ledger/app/yorks_v1_workspace_shell.dart';
 import 'package:material_ledger/core/theme/app_theme.dart';
 import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_project_create_flow_screen.dart';
 import 'package:material_ledger/shared/models/app_language.dart';
@@ -228,9 +229,12 @@ Future<void> main() async {
     routes: [
       GoRoute(
         path: RoutePaths.engineerCreateProject,
-        builder: (context, _) => stageIndex == 5
-            ? const _VisualCompletionScreen()
-            : const YorksV1ProjectCreateFlowScreen(),
+        builder: (context, _) => YorksV1WorkspaceShell(
+          featureOwnsChrome: true,
+          child: stageIndex == 5
+              ? const _VisualCompletionScreen()
+              : const YorksV1ProjectCreateFlowScreen(),
+        ),
       ),
     ],
   );

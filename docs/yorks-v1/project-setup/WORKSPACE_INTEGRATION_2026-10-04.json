@@ -1,0 +1,140 @@
+{
+  "status": "local_gates_passed_pending_staging_deployment",
+  "source_commit": null,
+  "entrypoint": "lib/main.dart",
+  "feature_flag": {
+    "YORKS_V1_PROJECT_SETUP": true,
+    "tracked_default": false,
+    "platform": "browser_only"
+  },
+  "backend": {
+    "project_ref": "iqltcyimlqtcwyzlemwx",
+    "schema_changed_for_integration": false
+  },
+  "staging_alias": {
+    "name": "yorks-r35-staging.vercel.app",
+    "before_deployment": "dpl_FxKmjTWKHzdo34uNXjDe9E4WHbNZ",
+    "before_source": "449a0e01f98d74caa5ee0bdcdc9aa38c80993b68",
+    "before_artifact": {
+      "url": "https://yorks-r35-staging.vercel.app/main.dart.js",
+      "status": 200,
+      "bytes": 10423896,
+      "sha256": "a535f2c106fb5018221cf9e593a6974d860b3cf96fe4320f608f285606452e44",
+      "staging_ref_count": 1,
+      "production_ref_count": 0
+    },
+    "after_deployment": null
+  },
+  "production": {
+    "alias": "yorks-r35.vercel.app",
+    "before_deployment": "dpl_Gj1cfA1CbEJnkVwi4bG8eKabkRJy",
+    "before_artifact": {
+      "url": "https://yorks-r35.vercel.app/main.dart.js",
+      "status": 200,
+      "bytes": 9678001,
+      "sha256": "739de306598a9c0d135c5c7721d133a8c800321538b05894bda2627b8471b19f"
+    },
+    "after_deployment": null,
+    "after_artifact": null
+  },
+  "validation": {
+    "focused_integration": {
+      "tests": 8,
+      "result": "passed_in_final_full_suite"
+    },
+    "final_full_test": {
+      "passed": 2272,
+      "retained_skips": 4,
+      "result": "passed",
+      "log": "/tmp/yorks-setup-integration-full-tests-final.log"
+    },
+    "analysis": {
+      "result": "no_issues",
+      "log": "/tmp/yorks-setup-integration-analyze-final.log"
+    },
+    "ci_web": {
+      "result": "passed",
+      "main_bytes": 10007045,
+      "startup_gzip_bytes": 2880695,
+      "sha256": "38b2a4265847217294dbc25c671507d219721d066983888f021dbc2ac87c1c8b",
+      "entrypoint": "lib/main.dart"
+    },
+    "ci_apk": {
+      "result": "passed_certificate_verified",
+      "bytes": 110533660,
+      "sha256": "db31b9b94ac0c7df4279fea16a18629fa7f18dd161333b9c810f8532f2ce0f8b",
+      "signing": "CI Ephemeral; not production artifact",
+      "certificate_dn": "CN=Yorks CI Ephemeral, OU=CI Only, O=Yorks, C=AE",
+      "certificate_sha256": "5e9d6cbc6ccdb5ab32cbef949b0055ee25b89b5f5c742f47f7c1c66740eda936",
+      "signature_scheme_v2": true
+    },
+    "staging_web": "pending",
+    "remote_ci": "not_claimed",
+    "local_database": "unchanged SQL; prior release gates retained",
+    "format": "passed; seven Dart files unchanged",
+    "pub_get": "passed; lock unchanged",
+    "diff_check": "passed"
+  },
+  "browser": {
+    "context": "synthetic local fixture; no remote commands",
+    "desktop_css": [
+      1438,
+      809
+    ],
+    "desktop_raster": [
+      1438,
+      809
+    ],
+    "phone_css": [
+      359,
+      800
+    ],
+    "phone_raster": [
+      403,
+      899
+    ],
+    "phone_scroll_width": 359,
+    "final_fresh_console_warnings": 0,
+    "final_fresh_console_errors": 0,
+    "debug_resize_semantics_error": "observed across breakpoint after enabling semantics; no fresh-start reproduction",
+    "authenticated_staging_uat": "not_run"
+  },
+  "visual_artifacts": [
+    {
+      "path": "visual-evidence/workspace-integration-2026-10-04/desktop-navigation.jpg",
+      "bytes": 76478,
+      "sha256": "229402f120ccb4a7a106e6ef4e935dd66a08c839b44db14de4677752a60cf867"
+    },
+    {
+      "path": "visual-evidence/workspace-integration-2026-10-04/desktop-search.jpg",
+      "bytes": 65036,
+      "sha256": "d2237fa011ad71087688c5fdd9300ae84a80d460d0da2dbe6cf1555ddc40505b"
+    },
+    {
+      "path": "visual-evidence/workspace-integration-2026-10-04/desktop-setup.jpg",
+      "bytes": 95789,
+      "sha256": "58bc92ee3a82d6049bfb2ce4e81b7e23511457618224db7d07690d1f920cb950"
+    },
+    {
+      "path": "visual-evidence/workspace-integration-2026-10-04/mobile-navigation.jpg",
+      "bytes": 23105,
+      "sha256": "305029d83446fff18b17dba2f8c3d0bdb84e6c5947db24bad6df8135c0da0a84"
+    },
+    {
+      "path": "visual-evidence/workspace-integration-2026-10-04/mobile-search.jpg",
+      "bytes": 26579,
+      "sha256": "cd24463de63145edcbe42d6a3c57ffd71e53c59a2840a8c1a20c8b44138ea5b7"
+    },
+    {
+      "path": "visual-evidence/workspace-integration-2026-10-04/mobile-setup.jpg",
+      "bytes": 34871,
+      "sha256": "532fbefa6909b47502b40bdd855ff340259c0e8369bd74ff686c6d57ca311b01"
+    }
+  ],
+  "deployment": null,
+  "limitations": [
+    "No authenticated staging navigation/create/edit/upload UAT",
+    "CI Ephemeral APK is not a production signing artifact",
+    "General browser resize and screen-reader acceptance remains open"
+  ]
+}

@@ -1,12 +1,10 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router.dart';
-import '../../../../app/yorks_v1_workspace_search_launcher.dart';
+import '../../../../app/yorks_v1_workspace_navigation_scope.dart';
 import '../../../../app/yorks_v1_workspace_shell.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../shared/models/app_language.dart';
@@ -74,7 +72,6 @@ class YorksV1ProjectSetupMobileShell extends ConsumerStatefulWidget {
 
 class _YorksV1ProjectSetupMobileShellState
     extends ConsumerState<YorksV1ProjectSetupMobileShell> {
-  final _scaffoldKey = GlobalKey<ScaffoldState>();
   final _accountMenu = MenuController();
   final _stageNodes = [
     for (final stage in YorksV1ProjectCreationStage.values)
@@ -105,20 +102,23 @@ class _YorksV1ProjectSetupMobileShellState
     super.dispose();
   }
 
-  void _openSearch() => unawaited(
-    showYorksV1WorkspaceSearch(
-      context,
-      targets: const [
-        YorksV1SearchNavigationTarget(
-          label: YorksV1ProjectStrings.projects,
-          icon: Icons.folder_outlined,
-          path: RoutePaths.yorksV1Projects,
-        ),
-      ],
-      language: widget.language,
-      role: ref.read(yorksV1CurrentRoleProvider),
-    ),
-  );
+  void _openNavigation() {
+    final workspace = YorksV1WorkspaceNavigationScope.maybeOf(context);
+    if (workspace != null) {
+      workspace.openNavigation();
+    } else {
+      context.go(RoutePaths.yorksV1MobileMore);
+    }
+  }
+
+  void _openSearch() {
+    final workspace = YorksV1WorkspaceNavigationScope.maybeOf(context);
+    if (workspace != null) {
+      workspace.openSearch();
+    } else {
+      context.go(RoutePaths.yorksV1MobileMore);
+    }
+  }
 
   void _closeThenGo(String path) {
     _accountMenu.close();
@@ -228,47 +228,7 @@ class _YorksV1ProjectSetupMobileShellState
           ),
         ),
         child: Scaffold(
-          key: _scaffoldKey,
           backgroundColor: Colors.white,
-          drawer: Drawer(
-            child: SafeArea(
-              child: ListView(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(18),
-                    child: Text(
-                      YorksV1ProjectSetupShellStrings.setup.active(language),
-                      style: _text(18, weight: FontWeight.w700),
-                    ),
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.folder_outlined),
-                    title: Text(
-                      YorksV1ProjectStrings.projects.active(language),
-                    ),
-                    enabled: !widget.saving,
-                    onTap: () {
-                      Navigator.pop(context);
-                      widget.onReturnToProjects();
-                    },
-                  ),
-                  for (final stage in YorksV1ProjectCreationStage.values)
-                    ListTile(
-                      selected: stage == widget.stage,
-                      enabled:
-                          !widget.saving &&
-                          !widget.completed &&
-                          widget.visitedStages.contains(stage),
-                      title: Text(_stageCopy(stage).active(language)),
-                      onTap: () {
-                        Navigator.pop(context);
-                        widget.onSelectStage(stage);
-                      },
-                    ),
-                ],
-              ),
-            ),
-          ),
           body: LayoutBuilder(
             builder: (context, constraints) {
               // Web navigation may report a transient 1×1 surface before
@@ -292,10 +252,12 @@ class _YorksV1ProjectSetupMobileShellState
                           child: Row(
                             children: [
                               IconButton(
-                                tooltip: YorksV1ProjectSetupShellStrings.setup
+                                key: const ValueKey(
+                                  'project-setup-workspace-navigation',
+                                ),
+                                tooltip: YorksV1ShellStrings.quickNavigation
                                     .active(language),
-                                onPressed: () =>
-                                    _scaffoldKey.currentState?.openDrawer(),
+                                onPressed: _openNavigation,
                                 icon: const Icon(
                                   Icons.menu,
                                   color: Colors.white,

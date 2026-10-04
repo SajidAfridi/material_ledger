@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/constants/constants.dart';
-import '../core/zoom/yorks_workspace_zoom.dart';
 
 import '../features/admin/presentation/screens/access_roles_screen.dart';
 import '../features/leave/presentation/screens/leave_requests_screen.dart';
@@ -543,13 +542,10 @@ Page<void> _slide(
 Page<void> _yorksV1Slide(LocalKey key, Widget child) =>
     _slide(key, YorksV1WorkspaceShell(child: child));
 
-/// Approved setup owns responsive chrome on every viewport. Keeping the zoom
-/// host outside that chrome preserves the desktop body-zoom boundary without
-/// adding a second office header to phones or tablets.
-Page<void> _yorksV1ProjectSetupSlide(LocalKey key, Widget child) => _slide(
-  key,
-  YorksWorkspaceZoomHost(routeKey: 'project-setup', child: child),
-);
+/// Setup keeps its reference chrome while participating in the same protected
+/// Yorks navigation, search and history as the rest of the workspace.
+Page<void> _yorksV1ProjectSetupSlide(LocalKey key, Widget child) =>
+    _slide(key, YorksV1WorkspaceShell(featureOwnsChrome: true, child: child));
 
 /// Slide-in page for screens that were originally office-shell *tabs* and so
 /// have no `Scaffold`/`Material` of their own. When reached as a full-screen

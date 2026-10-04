@@ -33,6 +33,7 @@ import '../shared/widgets/notification_bell.dart';
 import '../shared/widgets/yorks_sign_out_action.dart';
 import 'router.dart';
 import 'yorks_navigation_history.dart';
+import 'yorks_v1_workspace_navigation_scope.dart';
 import 'yorks_v1_workspace_search_launcher.dart';
 import 'yorks_v1_workspace_status_label.dart';
 
@@ -46,9 +47,17 @@ final yorksV1SidebarExpandedProvider = yorksV1WorkspaceSidebarExpandedProvider;
 /// client permissions or server data; individual feature screens continue to
 /// request their own safe projections and call their existing controllers.
 class YorksV1WorkspaceShell extends ConsumerWidget {
-  const YorksV1WorkspaceShell({super.key, required this.child});
+  const YorksV1WorkspaceShell({
+    super.key,
+    required this.child,
+    this.featureOwnsChrome = false,
+  });
 
   final Widget child;
+
+  /// Focused setup keeps its reference header/stage rail while using this
+  /// shell's permission gate, navigation, search and session-scoped history.
+  final bool featureOwnsChrome;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -171,14 +180,16 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
 
     return YorksWorkspaceZoomHost(
       key: ValueKey(user?.id),
-      routeKey: location,
+      routeKey: featureOwnsChrome ? 'project-setup' : location,
       child: PopScope(
         // Root destinations in StatefulShellRoute have no Navigator page to pop.
         // Intercept system/gesture Back there and consume the shared workspace
         // history. Native nested routes keep their normal pop semantics.
-        canPop: canPopNatively || !canUseWorkspaceHistory,
+        // Focused setup already owns a draft-aware PopScope and GoRouter exit
+        // guard. Do not issue another Back while that guard is deciding.
+        canPop: featureOwnsChrome || canPopNatively || !canUseWorkspaceHistory,
         onPopInvokedWithResult: (didPop, _) {
-          if (didPop || !canUseWorkspaceHistory) return;
+          if (featureOwnsChrome || didPop || !canUseWorkspaceHistory) return;
           yorksNavigateBack(
             context,
             ref,
@@ -199,9 +210,13 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
           },
           child: Scaffold(
             backgroundColor: AppColors.surface,
-            drawer: desktop
+            drawer: desktop && !featureOwnsChrome
                 ? null
                 : Drawer(
+                    key: const ValueKey('yorks-workspace-navigation-drawer'),
+                    semanticLabel: YorksV1ShellStrings.quickNavigation.active(
+                      language,
+                    ),
                     width: 246,
                     shape: const RoundedRectangleBorder(),
                     child: _YorksDesktopSidebar(
@@ -215,6 +230,14 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
                   ),
             body: Builder(
               builder: (scaffoldContext) {
+                if (featureOwnsChrome) {
+                  return YorksV1WorkspaceNavigationScope(
+                    openNavigation: () =>
+                        Scaffold.of(scaffoldContext).openDrawer(),
+                    openSearch: openSearch,
+                    child: child,
+                  );
+                }
                 if (!desktop) {
                   final unread = ref.watch(unreadNotificationCountProvider);
                   return ColoredBox(
