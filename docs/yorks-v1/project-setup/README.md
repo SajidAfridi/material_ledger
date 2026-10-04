@@ -6,6 +6,11 @@ The new create/edit experience is gated by `YORKS_V1_PROJECT_SETUP`, default `fa
 
 General project imports, building-paste mappings, cloud/collaborative drafts, multiple active drafts and exact analytics run correlation remain deferred/gated. Existing building retirement is conservatively blocked until its operational/Accounts reconciliation policy is defined. No scope history is deleted.
 
+The later 4 October owner correction removes the Project created screen and
+opens the authorized project after confirmation. Historical six-screen reports
+below retain earlier design evidence; [direct navigation and fresh Create](DIRECT_PROJECT_NAVIGATION_2026-10-04.md)
+governs the current completion/draft lifecycle.
+
 - [Requirements](registers/Requirements.csv)
 - [Acceptance catalogue](registers/Acceptance_Tests.csv)
 - [Full supplied specification](specification/Yorks_Project_Creation_Editing_SRS_v1.0.md)

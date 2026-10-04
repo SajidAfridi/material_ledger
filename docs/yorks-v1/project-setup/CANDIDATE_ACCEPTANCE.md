@@ -4,6 +4,11 @@ Review date: 3 October 2026. This is a source/test traceability map for the guar
 
 `YORKS_V1_PROJECT_SETUP` remains default off. The accepted creation screen and its legacy owner-key draft provider remain the fallback. Product authorization to implement does not authorize a deployment, production migration or rollout flag change.
 
+Later owner-authorized staging delivery and the removal of the Project created
+screen are recorded in [direct project navigation and fresh Create](DIRECT_PROJECT_NAVIGATION_2026-10-04.md).
+That correction supersedes historical sticky-result presentation; this dated
+catalogue remains a traceability map and is not production acceptance.
+
 ## How to read the status
 
 - **Partial** identifies named automated subcases or a retained contract, and states the remainder of the original Given/When/Then. It does not certify the whole scenario.

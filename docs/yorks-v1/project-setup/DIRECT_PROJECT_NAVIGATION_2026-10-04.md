@@ -1,6 +1,6 @@
 # Direct project navigation and fresh Create — 4 October 2026
 
-Status: implementation and local Flutter gates passed; staging delivery in progress.
+Status: implemented, local Flutter gates passed, staging deployed and verified.
 
 ## Later product-owner correction
 
@@ -85,9 +85,63 @@ explicit takeover, a still-live former writer, exact private manifest/journal
 retention and zero remote commands. A local retirement write failure followed
 by another writer before Retry exposes takeover instead of acquiring ownership.
 
-Final source, artifact/deployment identity, unchanged production proof, desktop
-and 360px browser evidence will be recorded after verification. Staging only
-remains authorized; production is unchanged by this task.
+Clean pushed source: `2546f9207138eee1ee6d77581e8f049f60cb4cd5`.
+The complete `lib/main.dart` application was rebuilt with the staging backend,
+setup enabled and PostHog disabled. An isolated 59-file / 54,039,834-byte artifact
+was inspected before upload. Staging backend markers: 2; production, CI and
+visual-fixture markers: 0. No private credential value or service-role JWT was
+found in the artifact.
+
+- [Stable staging](https://yorks-r35-staging.vercel.app/yorks/projects#/yorks/projects)
+- [Immutable preview](https://yorks-r35-le5zfrcjv-sajid-alis-projects-0ec775a2.vercel.app)
+- READY preview deployment: `dpl_48uDaRkz5M3WBzmQn4BYUQEFMiYJ`.
+- Staging main: 10,037,931 bytes; verifier gzip: 2,890,157 bytes.
+- Main SHA-256: `3ed5ece7b69478d61939de13cd9507efa0a8829db3cf3f214ca306889c803f51`.
+- Index SHA-256: `972a64c127b49a2567a638054c0dc3d4a1373983983ccb019a66558c65668985`.
+- Preview and stable alias each passed **23 route/asset hashes plus two
+  additional Create/Edit deep routes**. Only the staging alias was assigned.
+
+The production alias still resolves to `dpl_Gj1cfA1CbEJnkVwi4bG8eKabkRJy`.
+Its 9,678,001-byte bundle retains SHA-256
+`739de306598a9c0d135c5c7721d133a8c800321538b05894bda2627b8471b19f`.
+The checked build/protection settings are unchanged. No production promotion,
+production mutation, backend configuration/migration or rollout-default change
+occurred.
+
+## Authenticated live verification
+
+The existing signed-in Local Admin browser retained its valid confirmed create
+record and pending `project_created.png`. In a separate verification tab,
+Create exposed the correct ownership notice and explicit Take over draft.
+That local action retired/indexed the original confirmed proposal and opened
+Project details with all eight rendered inputs blank. Back to Projects exited
+directly; another Create again opened the blank current proposal without a
+Project created screen or old project summary.
+
+Read-only inspection compared hashed recovery metadata before/after: the full
+confirmed core receipt hash and full file-manifest hash are identical. The old
+proposal tombstone and project locator exist, while the active proposal has a
+different draft ID. Its original pending file remains discoverable in the
+existing project's Edit view. The retained edit draft was not taken over or
+applied. Captured takeover network requests were only three reads of notification
+preferences; no Create/Update/activation/upload command was sent.
+
+Desktop evidence is 1456×787. A fresh 360×900 CSS / DPR 1 session verified the
+compact universal header, blank form, lower date/notes fields, readable controls
+and sticky actions. Temporary viewport overrides were reset. The original BOQ
+tab was preserved; a fresh desktop Create tab was left as a deliverable.
+
+The fresh mobile session had no captured warnings/errors. The desktop session
+captured one bundled-font fallback warning. Browser-resident JavaScript
+hashing was not measured; HTTP artifact hashes and observed UI are independent
+evidence. The previous accessibility-enabled breakpoint resize semantics-map
+issue remains open, as do fresh live final Create/Update/upload UAT,
+real-device Android, production signing and hosted Flutter CI acceptance.
+
+[Machine-readable release evidence](DIRECT_PROJECT_NAVIGATION_2026-10-04.json)
+and [native browser captures](visual-evidence/direct-navigation-2026-10-04/README.md)
+record these boundaries. Later documentation commits do not change the deployed
+application source above.
 
 Rollback preserves all draft/journal/quarantine/tombstone and completed-project
 recovery namespaces. The previous verified staging deployment or default-off
