@@ -13,7 +13,11 @@ governs the current completion/draft lifecycle.
 
 The later owner correction removes the redundant setup-sidebar exit and keeps
 the footer Back action. [Single Back navigation and staging evidence](SINGLE_BACK_NAVIGATION_2026-10-05.md)
-records this presentation change and the latest staging deployment.
+records that presentation change and its staging deployment.
+
+The 5 October owner report adds local saved-setup discovery to Projects.
+[Saved draft visibility, resume and latest staging evidence](SAVED_DRAFT_DISCOVERY_2026-10-05.md)
+records the current deployment.
 
 - [Requirements](registers/Requirements.csv)
 - [Acceptance catalogue](registers/Acceptance_Tests.csv)
@@ -28,6 +32,7 @@ records this presentation change and the latest staging deployment.
 - [Workspace integration correction, staging alias and validation boundaries](WORKSPACE_INTEGRATION_2026-10-04.md)
 - [Universal workspace chrome and explicit local-save correction](UNIVERSAL_WORKSPACE_AND_DRAFT_SAVE_2026-10-04.md)
 - [Direct project navigation and fresh Create correction](DIRECT_PROJECT_NAVIGATION_2026-10-04.md)
-- [Single Back navigation and latest staging evidence](SINGLE_BACK_NAVIGATION_2026-10-05.md)
+- [Single Back navigation and previous staging evidence](SINGLE_BACK_NAVIGATION_2026-10-05.md)
+- [Saved setup discovery and latest staging evidence](SAVED_DRAFT_DISCOVERY_2026-10-05.md)
 
 The source acceptance catalogue retains its original Not run status. Candidate evidence and unresolved gates are recorded separately in IMPLEMENTATION_EVIDENCE.md; source requirements must not be silently rewritten into passes.
