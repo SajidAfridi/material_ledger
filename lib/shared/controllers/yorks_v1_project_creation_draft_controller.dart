@@ -59,6 +59,7 @@ class YorksV1ProjectCreationDraftController
   final List<({int revision, Completer<void> completion})> _waiters = [];
   bool _disposed = false;
   bool _reportedSaved = false;
+  bool _ownershipClaimed = false;
 
   Future<void> get initialized => _initialization;
 
@@ -123,7 +124,29 @@ class YorksV1ProjectCreationDraftController
     }
   }
 
-  Future<void> _claim({String? legacyRaw, bool takeOver = false}) async {
+  Future<void> _claim({
+    String? legacyRaw,
+    bool takeOver = false,
+    bool recoveringFailedClaim = false,
+  }) async {
+    if (_disposed) return;
+    void preserveProposal(
+      ProjectDraftAtomicTransaction tx,
+      YorksV1ProjectCreationDraft proposal,
+      String reason,
+    ) {
+      tx.write(
+        '$storageKey:quarantine:${proposal.draftId}:$_writerId',
+        jsonEncode({
+          'raw': _encodeRecord(proposal),
+          'reason': reason,
+          'ownerAuthUserId': _ownerAuthUserId,
+          'backendIdentity': _backendIdentity,
+          'capturedAt': DateTime.now().toUtc().toIso8601String(),
+        }),
+      );
+    }
+
     try {
       if (state.storageState ==
           YorksV1ProjectDraftStorageState.recoveryRequired) {
@@ -146,15 +169,59 @@ class YorksV1ProjectCreationDraftController
         return;
       }
       final claimed = await _storage.transaction(storageKey, (tx) {
+        if (_disposed) {
+          throw const ProjectDraftStorageException('controller_disposed');
+        }
         final raw = tx.read(storageKey);
         final record = raw == null ? <String, dynamic>{} : _record(raw);
+        final retained = raw == null ? null : _draftFromRecord(record);
+        if (retained != null &&
+            (retained.ownerAuthUserId != _ownerAuthUserId ||
+                retained.backendIdentity != _backendIdentity ||
+                retained.mode != state.mode ||
+                retained.projectId != state.projectId)) {
+          throw const FormatException('Project draft context mismatch');
+        }
         final owner = record['ownerWriterId'] as String?;
         final epoch = record['writerEpoch'] as int? ?? 0;
         if (record['retired'] != true &&
             owner != null &&
             owner != _writerId &&
             !takeOver) {
-          return (draft: _draftFromRecord(record), acquired: false);
+          final hasUnpublishedRecovery =
+              recoveringFailedClaim && _pending != null;
+          final quarantineReason = hasUnpublishedRecovery
+              ? 'owner_acquired_during_failed_claim'
+              : null;
+          if (hasUnpublishedRecovery) {
+            preserveProposal(tx, state, quarantineReason!);
+          }
+          return (
+            draft: hasUnpublishedRecovery ? state : retained!,
+            acquired: false,
+            recoveryRequired: false,
+            quarantineReason: quarantineReason,
+          );
+        }
+        if (recoveringFailedClaim &&
+            _pending != null &&
+            retained != null &&
+            (record['retired'] == true ||
+                retained.draftId != state.draftId ||
+                retained.revision > state.acknowledgedRevision)) {
+          // Storage may have changed while the initial read/claim was failing.
+          // A proposal typed against that uncertain snapshot must not replace
+          // a different or newer durable draft, or resurrect a retired result.
+          // Keep both complete records for explicit recovery without taking
+          // ownership or silently assigning one proposal to the other's ID.
+          const quarantineReason = 'retained_draft_changed_during_failed_claim';
+          preserveProposal(tx, state, quarantineReason);
+          return (
+            draft: state,
+            acquired: false,
+            recoveryRequired: true,
+            quarantineReason: quarantineReason,
+          );
         }
         // Initial restoration may race the previous owner's last save/release.
         // Every ownership acquisition reads the latest proposal under the lock.
@@ -169,19 +236,50 @@ class YorksV1ProjectCreationDraftController
           );
         }
         tx.write(storageKey, _encodeRecord(draft));
-        return (draft: draft, acquired: true);
+        return (
+          draft: draft,
+          acquired: true,
+          recoveryRequired: false,
+          quarantineReason: null,
+        );
       });
       if (_disposed) return;
       if (!claimed.acquired) {
-        state = claimed.draft.copyWith(
-          storageState: YorksV1ProjectDraftStorageState.ownedElsewhere,
+        _ownershipClaimed = false;
+        var preserved = claimed.draft;
+        final quarantineReason = claimed.quarantineReason;
+        // Native storage acknowledges writes asynchronously. Input can advance
+        // while an unpublished proposal is being quarantined. Preserve each
+        // newer revision before publishing a read-only refusal, so the final
+        // proposal and durable recovery record cannot fall back to older input.
+        while (!_disposed &&
+            quarantineReason != null &&
+            (state.draftId != preserved.draftId ||
+                state.revision != preserved.revision)) {
+          preserved = await _storage.transaction(storageKey, (tx) {
+            if (_disposed) {
+              throw const ProjectDraftStorageException('controller_disposed');
+            }
+            final proposal = state;
+            preserveProposal(tx, proposal, quarantineReason);
+            return proposal;
+          });
+        }
+        if (_disposed) return;
+        state = preserved.copyWith(
+          storageState: claimed.recoveryRequired
+              ? YorksV1ProjectDraftStorageState.recoveryRequired
+              : YorksV1ProjectDraftStorageState.ownedElsewhere,
         );
         _capture(AnalyticsEvent.projectSetupConflictDetected, {
           AnalyticsProperty.mode: state.mode.name,
-          AnalyticsProperty.conflictType: 'local_owner',
+          AnalyticsProperty.conflictType: claimed.recoveryRequired
+              ? 'stale_prerequisite'
+              : 'local_owner',
         });
         return;
       }
+      _ownershipClaimed = true;
       final changedWhileInitializing =
           !takeOver && state.revision > claimed.draft.revision;
       state = (changedWhileInitializing ? state : claimed.draft).copyWith(
@@ -201,6 +299,7 @@ class YorksV1ProjectCreationDraftController
         });
       }
     } catch (_) {
+      _ownershipClaimed = false;
       if (!_disposed) {
         state = state.copyWith(
           storageState: YorksV1ProjectDraftStorageState.failed,
@@ -358,6 +457,25 @@ class YorksV1ProjectCreationDraftController
 
   Future<void> _drain(String saveTrigger) async {
     await _initialization;
+    // An initial local-storage failure can happen before an owner envelope
+    // exists. Retry the same fenced acquisition when storage recovers; an
+    // ordinary atomic write alone would remain stuck on owner_missing forever.
+    // The claim retains newer in-memory input and never takes over another tab.
+    if (!_ownershipClaimed && !state.isReadOnly) {
+      await _claim(recoveringFailedClaim: true);
+    }
+    if (!_disposed && (!_ownershipClaimed || state.isReadOnly)) {
+      _pending = null;
+      for (final waiter in _waiters) {
+        waiter.completion.completeError(
+          ProjectDraftStorageException(
+            state.isReadOnly ? 'draft_not_writable' : 'owner_claim_failed',
+          ),
+        );
+      }
+      _waiters.clear();
+      return;
+    }
     while (_pending != null && !_disposed) {
       final snapshot = _pending!.copyWith(writerEpoch: state.writerEpoch);
       _pending = null;

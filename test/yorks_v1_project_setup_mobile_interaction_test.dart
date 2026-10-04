@@ -19,6 +19,7 @@ import 'package:material_ledger/shared/models/yorks_v1_project_setup_shell_strin
 import 'package:material_ledger/shared/models/yorks_v1_project_strings.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_team_directory_member.dart';
 import 'package:material_ledger/shared/models/yorks_v1_role.dart';
+import 'package:material_ledger/shared/models/yorks_v1_shell_strings.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
 import 'package:material_ledger/shared/providers/session_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_feature_flags_provider.dart';
@@ -57,7 +58,7 @@ void main() {
   });
 
   for (final stage in YorksV1ProjectCreationStage.values) {
-    testWidgets('mobile reference ${stage.name} — app-only431×863', (
+    testWidgets('mobile reference ${stage.name} — content-only431×863', (
       tester,
     ) async {
       final fixture = await _fixture(stage, filesReviewed: true);
@@ -90,7 +91,7 @@ void main() {
       final shell = _key('project-setup-mobile-shell');
       expect(shell, findsOneWidget);
       expect(tester.getSize(shell), _referenceViewport);
-      expect(_key('project-setup-mobile-header'), findsOneWidget);
+      _expectContentOnlyChrome();
       expect(_key('project-setup-mobile-stepper'), findsOneWidget);
       final stepper = tester.getRect(_key('project-setup-mobile-stepper'));
       expect(stepper.top, greaterThanOrEqualTo(0));
@@ -118,7 +119,7 @@ void main() {
     });
   }
 
-  testWidgets('mobile reference confirmed result — app-only431×863', (
+  testWidgets('mobile reference confirmed result — content-only431×863', (
     tester,
   ) async {
     final fixture = await _fixture(YorksV1ProjectCreationStage.reviewAndCreate);
@@ -155,6 +156,7 @@ void main() {
     );
     final shell = _key('project-setup-mobile-shell');
     expect(tester.getSize(shell), _referenceViewport);
+    _expectContentOnlyChrome();
     expect(_key('yorks-v1-project-create'), findsNothing);
     _expectVisibleButtonTargets(tester, _referenceViewport);
     expect(tester.takeException(), isNull);
@@ -546,6 +548,15 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+}
+
+// Project setup owns its fields/stages/actions only. Shared workspace chrome is
+// asserted separately by the real Projects-to-Create integration fixture.
+void _expectContentOnlyChrome() {
+  expect(find.text(YorksV1ShellStrings.companyName.primary), findsNothing);
+  expect(_key('project-setup-mobile-header'), findsNothing);
+  expect(_key('project-setup-workspace-navigation'), findsNothing);
+  expect(_key('project-setup-workspace-search'), findsNothing);
 }
 
 Finder _key(String value) => find.byKey(ValueKey(value));

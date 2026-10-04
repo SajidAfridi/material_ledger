@@ -1,23 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
-import '../../../../app/router.dart';
-import '../../../../app/yorks_v1_workspace_navigation_scope.dart';
-import '../../../../app/yorks_v1_workspace_shell.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/yorks_v1_project_creation_draft.dart';
 import '../../../../shared/models/yorks_v1_project_strings.dart';
 import '../../../../shared/models/yorks_v1_project_setup_shell_strings.dart';
-import '../../../../shared/models/yorks_v1_shell_strings.dart';
-import '../../../../shared/providers/session_provider.dart';
-import '../../../../shared/providers/yorks_v1_identity_provider.dart';
-import '../../../../shared/providers/yorks_v1_workspace_status_provider.dart';
-import '../../../../shared/widgets/notification_bell.dart';
-import '../../../../shared/widgets/yorks_sign_out_action.dart';
 
 /// Phone and tablet presentation of the same server-authoritative setup flow.
 /// Safe areas belong to the device; the reference's OS chrome is not drawn.
@@ -72,12 +62,10 @@ class YorksV1ProjectSetupMobileShell extends ConsumerStatefulWidget {
 
 class _YorksV1ProjectSetupMobileShellState
     extends ConsumerState<YorksV1ProjectSetupMobileShell> {
-  final _accountMenu = MenuController();
   final _stageNodes = [
     for (final stage in YorksV1ProjectCreationStage.values)
       FocusNode(debugLabel: 'project-setup-mobile-${stage.name}'),
   ];
-  static const _navy = Color(0xff173c63);
   static const _ink = Color(0xff08244d);
   static const _muted = Color(0xff607aa5);
   static const _line = Color(0xffdbe5ef);
@@ -100,29 +88,6 @@ class _YorksV1ProjectSetupMobileShellState
       node.dispose();
     }
     super.dispose();
-  }
-
-  void _openNavigation() {
-    final workspace = YorksV1WorkspaceNavigationScope.maybeOf(context);
-    if (workspace != null) {
-      workspace.openNavigation();
-    } else {
-      context.go(RoutePaths.yorksV1MobileMore);
-    }
-  }
-
-  void _openSearch() {
-    final workspace = YorksV1WorkspaceNavigationScope.maybeOf(context);
-    if (workspace != null) {
-      workspace.openSearch();
-    } else {
-      context.go(RoutePaths.yorksV1MobileMore);
-    }
-  }
-
-  void _closeThenGo(String path) {
-    _accountMenu.close();
-    context.go(path);
   }
 
   TranslatableString _stageCopy(YorksV1ProjectCreationStage stage) =>
@@ -170,209 +135,85 @@ class _YorksV1ProjectSetupMobileShellState
 
   @override
   Widget build(BuildContext context) {
-    final language = widget.language;
-    final user = ref.watch(currentUserProvider);
-    final role = ref.watch(yorksV1CurrentRoleProvider);
-    final status = ref.watch(yorksV1WorkspaceStatusProvider);
-    final name = user?.fullName ?? '';
-    final initials = name
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((s) => s.isNotEmpty)
-        .take(2)
-        .map((s) => s.characters.first)
-        .join()
-        .toUpperCase();
-    return CallbackShortcuts(
-      bindings: {
-        const SingleActivator(LogicalKeyboardKey.keyK, meta: true): _openSearch,
-        const SingleActivator(LogicalKeyboardKey.keyK, control: true):
-            _openSearch,
-      },
-      child: Theme(
-        data: Theme.of(context).copyWith(
-          visualDensity: VisualDensity.standard,
-          iconButtonTheme: IconButtonThemeData(
-            style: IconButton.styleFrom(
-              minimumSize: const Size(44, 44),
-              padding: const EdgeInsets.all(7),
-              tapTargetSize: MaterialTapTargetSize.padded,
-            ),
-          ),
-          outlinedButtonTheme: OutlinedButtonThemeData(
-            style: OutlinedButton.styleFrom(
-              foregroundColor: _ink,
-              backgroundColor: Colors.white,
-              side: const BorderSide(color: Color(0xffbdcee4)),
-              minimumSize: const Size(44, 44),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(5),
-              ),
-              textStyle: _text(12, weight: FontWeight.w600),
-            ),
-          ),
-          filledButtonTheme: FilledButtonThemeData(
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xff084477),
-              foregroundColor: Colors.white,
-              disabledBackgroundColor: const Color(0xffdfe5ed),
-              disabledForegroundColor: const Color(0xff7488a5),
-              minimumSize: const Size(44, 44),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(5),
-              ),
-              textStyle: _text(12, weight: FontWeight.w600),
-            ),
+    return Theme(
+      data: Theme.of(context).copyWith(
+        visualDensity: VisualDensity.standard,
+        iconButtonTheme: IconButtonThemeData(
+          style: IconButton.styleFrom(
+            minimumSize: const Size(44, 44),
+            padding: const EdgeInsets.all(7),
+            tapTargetSize: MaterialTapTargetSize.padded,
           ),
         ),
-        child: Scaffold(
-          backgroundColor: Colors.white,
-          body: LayoutBuilder(
-            builder: (context, constraints) {
-              // Web navigation may report a transient 1×1 surface before
-              // its real viewport arrives. Defer only the chrome; keep
-              // the flow, scaffold and messenger registered for outcomes.
-              if (constraints.maxWidth < AppSpacing.minTapTarget ||
-                  constraints.maxHeight < AppSpacing.minTapTarget * 2) {
-                return const SizedBox.shrink();
-              }
-              return KeyedSubtree(
-                key: const ValueKey('project-setup-mobile-shell'),
-                child: Column(
-                  children: [
-                    Material(
-                      key: const ValueKey('project-setup-mobile-header'),
-                      color: _navy,
-                      child: SafeArea(
-                        bottom: false,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: Row(
-                            children: [
-                              IconButton(
-                                key: const ValueKey(
-                                  'project-setup-workspace-navigation',
-                                ),
-                                tooltip: YorksV1ShellStrings.quickNavigation
-                                    .active(language),
-                                onPressed: _openNavigation,
-                                icon: const Icon(
-                                  Icons.menu,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  YorksV1ShellStrings.companyName.active(
-                                    language,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: _text(
-                                    16,
-                                    color: Colors.white,
-                                    weight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                              IconButton(
-                                key: const ValueKey(
-                                  'project-setup-workspace-search',
-                                ),
-                                tooltip: YorksV1ProjectSetupShellStrings.search
-                                    .active(language),
-                                onPressed: _openSearch,
-                                icon: const Icon(
-                                  Icons.search,
-                                  color: Colors.white,
-                                  size: 24,
-                                ),
-                              ),
-                              const NotificationBell(
-                                foregroundColor: Colors.white,
-                              ),
-                              MenuAnchor(
-                                controller: _accountMenu,
-                                menuChildren: [
-                                  YorksAccountPopover(
-                                    fallbackName: name,
-                                    fallbackRole: role,
-                                    language: language,
-                                    workspaceStatus: status,
-                                    onOpenProfile: () => _closeThenGo(
-                                      RoutePaths.engineerProfile,
-                                    ),
-                                    onNotifications: () =>
-                                        _closeThenGo(RoutePaths.notifications),
-                                    onHelp: () =>
-                                        _closeThenGo(RoutePaths.about),
-                                    onSignOut: () async {
-                                      _accountMenu.close();
-                                      await showYorksSignOut(context, ref);
-                                    },
-                                  ),
-                                ],
-                                builder: (context, controller, child) =>
-                                    IconButton(
-                                      key: const ValueKey(
-                                        'project-setup-account',
-                                      ),
-                                      tooltip: AppStrings.profile.active(
-                                        language,
-                                      ),
-                                      onPressed: () => controller.isOpen
-                                          ? controller.close()
-                                          : controller.open(),
-                                      icon: CircleAvatar(
-                                        radius: 15,
-                                        backgroundColor: const Color(
-                                          0xffedf5fb,
-                                        ),
-                                        child: Text(
-                                          initials.isEmpty ? '•' : initials,
-                                          style: _text(
-                                            11,
-                                            weight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: SafeArea(
-                        top: false,
-                        bottom: widget.completed,
-                        child: SingleChildScrollView(
-                          controller: widget.scrollController,
-                          padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _heading(),
-                              const SizedBox(height: 12),
-                              _stepper(),
-                              const SizedBox(height: 18),
-                              ...widget.notices,
-                              widget.body,
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    if (!widget.completed) _footer(),
-                  ],
-                ),
-              );
-            },
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: _ink,
+            backgroundColor: Colors.white,
+            side: const BorderSide(color: Color(0xffbdcee4)),
+            minimumSize: const Size(44, 44),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(5),
+            ),
+            textStyle: _text(12, weight: FontWeight.w600),
           ),
+        ),
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xff084477),
+            foregroundColor: Colors.white,
+            disabledBackgroundColor: const Color(0xffdfe5ed),
+            disabledForegroundColor: const Color(0xff7488a5),
+            minimumSize: const Size(44, 44),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(5),
+            ),
+            textStyle: _text(12, weight: FontWeight.w600),
+          ),
+        ),
+      ),
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        body: LayoutBuilder(
+          builder: (context, constraints) {
+            // Web navigation may report a transient 1×1 surface before
+            // its real viewport arrives. Defer only the chrome; keep
+            // the flow, scaffold and messenger registered for outcomes.
+            if (constraints.maxWidth < AppSpacing.minTapTarget ||
+                constraints.maxHeight < AppSpacing.minTapTarget * 2) {
+              return const SizedBox.shrink();
+            }
+            return KeyedSubtree(
+              key: const ValueKey('project-setup-mobile-shell'),
+              child: Column(
+                children: [
+                  Expanded(
+                    child: SafeArea(
+                      top: false,
+                      bottom: widget.completed,
+                      child: SingleChildScrollView(
+                        controller: widget.scrollController,
+                        padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _heading(),
+                            const SizedBox(height: 12),
+                            _stepper(),
+                            const SizedBox(height: 18),
+                            ...widget.notices,
+                            widget.body,
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (!widget.completed) _footer(),
+                ],
+              ),
+            );
+          },
         ),
       ),
     );
@@ -615,16 +456,15 @@ class _YorksV1ProjectSetupMobileShellState
               ),
             ),
             if (!largeText)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 2),
-                child: Text(
-                  copy,
-                  textAlign: TextAlign.center,
-                  style: _text(
-                    11,
-                    color: selected ? _blue : _muted,
-                    weight: selected ? FontWeight.w600 : FontWeight.w400,
-                  ),
+              Text(
+                copy,
+                textAlign: TextAlign.center,
+                softWrap: stage != YorksV1ProjectCreationStage.attachments,
+                overflow: TextOverflow.visible,
+                style: _text(
+                  stage == YorksV1ProjectCreationStage.attachments ? 10 : 11,
+                  color: selected ? _blue : _muted,
+                  weight: selected ? FontWeight.w600 : FontWeight.w400,
                 ),
               ),
           ],

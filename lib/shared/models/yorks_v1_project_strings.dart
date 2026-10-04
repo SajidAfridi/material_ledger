@@ -32,6 +32,12 @@ abstract final class YorksV1ProjectStrings {
     ur: "تبدیلیاں اس ڈیوائس پر محفوظ ہیں۔ پراجیکٹ پر لاگو نہیں ہوئیں۔",
     hi: "परिवर्तन इस डिवाइस पर सहेजे गए हैं। प्रोजेक्ट पर लागू नहीं हुए हैं।",
   );
+  static const changedDuringLocalSave = TranslatableString(
+    en: 'Draft saved on this device. You changed the input while saving; review it and save again before leaving.',
+    ar: 'تم حفظ المسودة على هذا الجهاز. غيّرت البيانات أثناء الحفظ؛ راجعها واحفظها مرة أخرى قبل المغادرة.',
+    ur: 'ڈرافٹ اس ڈیوائس پر محفوظ ہو گیا۔ محفوظ ہوتے وقت اندراج تبدیل ہوا؛ چھوڑنے سے پہلے جائزہ لیں اور دوبارہ محفوظ کریں۔',
+    hi: 'ड्राफ़्ट इस डिवाइस पर सहेजा गया। सहेजते समय आपने जानकारी बदली; जाने से पहले उसकी समीक्षा करके फिर सहेजें।',
+  );
   static const draftOwnedElsewhere = TranslatableString(
     en: "This draft is being edited in another tab.",
     ar: "يتم تحرير هذه المسودة في علامة تبويب أخرى.",

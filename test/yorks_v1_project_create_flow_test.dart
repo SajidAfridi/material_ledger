@@ -36,6 +36,7 @@ import 'package:material_ledger/shared/providers/yorks_v1_project_setup_coordina
 import 'package:material_ledger/shared/providers/yorks_v1_project_setup_navigation_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_project_reference_advisory_provider.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_project_draft_storage_native.dart';
+import 'package:material_ledger/shared/repositories/yorks_v1_project_draft_store.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_project_team_directory_provider.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_project_repository.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_project_team_directory_repository.dart';
@@ -73,6 +74,7 @@ void main() {
     YorksV1DocumentFileService? documentFileService,
     AnalyticsService? analytics,
     List<YorksV1ProjectPortfolioItem> Function()? portfolioItems,
+    ProjectDraftAtomicStorage Function(SharedPreferences)? draftStorageFactory,
   }) async {
     SharedPreferences.setMockInitialValues({});
     repository.creatorRole = role;
@@ -106,7 +108,8 @@ void main() {
           ProjectSetupReviewedRepositoryAdapter(repository),
         ),
         yorksV1ProjectDraftAtomicStorageProvider.overrideWithValue(
-          _SupportedTestDraftStorage(preferences),
+          draftStorageFactory?.call(preferences) ??
+              _SupportedTestDraftStorage(preferences),
         ),
         yorksV1ProjectTeamDirectoryRepositoryProvider.overrideWithValue(
           teamDirectoryRepository ?? _FakeTeamDirectoryRepository(),
@@ -2407,6 +2410,275 @@ void main() {
   );
 
   testWidgets(
+    'a rich restored draft keeps its acknowledged manual save through navigation checkpoints',
+    (tester) async {
+      final container = await createContainer(
+        role: YorksV1Role.projectEngineer,
+        repository: _FakeProjectRepository(),
+      );
+      final provider = yorksV1ProjectSetupCreationDraftProvider(_authUserId);
+      final controller = container.read(provider.notifier);
+      await controller.initialized;
+      await controller.save(
+        container
+            .read(provider)
+            .copyWith(
+              reference: 'YRA-322',
+              name: 'NEXUS — Four substations',
+              clientName: 'TAQA Transmission',
+              jobOrContractReference: 'C-4587',
+              siteLocation: 'Al Dhafra, Abu Dhabi',
+              startDate: DateTime.utc(2024, 3, 12),
+              endDate: DateTime.utc(2024, 11, 30),
+              notes: 'Four new substations as part of the Nexus programme.',
+              parties: const [
+                YorksV1ProjectPartyInput(
+                  kind: YorksV1ProjectPartyKind.consultant,
+                  name: 'AtkinsRéalis',
+                ),
+                YorksV1ProjectPartyInput(
+                  kind: YorksV1ProjectPartyKind.mainContractor,
+                  name: 'Balfour Beatty',
+                ),
+                YorksV1ProjectPartyInput(
+                  kind: YorksV1ProjectPartyKind.subcontractor,
+                  name: 'Northfield Electrical Ltd',
+                ),
+                YorksV1ProjectPartyInput(
+                  kind: YorksV1ProjectPartyKind.subcontractor,
+                  name: 'Delta Mechanical Services',
+                ),
+                YorksV1ProjectPartyInput(
+                  kind: YorksV1ProjectPartyKind.otherContractor,
+                  name: 'Siteworks UK',
+                ),
+                YorksV1ProjectPartyInput(
+                  kind: YorksV1ProjectPartyKind.otherContractor,
+                  name: 'Crane Hire Co.',
+                ),
+                YorksV1ProjectPartyInput(
+                  kind: YorksV1ProjectPartyKind.otherContractor,
+                  name: 'Safety Solutions',
+                ),
+              ],
+              attachments: const [
+                YorksV1ProjectAttachmentInput(
+                  localId: 'fixture-file-1',
+                  fileName: 'DF3W_General_Arrangement.pdf',
+                  mimeType: 'application/pdf',
+                  sizeBytes: 2400000,
+                ),
+                YorksV1ProjectAttachmentInput(
+                  localId: 'fixture-file-2',
+                  fileName: 'Load_Calculations_DF3W.xlsx',
+                  mimeType:
+                      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                  sizeBytes: 1100000,
+                ),
+                YorksV1ProjectAttachmentInput(
+                  localId: 'fixture-file-3',
+                  fileName: 'Programme_DF3W.docx',
+                  mimeType:
+                      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                  sizeBytes: 856000,
+                ),
+                YorksV1ProjectAttachmentInput(
+                  localId: 'fixture-file-4',
+                  fileName: 'Electrical_Schematics.pdf',
+                  mimeType: 'application/pdf',
+                  sizeBytes: 1800000,
+                ),
+              ],
+              rawEditorState: const {
+                'reviewedOperationalFiles': [
+                  'fixture-file-1:2400000',
+                  'fixture-file-2:1100000',
+                  'fixture-file-3:856000',
+                  'fixture-file-4:1800000',
+                ],
+              },
+              buildings: const [
+                YorksV1ProjectBuildingInput(
+                  localRowId: 'fixture-b1',
+                  code: 'DF3W',
+                  name: 'DF3W substation',
+                  floorsOrLevels: ['Ground', 'Roof'],
+                  deliveryAddress: 'Zone 1, metro depot',
+                  hasFrpRoom: true,
+                ),
+                YorksV1ProjectBuildingInput(
+                  localRowId: 'fixture-b2',
+                  code: 'DF4W',
+                  name: 'DF4W substation',
+                  floorsOrLevels: ['Ground'],
+                  deliveryAddress: 'Al Dhafra, Abu Dhabi',
+                  hasFrpRoom: false,
+                ),
+                YorksV1ProjectBuildingInput(
+                  localRowId: 'fixture-b3',
+                  code: 'DF6W',
+                  name: 'DF6W substation',
+                  floorsOrLevels: ['Ground', 'L1'],
+                ),
+                YorksV1ProjectBuildingInput(
+                  localRowId: 'fixture-b4',
+                  code: 'DF7W',
+                  name: 'DF7W substation',
+                  hasFrpRoom: true,
+                ),
+              ],
+            ),
+      );
+      await _pumpScreen(tester, container);
+      await tester.tap(find.byKey(const ValueKey('project-setup-save-draft')));
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byType(SnackBar),
+          matching: find.text(YorksV1ProjectStrings.draftSaved.primary),
+        ),
+        findsOneWidget,
+      );
+      expect(container.read(provider).isAcknowledged, isTrue);
+      final startDateInput = tester
+          .widgetList<TextFormField>(find.byType(TextFormField))
+          .firstWhere((field) => field.controller?.text == '12/03/2024');
+      // Flutter web updates selection when a hydrated date field receives or
+      // loses focus. This is a controller notification without a text edit.
+      startDateInput.controller!.selection = const TextSelection.collapsed(
+        offset: 0,
+      );
+      await tester.pumpAndSettle();
+      final leaving = container
+          .read(yorksV1ProjectSetupNavigationGuardProvider)
+          .canLeave();
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(await leaving, isTrue);
+      expect(container.read(provider).attachments.length, 4);
+      expect(container.read(provider).buildings.length, 4);
+      startDateInput.controller!.text = '12/10/';
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+      expect(
+        container.read(provider).rawEditorState['dateStartText'],
+        '12/10/',
+      );
+      final editedLeave = container
+          .read(yorksV1ProjectSetupNavigationGuardProvider)
+          .canLeave();
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsOneWidget);
+      await tester.tap(find.text(YorksV1ProjectStrings.keepWorking.primary));
+      await tester.pumpAndSettle();
+      expect(await editedLeave, isFalse);
+    },
+  );
+
+  testWidgets(
+    'manual local save reports failure, retries, and only then permits a direct exit',
+    (tester) async {
+      late _ManualSaveTestDraftStorage storage;
+      final repository = _FakeProjectRepository();
+      final container = await createContainer(
+        role: YorksV1Role.projectEngineer,
+        repository: repository,
+        draftStorageFactory: (preferences) =>
+            storage = _ManualSaveTestDraftStorage(preferences),
+      );
+      await _pumpScreen(tester, container);
+      await tester.enterText(
+        find.byKey(const ValueKey('yorks-v1-project-name')),
+        'Keep this local proposal',
+      );
+      storage.failWrites = true;
+      await tester.tap(find.byKey(const ValueKey('project-setup-save-draft')));
+      await tester.pumpAndSettle();
+      expect(
+        find.text(YorksV1ProjectStrings.localSaveFailed.primary),
+        findsWidgets,
+      );
+      expect(
+        await container
+            .read(yorksV1ProjectSetupNavigationGuardProvider)
+            .canLeave(),
+        isFalse,
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      final provider = yorksV1ProjectSetupCreationDraftProvider(_authUserId);
+      expect(container.read(provider).name, 'Keep this local proposal');
+      expect(container.read(provider).isAcknowledged, isFalse);
+
+      storage.failWrites = false;
+      await tester.tap(find.byKey(const ValueKey('project-setup-save-draft')));
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byType(SnackBar),
+          matching: find.text(YorksV1ProjectStrings.draftSaved.primary),
+        ),
+        findsOneWidget,
+      );
+      expect(container.read(provider).isAcknowledged, isTrue);
+      final permitted = container
+          .read(yorksV1ProjectSetupNavigationGuardProvider)
+          .canLeave();
+      await tester.pumpAndSettle();
+      expect(await permitted, isTrue);
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(repository.receivedCreationInputs, isEmpty);
+    },
+  );
+
+  testWidgets(
+    'typing during a manual save is retained and requires another leave decision',
+    (tester) async {
+      late _ManualSaveTestDraftStorage storage;
+      final container = await createContainer(
+        role: YorksV1Role.projectEngineer,
+        repository: _FakeProjectRepository(),
+        draftStorageFactory: (preferences) =>
+            storage = _ManualSaveTestDraftStorage(preferences),
+      );
+      await _pumpScreen(tester, container);
+      await tester.enterText(
+        find.byKey(const ValueKey('yorks-v1-project-name')),
+        'Input when Save was pressed',
+      );
+      final commit = Completer<void>();
+      storage.nextTransaction = commit;
+      await tester.tap(find.byKey(const ValueKey('project-setup-save-draft')));
+      await tester.pump();
+      await tester.enterText(
+        find.byKey(const ValueKey('yorks-v1-project-name')),
+        'New typing while storage was pending',
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+      commit.complete();
+      await tester.pumpAndSettle();
+      final provider = yorksV1ProjectSetupCreationDraftProvider(_authUserId);
+      expect(
+        container.read(provider).name,
+        'New typing while storage was pending',
+      );
+      expect(container.read(provider).isAcknowledged, isTrue);
+      expect(
+        find.text(YorksV1ProjectStrings.changedDuringLocalSave.primary),
+        findsOneWidget,
+      );
+      final leaving = container
+          .read(yorksV1ProjectSetupNavigationGuardProvider)
+          .canLeave();
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsOneWidget);
+      await tester.tap(find.text(YorksV1ProjectStrings.keepWorking.primary));
+      await tester.pumpAndSettle();
+      expect(await leaving, isFalse);
+    },
+  );
+
+  testWidgets(
     'navigation guard acknowledges a field still inside the debounce window',
     (tester) async {
       final container = await createContainer(
@@ -3270,6 +3542,26 @@ class _SupportedTestDraftStorage extends SharedPreferencesProjectDraftStorage {
   _SupportedTestDraftStorage(super.preferences);
   @override
   bool get supportsAtomicOwnership => true;
+}
+
+class _ManualSaveTestDraftStorage extends _SupportedTestDraftStorage {
+  _ManualSaveTestDraftStorage(super.preferences);
+  bool failWrites = false;
+  Completer<void>? nextTransaction;
+
+  @override
+  Future<T> transaction<T>(
+    String lockKey,
+    T Function(ProjectDraftAtomicTransaction transaction) work,
+  ) async {
+    final gate = nextTransaction;
+    nextTransaction = null;
+    if (gate != null) await gate.future;
+    if (failWrites) {
+      throw const ProjectDraftStorageException('synthetic_unavailable');
+    }
+    return super.transaction(lockKey, work);
+  }
 }
 
 class _ThrowingAnalyticsService extends NoopAnalyticsService {

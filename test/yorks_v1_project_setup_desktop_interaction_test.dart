@@ -23,6 +23,7 @@ import 'package:material_ledger/shared/models/yorks_v1_project_setup_operation.d
 import 'package:material_ledger/shared/models/yorks_v1_project_setup_shell_strings.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_team_directory_member.dart';
 import 'package:material_ledger/shared/models/yorks_v1_role.dart';
+import 'package:material_ledger/shared/models/yorks_v1_shell_strings.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
 import 'package:material_ledger/shared/providers/session_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_document_file_service_provider.dart';
@@ -270,7 +271,9 @@ void main() {
   });
 
   for (final stage in YorksV1ProjectCreationStage.values) {
-    testWidgets('desktop reference ${stage.name} — 1536×1024', (tester) async {
+    testWidgets('desktop content reference ${stage.name} — 1536×1024', (
+      tester,
+    ) async {
       final fixture = await _fixture(
         stage,
         filesReviewed: true,
@@ -293,10 +296,11 @@ void main() {
       final shell = _key('project-setup-desktop-shell');
       expect(shell, findsOneWidget);
       expect(tester.getSize(shell), _viewport);
+      _expectContentOnlyChrome();
       final rail = tester.getRect(_key('project-setup-desktop-rail'));
       expect(rail.left, 0);
-      expect(rail.top, 56);
-      expect(rail.width, 232);
+      expect(rail.top, 0);
+      expect(rail.width, 196);
       final footerHeight = switch (stage) {
         YorksV1ProjectCreationStage.projectDetails => 86.0,
         YorksV1ProjectCreationStage.partiesAndAccess => 66.0,
@@ -309,9 +313,9 @@ void main() {
         final dropzone = tester.getRect(_key('yorks-v1-attachment-dropzone'));
         // Render-object bounds include the panel's border inset. Keep the
         // tolerance small enough to reject a platform-only intrinsic width.
-        expect(dropzone.left, closeTo(276, 2));
-        expect(dropzone.top, closeTo(294, 2));
-        expect(dropzone.width, closeTo(1222, 2));
+        expect(dropzone.left, closeTo(240, 2));
+        expect(dropzone.top, closeTo(238, 2));
+        expect(dropzone.width, closeTo(1258, 2));
         expect(dropzone.height, 233);
       }
       if (stage == YorksV1ProjectCreationStage.buildings ||
@@ -350,7 +354,9 @@ void main() {
     });
   }
 
-  testWidgets('desktop reference confirmed result — 1536×1024', (tester) async {
+  testWidgets('desktop content reference confirmed result — 1536×1024', (
+    tester,
+  ) async {
     final fixture = await _fixture(YorksV1ProjectCreationStage.reviewAndCreate);
     final scrollController = ScrollController();
     addTearDown(scrollController.dispose);
@@ -383,8 +389,9 @@ void main() {
     final shell = _key('project-setup-desktop-shell');
     final rail = tester.getRect(_key('project-setup-desktop-rail'));
     expect(tester.getSize(shell), _viewport);
-    expect(rail.top, 56);
-    expect(rail.width, 232);
+    _expectContentOnlyChrome();
+    expect(rail.top, 0);
+    expect(rail.width, 196);
     expect(rail.bottom, _viewport.height);
     expect(_key('yorks-v1-project-create'), findsNothing);
     expect(tester.takeException(), isNull);
@@ -744,6 +751,15 @@ Future<void> _reselectFile(WidgetTester tester, String localId) async {
   await _tapVisible(tester, _key('yorks-v1-desktop-file-menu-$localId'));
   await tester.tap(find.text(YorksV1ProjectStrings.fileReselect.primary).last);
   await tester.pumpAndSettle();
+}
+
+// This fixture renders only project setup content. The actual shared Yorks
+// header/sidebar and portfolio entry are covered by workspace integration tests.
+void _expectContentOnlyChrome() {
+  expect(find.text(YorksV1ShellStrings.companyName.primary), findsNothing);
+  expect(_key('project-setup-workspace-navigation'), findsNothing);
+  expect(_key('project-setup-workspace-search'), findsNothing);
+  expect(_key('project-setup-mobile-header'), findsNothing);
 }
 
 Finder _key(String value) => find.byKey(ValueKey(value));

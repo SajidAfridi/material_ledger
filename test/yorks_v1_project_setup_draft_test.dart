@@ -223,6 +223,366 @@ void main() {
       },
     );
 
+    test('manual save retries a failed initial ownership claim', () async {
+      store.failNextWrite = true;
+      final writer = controller();
+      addTearDown(writer.dispose);
+      await writer.initialized;
+      expect(writer.state.storageState, YorksV1ProjectDraftStorageState.failed);
+      expect(store.values['draft'], isNull);
+
+      await writer.save(
+        writer.state.copyWith(name: 'Keep input after storage recovers'),
+        saveTrigger: 'manual',
+      );
+      await writer.flush(saveTrigger: 'manual');
+
+      expect(writer.state.isAcknowledged, isTrue);
+      final persisted = jsonDecode(store.values['draft']!) as Map;
+      expect(
+        (persisted['draft'] as Map)['name'],
+        'Keep input after storage recovers',
+      );
+    });
+
+    test('a recovered claim never takes over another tab', () async {
+      store.failNextWrite = true;
+      final first = controller();
+      addTearDown(first.dispose);
+      await first.initialized;
+      final second = controller();
+      addTearDown(second.dispose);
+      await second.initialized;
+      await second.save(second.state.copyWith(name: 'Other tab owns this'));
+
+      await expectLater(
+        first.save(
+          first.state.copyWith(name: 'Must not overwrite other tab'),
+          saveTrigger: 'manual',
+        ),
+        throwsA(isA<ProjectDraftStorageException>()),
+      );
+      expect(
+        first.state.storageState,
+        YorksV1ProjectDraftStorageState.ownedElsewhere,
+      );
+      expect(first.state.name, 'Must not overwrite other tab');
+      final persisted = jsonDecode(store.values['draft']!) as Map;
+      expect((persisted['draft'] as Map)['name'], 'Other tab owns this');
+      expect(second.state.isAcknowledged, isTrue);
+      final recovered = store.values.entries
+          .where((entry) => entry.key.startsWith('draft:quarantine:'))
+          .single;
+      final raw = (jsonDecode(recovered.value) as Map)['raw'] as String;
+      expect(
+        ((jsonDecode(raw) as Map)['draft'] as Map)['name'],
+        'Must not overwrite other tab',
+      );
+    });
+
+    test(
+      'a failed quarantine keeps unpublished input writable and blocks exit acknowledgement',
+      () async {
+        store.failNextWrite = true;
+        final first = controller();
+        addTearDown(first.dispose);
+        await first.initialized;
+        final second = controller();
+        addTearDown(second.dispose);
+        await second.initialized;
+        await second.save(second.state.copyWith(name: 'Other durable owner'));
+        final original = store.values['draft'];
+        store.failNextWrite = true;
+        await expectLater(
+          first.save(
+            first.state.copyWith(name: 'Unpublished until storage recovers'),
+          ),
+          throwsA(isA<ProjectDraftStorageException>()),
+        );
+        expect(first.state.name, 'Unpublished until storage recovers');
+        expect(
+          first.state.storageState,
+          YorksV1ProjectDraftStorageState.failed,
+        );
+        expect(first.state.isReadOnly, isFalse);
+        expect(first.state.isAcknowledged, isFalse);
+        expect(store.values['draft'], original);
+        expect(
+          store.values.keys.where((key) => key.startsWith('draft:quarantine:')),
+          isEmpty,
+        );
+      },
+    );
+
+    for (final foreignOwner in [true, false]) {
+      test(
+        'a delayed ${foreignOwner ? 'foreign-owner' : 'retained-draft'} refusal preserves typing until quarantine acknowledgement',
+        () async {
+          store.failNextWrite = true;
+          final writer = controller();
+          addTearDown(writer.dispose);
+          await writer.initialized;
+          final retainedOwner = controller();
+          await retainedOwner.initialized;
+          await retainedOwner.save(
+            retainedOwner.state.copyWith(name: 'Existing durable input'),
+          );
+          if (foreignOwner) {
+            addTearDown(retainedOwner.dispose);
+          } else {
+            retainedOwner.dispose();
+            await store.transaction('draft', (_) {});
+          }
+          final original = store.values['draft'];
+          final proposalId = writer.state.draftId;
+          final proposalIntent = writer.state.creationIdempotencyKey;
+          final firstAcknowledgement = Completer<void>();
+          final latestAcknowledgement = Completer<void>();
+          store.barriers.addAll([firstAcknowledgement, latestAcknowledgement]);
+          final first = writer.save(
+            writer.state.copyWith(name: 'Earlier unpublished input'),
+          );
+          final firstRejected = expectLater(
+            first,
+            throwsA(isA<ProjectDraftStorageException>()),
+          );
+          await Future<void>.delayed(Duration.zero);
+          final latest = writer.save(
+            writer.state.copyWith(
+              name: 'Latest typing during acknowledgement',
+              rawEditorState: {'dateStartText': '2026-10-'},
+            ),
+          );
+          var latestCompleted = false;
+          final latestRejected = expectLater(
+            latest.whenComplete(() => latestCompleted = true),
+            throwsA(isA<ProjectDraftStorageException>()),
+          );
+
+          firstAcknowledgement.complete();
+          await Future<void>.delayed(Duration.zero);
+          expect(latestCompleted, isFalse);
+          expect(writer.state.isReadOnly, isFalse);
+          expect(writer.state.name, 'Latest typing during acknowledgement');
+          expect(store.values['draft'], original);
+
+          latestAcknowledgement.complete();
+          await Future.wait([firstRejected, latestRejected]);
+          expect(writer.state.name, 'Latest typing during acknowledgement');
+          expect(writer.state.rawEditorState['dateStartText'], '2026-10-');
+          expect(writer.state.draftId, proposalId);
+          expect(writer.state.creationIdempotencyKey, proposalIntent);
+          expect(writer.state.isAcknowledged, isFalse);
+          expect(
+            writer.state.storageState,
+            foreignOwner
+                ? YorksV1ProjectDraftStorageState.ownedElsewhere
+                : YorksV1ProjectDraftStorageState.recoveryRequired,
+          );
+          expect(store.values['draft'], original);
+          final recovered = store.values.entries
+              .where((entry) => entry.key.startsWith('draft:quarantine:'))
+              .single;
+          expect(recovered.key, contains(proposalId));
+          final raw = (jsonDecode(recovered.value) as Map)['raw'] as String;
+          final proposal = (jsonDecode(raw) as Map)['draft'] as Map;
+          expect(proposal['name'], 'Latest typing during acknowledgement');
+          expect(
+            (proposal['rawEditorState'] as Map)['dateStartText'],
+            '2026-10-',
+          );
+          expect(proposal['draftId'], proposalId);
+          expect(proposal['creationIdempotencyKey'], proposalIntent);
+          expect(proposal['revision'], writer.state.revision);
+        },
+      );
+    }
+
+    test(
+      'a failed newer quarantine acknowledgement keeps latest input and blocks read-only exit',
+      () async {
+        store.failNextWrite = true;
+        final writer = controller();
+        addTearDown(writer.dispose);
+        await writer.initialized;
+        final retainedOwner = controller();
+        addTearDown(retainedOwner.dispose);
+        await retainedOwner.initialized;
+        await retainedOwner.save(
+          retainedOwner.state.copyWith(name: 'Other durable owner'),
+        );
+        final original = store.values['draft'];
+        final firstAcknowledgement = Completer<void>();
+        final latestAcknowledgement = Completer<void>();
+        store.barriers.addAll([firstAcknowledgement, latestAcknowledgement]);
+        final first = writer.save(writer.state.copyWith(name: 'Earlier input'));
+        final firstRejected = expectLater(
+          first,
+          throwsA(isA<ProjectDraftStorageException>()),
+        );
+        await Future<void>.delayed(Duration.zero);
+        final latest = writer.save(writer.state.copyWith(name: 'Keep latest'));
+        final latestRejected = expectLater(
+          latest,
+          throwsA(isA<ProjectDraftStorageException>()),
+        );
+        firstAcknowledgement.complete();
+        await Future<void>.delayed(Duration.zero);
+        store.failNextWrite = true;
+        latestAcknowledgement.complete();
+        await Future.wait([firstRejected, latestRejected]);
+
+        expect(writer.state.name, 'Keep latest');
+        expect(writer.state.isAcknowledged, isFalse);
+        expect(writer.state.isReadOnly, isFalse);
+        expect(
+          writer.state.storageState,
+          YorksV1ProjectDraftStorageState.failed,
+        );
+        expect(store.values['draft'], original);
+
+        await expectLater(
+          writer.flush(),
+          throwsA(isA<ProjectDraftStorageException>()),
+        );
+        expect(writer.state.name, 'Keep latest');
+        expect(
+          writer.state.storageState,
+          YorksV1ProjectDraftStorageState.ownedElsewhere,
+        );
+        final recovered = store.values.entries
+            .where((entry) => entry.key.startsWith('draft:quarantine:'))
+            .single;
+        final raw = (jsonDecode(recovered.value) as Map)['raw'] as String;
+        expect(
+          ((jsonDecode(raw) as Map)['draft'] as Map)['name'],
+          'Keep latest',
+        );
+        expect(store.values['draft'], original);
+      },
+    );
+
+    for (final sameDraftId in [false, true]) {
+      test(
+        'failed claim recovery preserves ${sameDraftId ? 'newer revision' : 'different draft'} and unpublished input',
+        () async {
+          final retained =
+              YorksV1ProjectCreationDraft.empty(
+                ownerAuthUserId: 'owner',
+                backendIdentity: 'staging',
+                creationIdempotencyKey: 'retained-intent',
+              ).copyWith(
+                draftId: sameDraftId ? 'key-2' : 'retained-id',
+                name: 'Previously durable proposal',
+                revision: 5,
+                acknowledgedRevision: 5,
+              );
+          final original = jsonEncode({
+            'recordVersion': 1,
+            'ownerWriterId': null,
+            'writerEpoch': 3,
+            'retired': false,
+            'draft': retained.toJson(),
+          });
+          store.values['draft'] = original;
+          store.readMissingOnce = true;
+          store.failNextWrite = true;
+          final writer = controller();
+          addTearDown(writer.dispose);
+          await writer.initialized;
+          final unpublishedId = writer.state.draftId;
+          final unpublishedIntent = writer.state.creationIdempotencyKey;
+          await expectLater(
+            writer.save(
+              writer.state.copyWith(name: 'Input typed during failure'),
+            ),
+            throwsA(isA<ProjectDraftStorageException>()),
+          );
+          expect(
+            writer.state.storageState,
+            YorksV1ProjectDraftStorageState.recoveryRequired,
+          );
+          expect(writer.state.name, 'Input typed during failure');
+          expect(writer.state.draftId, unpublishedId);
+          expect(writer.state.creationIdempotencyKey, unpublishedIntent);
+          expect(store.values['draft'], original);
+          final recovered = store.values.entries
+              .where((entry) => entry.key.startsWith('draft:quarantine:'))
+              .single;
+          final raw = (jsonDecode(recovered.value) as Map)['raw'] as String;
+          final proposal = (jsonDecode(raw) as Map)['draft'] as Map;
+          expect(proposal['name'], 'Input typed during failure');
+          expect(proposal['draftId'], unpublishedId);
+          expect(proposal['creationIdempotencyKey'], unpublishedIntent);
+        },
+      );
+    }
+
+    test(
+      'disposing a queued recovery claim writes no owner envelope',
+      () async {
+        store.failNextWrite = true;
+        final writer = controller();
+        await writer.initialized;
+        final blocked = Completer<void>();
+        store.barriers.add(blocked);
+        final preceding = store.transaction(
+          'unrelated',
+          (tx) => tx.write('unrelated', 'keep'),
+        );
+        await Future<void>.delayed(Duration.zero);
+        final save = writer.save(
+          writer.state.copyWith(name: 'Cancelled pending recovery'),
+          saveTrigger: 'manual',
+        );
+        final rejected = expectLater(
+          save,
+          throwsA(isA<ProjectDraftStorageException>()),
+        );
+        await Future<void>.delayed(Duration.zero);
+        writer.dispose();
+        blocked.complete();
+        await preceding;
+        await rejected;
+        await store.transaction('drain', (_) {});
+        expect(store.values['draft'], isNull);
+        expect(store.values['unrelated'], 'keep');
+      },
+    );
+
+    test(
+      'flush awaits newer edits while the manual save is committing',
+      () async {
+        final writer = controller();
+        addTearDown(writer.dispose);
+        await writer.initialized;
+        final firstWrite = Completer<void>();
+        final newestWrite = Completer<void>();
+        store.barriers.addAll([firstWrite, newestWrite]);
+        final manual = writer.save(
+          writer.state.copyWith(name: 'Manual snapshot'),
+          saveTrigger: 'manual',
+        );
+        await Future<void>.delayed(Duration.zero);
+        final latest = writer.save(writer.state.copyWith(name: 'Newer typing'));
+        var flushed = false;
+        final flush = writer.flush(saveTrigger: 'manual').then((_) {
+          flushed = true;
+        });
+        firstWrite.complete();
+        await manual;
+        await Future<void>.delayed(Duration.zero);
+        expect(flushed, isFalse);
+        expect(writer.state.isAcknowledged, isFalse);
+        newestWrite.complete();
+        await Future.wait([latest, flush]);
+        expect(writer.state.isAcknowledged, isTrue);
+        expect(writer.state.name, 'Newer typing');
+        final persisted = jsonDecode(store.values['draft']!) as Map;
+        expect((persisted['draft'] as Map)['name'], 'Newer typing');
+      },
+    );
+
     test(
       'takeover reloads acknowledged data and fences a resumed writer',
       () async {
@@ -429,10 +789,15 @@ class _AtomicMemoryStore implements ProjectDraftAtomicStorage {
   bool failNextWrite = false;
   int commitCount = 0;
   String? readOverrideOnce;
+  bool readMissingOnce = false;
   @override
   bool get supportsAtomicOwnership => true;
   @override
   String? read(String key) {
+    if (readMissingOnce) {
+      readMissingOnce = false;
+      return null;
+    }
     final override = readOverrideOnce;
     readOverrideOnce = null;
     return override ?? values[key];

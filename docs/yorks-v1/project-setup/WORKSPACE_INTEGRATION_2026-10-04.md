@@ -1,5 +1,10 @@
 # Project setup workspace integration — 4 October 2026
 
+**Historical release.** The later product-owner correction requires the new
+forms inside the original Yorks top bar and persistent sidebar. The
+feature-owned chrome decision below is superseded by
+[the universal workspace and local-save correction](UNIVERSAL_WORKSPACE_AND_DRAFT_SAVE_2026-10-04.md).
+
 ## Root cause and correction
 
 The staging candidate deployed the full application from `lib/main.dart`, not

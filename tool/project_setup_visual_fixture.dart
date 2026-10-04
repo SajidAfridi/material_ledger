@@ -21,6 +21,7 @@ import 'package:material_ledger/shared/providers/yorks_v1_feature_flags_provider
 import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_project_creation_draft_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_project_team_directory_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_project_setup_navigation_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_workspace_status_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_permission_provider.dart';
@@ -229,11 +230,38 @@ Future<void> main() async {
     routes: [
       GoRoute(
         path: RoutePaths.engineerCreateProject,
+        onExit: (context, state) => container
+            .read(yorksV1ProjectSetupNavigationGuardProvider)
+            .canLeave(),
         builder: (context, _) => YorksV1WorkspaceShell(
-          featureOwnsChrome: true,
+          featureOwnsBackNavigation: true,
           child: stageIndex == 5
               ? const _VisualCompletionScreen()
               : const YorksV1ProjectCreateFlowScreen(),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1Projects,
+        builder: (context, _) => YorksV1WorkspaceShell(
+          child: Scaffold(
+            body: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Local synthetic project setup fixture'),
+                  FilledButton(
+                    onPressed: () =>
+                        context.go(RoutePaths.engineerCreateProject),
+                    child: Text(
+                      YorksV1ProjectStrings.createProject.active(
+                        container.read(languageProvider),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     ],
@@ -283,35 +311,45 @@ class _VisualCompletionScreenState
   @override
   Widget build(BuildContext context) {
     final language = ref.watch(languageProvider);
-    final desktop = YorksProjectSetupDesktopTheme.isDesktop(context);
-    final buildShell = desktop
-        ? YorksV1ProjectSetupDesktopShell.new
-        : YorksV1ProjectSetupMobileShell.new;
-    return buildShell(
-      language: language,
-      stage: YorksV1ProjectCreationStage.reviewAndCreate,
-      visitedStages: YorksV1ProjectCreationStage.values.toSet(),
-      completeStages: YorksV1ProjectCreationStage.values.toSet(),
-      reference: 'YRA-322',
-      projectName: 'NEXUS — Four substations',
-      localStatus: '',
-      saving: false,
-      readOnly: true,
-      completed: true,
-      body: buildProjectSetupCompletionFixture(
-        language: language,
-        compact: !desktop,
-        onDismissBanner: () {},
-      ),
-      scrollController: _scroll,
-      onSelectStage: (_) {},
-      onSaveDraft: null,
-      onBack: () {},
-      onReturnToProjects: () {},
-      onContinue: null,
-      onSkip: null,
-      onFinalAction: null,
-      primaryLabel: YorksV1ProjectStrings.createProject,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final desktop = YorksProjectSetupDesktopTheme.isDesktopForWidth(
+          context,
+          constraints.maxWidth,
+        );
+        final buildShell = desktop
+            ? YorksV1ProjectSetupDesktopShell.new
+            : YorksV1ProjectSetupMobileShell.new;
+        return YorksProjectSetupLayoutScope(
+          availableWidth: constraints.maxWidth,
+          child: buildShell(
+            language: language,
+            stage: YorksV1ProjectCreationStage.reviewAndCreate,
+            visitedStages: YorksV1ProjectCreationStage.values.toSet(),
+            completeStages: YorksV1ProjectCreationStage.values.toSet(),
+            reference: 'YRA-322',
+            projectName: 'NEXUS — Four substations',
+            localStatus: '',
+            saving: false,
+            readOnly: true,
+            completed: true,
+            body: buildProjectSetupCompletionFixture(
+              language: language,
+              compact: !desktop,
+              onDismissBanner: () {},
+            ),
+            scrollController: _scroll,
+            onSelectStage: (_) {},
+            onSaveDraft: null,
+            onBack: () {},
+            onReturnToProjects: () {},
+            onContinue: null,
+            onSkip: null,
+            onFinalAction: null,
+            primaryLabel: YorksV1ProjectStrings.createProject,
+          ),
+        );
+      },
     );
   }
 }

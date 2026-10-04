@@ -2,6 +2,27 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/constants/constants.dart';
 
+/// Available workspace content width after the universal sidebar and zoom.
+/// Stage widgets use this scope rather than treating the whole browser as
+/// available form space.
+class YorksProjectSetupLayoutScope extends InheritedWidget {
+  const YorksProjectSetupLayoutScope({
+    super.key,
+    required this.availableWidth,
+    required super.child,
+  });
+
+  final double availableWidth;
+
+  static double? maybeWidthOf(BuildContext context) => context
+      .dependOnInheritedWidgetOfExactType<YorksProjectSetupLayoutScope>()
+      ?.availableWidth;
+
+  @override
+  bool updateShouldNotify(YorksProjectSetupLayoutScope oldWidget) =>
+      oldWidget.availableWidth != availableWidth;
+}
+
 /// Scoped desktop tokens for the approved project setup reference.
 abstract final class YorksProjectSetupDesktopTheme {
   static const navy = AppColors.navy;
@@ -26,8 +47,14 @@ abstract final class YorksProjectSetupDesktopTheme {
   static TextStyle get section =>
       body.copyWith(fontSize: 20, fontWeight: FontWeight.w700);
 
-  static bool isDesktop(BuildContext context) =>
-      MediaQuery.sizeOf(context).width >= 1100 &&
+  static bool isDesktop(BuildContext context) => isDesktopForWidth(
+    context,
+    YorksProjectSetupLayoutScope.maybeWidthOf(context) ??
+        MediaQuery.sizeOf(context).width,
+  );
+
+  static bool isDesktopForWidth(BuildContext context, double availableWidth) =>
+      availableWidth >= 1100 &&
       MediaQuery.textScalerOf(context).scale(1) <= 1.1;
 
   static InputDecoration inputDecoration({

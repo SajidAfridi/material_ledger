@@ -149,6 +149,8 @@ class _YorksV1ProjectCreateFlowScreenState
     extends ConsumerState<YorksV1ProjectCreateFlowScreen>
     with WidgetsBindingObserver {
   final _detailsFormKey = GlobalKey<FormState>();
+  final _featureScaffoldKey = GlobalKey<ScaffoldState>();
+  final _featureMessengerKey = GlobalKey<ScaffoldMessengerState>();
   final _scrollController = ScrollController();
   final _fieldFocusNodes = {
     for (final name in [
@@ -218,6 +220,8 @@ class _YorksV1ProjectCreateFlowScreenState
   String? _lastFocusedField;
   bool _restoringNavigation = false;
   int? _leaveAuthorizedGeneration;
+  String? _manuallySavedInput;
+  bool _manualSavePending = false;
   Future<bool?>? _leaveDecision;
   bool _confirmedContextResult = false;
   bool _disposed = false;
@@ -488,6 +492,8 @@ class _YorksV1ProjectCreateFlowScreenState
       _lastFocusedField = null;
       _restoringNavigation = false;
       _leaveAuthorizedGeneration = null;
+      _manuallySavedInput = null;
+      _manualSavePending = false;
       _leaveDecision = null;
       _confirmedContextResult = false;
       _completedOperation = null;
@@ -591,7 +597,7 @@ class _YorksV1ProjectCreateFlowScreenState
           _SaveLocalDraftIntent: CallbackAction<_SaveLocalDraftIntent>(
             onInvoke: (_) {
               if (_completedOperation?.cleanupComplete != true) {
-                unawaited(_saveDraft(_currentDraft()));
+                unawaited(_saveDraft(_currentDraft(), manual: true));
               }
               return null;
             },
@@ -611,332 +617,145 @@ class _YorksV1ProjectCreateFlowScreenState
             if (!canLeave) return;
             await Navigator.of(context).maybePop(result);
           },
-          child: Scaffold(
-            backgroundColor: AppColors.surface,
-            body: SafeArea(
-              top: false,
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final rail = constraints.maxWidth >= 980;
-                  final showHelp =
-                      constraints.maxWidth >= 1280 &&
-                      MediaQuery.textScalerOf(context).scale(1) < 1.5;
-                  final navigation = _StageNavigation(
-                    currentStage: draft.currentStage,
-                    language: language,
-                    vertical: rail,
-                    visitedStages: _isEditing
-                        ? YorksV1ProjectCreationStage.values.toSet()
-                        : _visitedStages,
-                    onSelect: _selectStage,
-                  );
-                  final content = _buildStageContent(
-                    draft: draft,
-                    language: language,
-                    creatorRole: role,
-                    creatorAuthUserId: authUserId,
-                    teamDirectory: teamDirectory,
-                    setupState: setupState,
-                  );
-                  if (YorksProjectSetupDesktopTheme.isDesktop(context) ||
-                      YorksProjectSetupMobileTheme.isMobileLayout(context)) {
-                    final knownOperation =
-                        setupState.operation ?? _completedOperation;
-                    final showCompletion =
-                        knownOperation?.coreSucceeded == true &&
-                        draft.currentStage !=
-                            YorksV1ProjectCreationStage.attachments;
-                    final editorPending =
-                        (draft.currentStage ==
-                                YorksV1ProjectCreationStage.buildings &&
-                            _hasUnappliedBuildingEditor) ||
-                        (draft.currentStage ==
-                                YorksV1ProjectCreationStage.partiesAndAccess &&
-                            _hasUnappliedPartyEditor);
-                    final completeStages = {
-                      for (final stage in YorksV1ProjectCreationStage.values)
-                        if (stage !=
-                                YorksV1ProjectCreationStage.reviewAndCreate &&
-                            (_isEditing || _visitedStages.contains(stage)) &&
-                            _errorsForStage(stage, draft).isEmpty &&
-                            !(stage == YorksV1ProjectCreationStage.buildings &&
-                                _hasUnappliedBuildingEditor) &&
-                            !(stage ==
-                                    YorksV1ProjectCreationStage
-                                        .partiesAndAccess &&
-                                _hasUnappliedPartyEditor) &&
-                            !(stage ==
-                                    YorksV1ProjectCreationStage
-                                        .projectDetails &&
-                                _hasInvalidTypedDates) &&
-                            !(stage ==
-                                    YorksV1ProjectCreationStage.attachments &&
-                                _hasUnreviewedAttachments))
-                          stage,
-                    };
-                    final buildShell =
-                        YorksProjectSetupDesktopTheme.isDesktop(context)
-                        ? YorksV1ProjectSetupDesktopShell.new
-                        : YorksV1ProjectSetupMobileShell.new;
-                    return buildShell(
+          child: ScaffoldMessenger(
+            key: _featureMessengerKey,
+            child: Scaffold(
+              key: _featureScaffoldKey,
+              backgroundColor: AppColors.surface,
+              body: SafeArea(
+                top: false,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final desktop =
+                        YorksProjectSetupDesktopTheme.isDesktopForWidth(
+                          context,
+                          constraints.maxWidth,
+                        );
+                    final rail = constraints.maxWidth >= 980;
+                    final showHelp =
+                        constraints.maxWidth >= 1280 &&
+                        MediaQuery.textScalerOf(context).scale(1) < 1.5;
+                    final navigation = _StageNavigation(
+                      currentStage: draft.currentStage,
                       language: language,
-                      stage: draft.currentStage,
+                      vertical: rail,
                       visitedStages: _isEditing
                           ? YorksV1ProjectCreationStage.values.toSet()
                           : _visitedStages,
-                      completeStages: completeStages,
-                      completed: showCompletion,
-                      reference: showCompletion
-                          ? knownOperation!.project!.reference
-                          : draft.reference,
-                      projectName: showCompletion
-                          ? knownOperation!.project!.name
-                          : draft.name,
-                      localStatus: localStatus.active(language),
-                      saving: saving,
-                      readOnly: readOnly,
-                      savedOnDevice: acknowledged,
-                      isEditing: _isEditing,
-                      scrollController: _scrollController,
-                      onSelectStage: _selectStage,
-                      onSaveDraft: saving || readOnly
-                          ? null
-                          : () => _saveDraft(_currentDraft()),
-                      onBack: _back,
-                      onReturnToProjects: () async {
-                        final generation = _contextGeneration;
-                        if (!await _prepareLeave() ||
-                            !mounted ||
-                            !context.mounted ||
-                            !_isCurrentContext(generation)) {
-                          return;
-                        }
-                        context.go(RoutePaths.yorksV1Projects);
-                      },
-                      onContinue: saving || readOnly || editorPending
-                          ? null
-                          : _continue,
-                      onSkip: saving || readOnly ? null : _skipAttachments,
-                      onFinalAction:
-                          permission.canWrite &&
-                              !readOnly &&
-                              (intentLocked ||
-                                  (!_hasUnreviewedAttachments &&
-                                      !_hasUnappliedBuildingEditor &&
-                                      !_hasUnappliedPartyEditor))
-                          ? _createProject
-                          : null,
-                      primaryLabel: intentLocked
-                          ? (setupState.outcomeUncertain
-                                ? YorksV1ProjectStrings.checkSavedStatus
-                                : YorksV1ProjectStrings.continueFileRecovery)
-                          : _isEditing
-                          ? YorksV1ProjectStrings.saveChanges
-                          : YorksV1ProjectStrings.createProject,
-                      footerHint: editorPending
-                          ? YorksV1ProjectSetupShellStrings.buildingEditPending
-                          : null,
-                      headerActions: [
-                        if (_ownershipCheckFailed)
-                          TextButton(
-                            onPressed: _verifyResumedOwnership,
-                            child: Text(
-                              YorksV1ProjectStrings.retry.active(language),
-                            ),
-                          ),
-                        if (ownedElsewhere)
-                          TextButton(
-                            onPressed: () async {
-                              final generation = _contextGeneration;
-                              _draftSaveTimer?.cancel();
-                              _pendingDraft = null;
-                              await _draftController(authUserId).takeOver();
-                              if (!_isCurrentContext(generation)) return;
-                              setState(() {
-                                _restoredEditor = false;
-                                _removedBuilding = null;
-                                _removedBuildingIndex = null;
-                                _buildingUndoRows = null;
-                                _removedParty = null;
-                                _removedPartyIndex = null;
-                                _restoredNavigationStage = null;
-                                _ownershipCheckFailed = false;
-                              });
-                            },
-                            child: Text(
-                              YorksV1ProjectStrings.takeOverDraft.active(
-                                language,
-                              ),
-                            ),
-                          ),
-                      ],
-                      notices: [
-                        YorksV1ActionAvailabilityNotice(
-                          access: permission,
-                          language: language,
-                          onRetry: () => ref
-                              .read(
-                                yorksV1CurrentPermissionSnapshotProvider
-                                    .notifier,
-                              )
-                              .retryVerification(),
-                        ),
-                        if (_validationErrors.isNotEmpty && !intentLocked)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  YorksV1ProjectStrings.stageNeedsAttention
-                                      .active(language),
-                                  style: AppTypography.titleSmall,
-                                ),
-                                for (final error in _validationErrors)
-                                  TextButton.icon(
-                                    onPressed: readOnly
-                                        ? null
-                                        : () => _focusInvalidField(error),
-                                    icon: const Icon(
-                                      Icons.error_outline,
-                                      size: 18,
-                                    ),
-                                    label: Text(
-                                      '${_validationTargetLabel(error).active(language)}: ${_messageForValidation({error}).active(language)}',
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        if (!showCompletion &&
-                            (setupState.operation != null ||
-                                setupState.recoveryError != null))
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 16),
-                            child: _ProjectSetupOutcomePanel(
-                              state: setupState,
-                              language: language,
-                              onRecover: _createProject,
-                              onOpen: setupState.project == null
-                                  ? null
-                                  : () => context.go(
-                                      RoutePaths.yorksV1ProjectPath(
-                                        setupState.project!.id,
-                                      ),
-                                    ),
-                              onReselect: () => _setStage(
-                                YorksV1ProjectCreationStage.attachments,
-                              ),
-                              onRetryFile: _retrySetupFile,
-                              onRemovePendingFile: _removePendingSetupFile,
-                            ),
-                          ),
-                        if (recoveryRequired)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 16),
-                            child: _DesktopPanel(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    YorksV1ProjectStrings.draftNeedsRecovery
-                                        .active(language),
-                                  ),
-                                  TextButton(
-                                    onPressed: _reviewRecoveredDraft,
-                                    child: Text(
-                                      YorksV1ProjectStrings.reviewRecoveredDraft
-                                          .active(language),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                      ],
-                      body: showCompletion
-                          ? _buildCompletion(
-                              knownOperation!,
-                              setupState,
-                              language,
-                              role,
-                              authUserId,
-                              saving,
-                            )
-                          : AbsorbPointer(
-                              absorbing:
-                                  saving ||
-                                  readOnly ||
-                                  (intentLocked &&
-                                      draft.currentStage !=
-                                          YorksV1ProjectCreationStage
-                                              .attachments),
-                              child:
-                                  intentLocked &&
-                                      draft.currentStage !=
-                                          YorksV1ProjectCreationStage
-                                              .attachments
-                                  ? _OriginalSetupIntentSummary(
-                                      operation: setupState.operation!,
-                                      language: language,
-                                    )
-                                  : content,
-                            ),
+                      onSelect: _selectStage,
                     );
-                  }
-                  final stackHeader =
-                      constraints.maxWidth < 600 &&
-                      (MediaQuery.textScalerOf(context).scale(1) > 1.3 ||
-                          ownedElsewhere ||
-                          _ownershipCheckFailed);
-                  final heading = Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        (_isEditing
-                                ? YorksV1ProjectStrings.editProject
-                                : YorksV1ProjectStrings.projectSetup)
-                            .active(language),
-                        style: AppTypography.headlineSmall.copyWith(
-                          color: AppColors.ink,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Semantics(
-                        liveRegion: true,
-                        child: Text(
-                          localStatus.active(language),
-                          style: AppTypography.bodySmall.copyWith(
-                            color: storageFailed
-                                ? AppColors.error
-                                : AppColors.muted,
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Padding(
-                        padding: EdgeInsets.fromLTRB(
-                          rail ? 24 : 14,
-                          16,
-                          rail ? 24 : 14,
-                          12,
-                        ),
-                        child: Flex(
-                          direction: stackHeader
-                              ? Axis.vertical
-                              : Axis.horizontal,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (stackHeader)
-                              SizedBox(width: double.infinity, child: heading)
-                            else
-                              Expanded(child: heading),
-                            SizedBox(width: 12, height: stackHeader ? 8 : 0),
+                    final content = _buildStageContent(
+                      draft: draft,
+                      language: language,
+                      creatorRole: role,
+                      creatorAuthUserId: authUserId,
+                      teamDirectory: teamDirectory,
+                      setupState: setupState,
+                    );
+                    if (YorksProjectSetupDesktopTheme.isDesktop(context) ||
+                        YorksProjectSetupMobileTheme.isMobileLayout(context)) {
+                      final knownOperation =
+                          setupState.operation ?? _completedOperation;
+                      final showCompletion =
+                          knownOperation?.coreSucceeded == true &&
+                          draft.currentStage !=
+                              YorksV1ProjectCreationStage.attachments;
+                      final editorPending =
+                          (draft.currentStage ==
+                                  YorksV1ProjectCreationStage.buildings &&
+                              _hasUnappliedBuildingEditor) ||
+                          (draft.currentStage ==
+                                  YorksV1ProjectCreationStage
+                                      .partiesAndAccess &&
+                              _hasUnappliedPartyEditor);
+                      final completeStages = {
+                        for (final stage in YorksV1ProjectCreationStage.values)
+                          if (stage !=
+                                  YorksV1ProjectCreationStage.reviewAndCreate &&
+                              (_isEditing || _visitedStages.contains(stage)) &&
+                              _errorsForStage(stage, draft).isEmpty &&
+                              !(stage ==
+                                      YorksV1ProjectCreationStage.buildings &&
+                                  _hasUnappliedBuildingEditor) &&
+                              !(stage ==
+                                      YorksV1ProjectCreationStage
+                                          .partiesAndAccess &&
+                                  _hasUnappliedPartyEditor) &&
+                              !(stage ==
+                                      YorksV1ProjectCreationStage
+                                          .projectDetails &&
+                                  _hasInvalidTypedDates) &&
+                              !(stage ==
+                                      YorksV1ProjectCreationStage.attachments &&
+                                  _hasUnreviewedAttachments))
+                            stage,
+                      };
+                      final buildShell = desktop
+                          ? YorksV1ProjectSetupDesktopShell.new
+                          : YorksV1ProjectSetupMobileShell.new;
+                      return YorksProjectSetupLayoutScope(
+                        availableWidth: constraints.maxWidth,
+                        child: buildShell(
+                          language: language,
+                          stage: draft.currentStage,
+                          visitedStages: _isEditing
+                              ? YorksV1ProjectCreationStage.values.toSet()
+                              : _visitedStages,
+                          completeStages: completeStages,
+                          completed: showCompletion,
+                          reference: showCompletion
+                              ? knownOperation!.project!.reference
+                              : draft.reference,
+                          projectName: showCompletion
+                              ? knownOperation!.project!.name
+                              : draft.name,
+                          localStatus: localStatus.active(language),
+                          saving: saving,
+                          readOnly: readOnly,
+                          savedOnDevice: acknowledged,
+                          isEditing: _isEditing,
+                          scrollController: _scrollController,
+                          onSelectStage: _selectStage,
+                          onSaveDraft: saving || readOnly || _manualSavePending
+                              ? null
+                              : () => _saveDraft(_currentDraft(), manual: true),
+                          onBack: _back,
+                          onReturnToProjects: () async {
+                            final generation = _contextGeneration;
+                            if (!await _prepareLeave() ||
+                                !mounted ||
+                                !context.mounted ||
+                                !_isCurrentContext(generation)) {
+                              return;
+                            }
+                            context.go(RoutePaths.yorksV1Projects);
+                          },
+                          onContinue: saving || readOnly || editorPending
+                              ? null
+                              : _continue,
+                          onSkip: saving || readOnly ? null : _skipAttachments,
+                          onFinalAction:
+                              permission.canWrite &&
+                                  !readOnly &&
+                                  (intentLocked ||
+                                      (!_hasUnreviewedAttachments &&
+                                          !_hasUnappliedBuildingEditor &&
+                                          !_hasUnappliedPartyEditor))
+                              ? _createProject
+                              : null,
+                          primaryLabel: intentLocked
+                              ? (setupState.outcomeUncertain
+                                    ? YorksV1ProjectStrings.checkSavedStatus
+                                    : YorksV1ProjectStrings
+                                          .continueFileRecovery)
+                              : _isEditing
+                              ? YorksV1ProjectStrings.saveChanges
+                              : YorksV1ProjectStrings.createProject,
+                          footerHint: editorPending
+                              ? YorksV1ProjectSetupShellStrings
+                                    .buildingEditPending
+                              : null,
+                          headerActions: [
                             if (_ownershipCheckFailed)
                               TextButton(
                                 onPressed: _verifyResumedOwnership,
@@ -951,18 +770,17 @@ class _YorksV1ProjectCreateFlowScreenState
                                   _draftSaveTimer?.cancel();
                                   _pendingDraft = null;
                                   await _draftController(authUserId).takeOver();
-                                  if (_isCurrentContext(generation)) {
-                                    setState(() {
-                                      _restoredEditor = false;
-                                      _removedBuilding = null;
-                                      _removedBuildingIndex = null;
-                                      _buildingUndoRows = null;
-                                      _removedParty = null;
-                                      _removedPartyIndex = null;
-                                      _restoredNavigationStage = null;
-                                      _ownershipCheckFailed = false;
-                                    });
-                                  }
+                                  if (!_isCurrentContext(generation)) return;
+                                  setState(() {
+                                    _restoredEditor = false;
+                                    _removedBuilding = null;
+                                    _removedBuildingIndex = null;
+                                    _buildingUndoRows = null;
+                                    _removedParty = null;
+                                    _removedPartyIndex = null;
+                                    _restoredNavigationStage = null;
+                                    _ownershipCheckFailed = false;
+                                  });
                                 },
                                 child: Text(
                                   YorksV1ProjectStrings.takeOverDraft.active(
@@ -970,300 +788,521 @@ class _YorksV1ProjectCreateFlowScreenState
                                   ),
                                 ),
                               ),
-                            OutlinedButton.icon(
-                              onPressed: saving || readOnly
-                                  ? null
-                                  : () => _saveDraft(_currentDraft()),
-                              icon: const Icon(Icons.save_outlined, size: 18),
-                              label: Text(
-                                YorksV1ProjectStrings.saveDraft.active(
-                                  language,
-                                ),
-                              ),
-                            ),
                           ],
-                        ),
-                      ),
-                      YorksV1ActionAvailabilityNotice(
-                        access: permission,
-                        language: language,
-                        onRetry: () => ref
-                            .read(
-                              yorksV1CurrentPermissionSnapshotProvider.notifier,
-                            )
-                            .retryVerification(),
-                      ),
-                      if (!rail)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 14),
-                          child: navigation,
-                        ),
-                      Expanded(
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            if (rail)
-                              SizedBox(
-                                width: 214,
-                                child: Padding(
-                                  padding: const EdgeInsets.fromLTRB(
-                                    14,
-                                    10,
-                                    12,
-                                    20,
-                                  ),
-                                  child: navigation,
-                                ),
-                              ),
-                            Expanded(
-                              child: SingleChildScrollView(
-                                controller: _scrollController,
-                                padding: EdgeInsets.fromLTRB(
-                                  rail ? 12 : 14,
-                                  12,
-                                  rail ? 20 : 14,
-                                  24,
-                                ),
-                                child: Align(
-                                  alignment: AlignmentDirectional.topStart,
-                                  child: ConstrainedBox(
-                                    constraints: const BoxConstraints(
-                                      maxWidth: 920,
-                                    ),
-                                    child: Container(
-                                      padding: EdgeInsets.all(rail ? 28 : 16),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.surfaceContainerLowest,
-                                        border: Border.all(
-                                          color: AppColors.line,
-                                        ),
-                                        borderRadius: BorderRadius.circular(
-                                          AppSpacing.radiusLg,
-                                        ),
-                                      ),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.stretch,
-                                        children: [
-                                          _R35CreationStageHeader(
-                                            stage: draft.currentStage,
-                                            language: language,
-                                          ),
-                                          const SizedBox(height: 20),
-                                          if (_validationErrors.isNotEmpty &&
-                                              !intentLocked)
-                                            Padding(
-                                              padding: const EdgeInsets.only(
-                                                bottom: 16,
-                                              ),
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    YorksV1ProjectStrings
-                                                        .stageNeedsAttention
-                                                        .active(language),
-                                                    style: AppTypography
-                                                        .titleSmall,
-                                                  ),
-                                                  for (final error
-                                                      in _validationErrors)
-                                                    TextButton.icon(
-                                                      onPressed: readOnly
-                                                          ? null
-                                                          : () =>
-                                                                _focusInvalidField(
-                                                                  error,
-                                                                ),
-                                                      icon: const Icon(
-                                                        Icons.error_outline,
-                                                        size: 18,
-                                                      ),
-                                                      label: Text(
-                                                        '${_validationTargetLabel(error).active(language)}: ${_messageForValidation({error}).active(language)}',
-                                                      ),
-                                                    ),
-                                                ],
-                                              ),
-                                            ),
-                                          if (setupState.operation != null ||
-                                              setupState.recoveryError !=
-                                                  null) ...[
-                                            _ProjectSetupOutcomePanel(
-                                              state: setupState,
-                                              language: language,
-                                              onRecover: _createProject,
-                                              onOpen: setupState.project == null
-                                                  ? null
-                                                  : () => context.go(
-                                                      RoutePaths.yorksV1ProjectPath(
-                                                        setupState.project!.id,
-                                                      ),
-                                                    ),
-                                              onReselect: () => _setStage(
-                                                YorksV1ProjectCreationStage
-                                                    .attachments,
-                                              ),
-                                              onRetryFile: _retrySetupFile,
-                                              onRemovePendingFile:
-                                                  _removePendingSetupFile,
-                                            ),
-                                            const SizedBox(height: 16),
-                                          ],
-                                          if (recoveryRequired)
-                                            Container(
-                                              padding: const EdgeInsets.all(16),
-                                              decoration: BoxDecoration(
-                                                color:
-                                                    AppColors.neutralContainer,
-                                                borderRadius:
-                                                    BorderRadius.circular(
-                                                      AppSpacing.radiusMd,
-                                                    ),
-                                              ),
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    YorksV1ProjectStrings
-                                                        .draftNeedsRecovery
-                                                        .active(language),
-                                                  ),
-                                                  TextButton(
-                                                    onPressed:
-                                                        _reviewRecoveredDraft,
-                                                    child: Text(
-                                                      YorksV1ProjectStrings
-                                                          .reviewRecoveredDraft
-                                                          .active(language),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          AbsorbPointer(
-                                            absorbing:
-                                                saving ||
-                                                readOnly ||
-                                                (intentLocked &&
-                                                    draft.currentStage !=
-                                                        YorksV1ProjectCreationStage
-                                                            .attachments),
-                                            child:
-                                                intentLocked &&
-                                                    draft.currentStage !=
-                                                        YorksV1ProjectCreationStage
-                                                            .attachments
-                                                ? _OriginalSetupIntentSummary(
-                                                    operation:
-                                                        setupState.operation!,
-                                                    language: language,
-                                                  )
-                                                : content,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
+                          notices: [
+                            YorksV1ActionAvailabilityNotice(
+                              access: permission,
+                              language: language,
+                              onRetry: () => ref
+                                  .read(
+                                    yorksV1CurrentPermissionSnapshotProvider
+                                        .notifier,
+                                  )
+                                  .retryVerification(),
                             ),
-                            if (showHelp)
-                              SizedBox(
-                                width: 260,
-                                child: Padding(
-                                  padding: const EdgeInsets.fromLTRB(
-                                    0,
+                            if (_validationErrors.isNotEmpty && !intentLocked)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 16),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      YorksV1ProjectStrings.stageNeedsAttention
+                                          .active(language),
+                                      style: AppTypography.titleSmall,
+                                    ),
+                                    for (final error in _validationErrors)
+                                      TextButton.icon(
+                                        onPressed: readOnly
+                                            ? null
+                                            : () => _focusInvalidField(error),
+                                        icon: const Icon(
+                                          Icons.error_outline,
+                                          size: 18,
+                                        ),
+                                        label: Text(
+                                          '${_validationTargetLabel(error).active(language)}: ${_messageForValidation({error}).active(language)}',
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            if (!showCompletion &&
+                                (setupState.operation != null ||
+                                    setupState.recoveryError != null))
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 16),
+                                child: _ProjectSetupOutcomePanel(
+                                  state: setupState,
+                                  language: language,
+                                  onRecover: _createProject,
+                                  onOpen: setupState.project == null
+                                      ? null
+                                      : () => context.go(
+                                          RoutePaths.yorksV1ProjectPath(
+                                            setupState.project!.id,
+                                          ),
+                                        ),
+                                  onReselect: () => _setStage(
+                                    YorksV1ProjectCreationStage.attachments,
+                                  ),
+                                  onRetryFile: _retrySetupFile,
+                                  onRemovePendingFile: _removePendingSetupFile,
+                                ),
+                              ),
+                            if (recoveryRequired)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 16),
+                                child: _DesktopPanel(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        YorksV1ProjectStrings.draftNeedsRecovery
+                                            .active(language),
+                                      ),
+                                      TextButton(
+                                        onPressed: _reviewRecoveredDraft,
+                                        child: Text(
+                                          YorksV1ProjectStrings
+                                              .reviewRecoveredDraft
+                                              .active(language),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                          ],
+                          body: showCompletion
+                              ? _buildCompletion(
+                                  knownOperation!,
+                                  setupState,
+                                  language,
+                                  role,
+                                  authUserId,
+                                  saving,
+                                  compact: !desktop,
+                                )
+                              : AbsorbPointer(
+                                  absorbing:
+                                      saving ||
+                                      readOnly ||
+                                      (intentLocked &&
+                                          draft.currentStage !=
+                                              YorksV1ProjectCreationStage
+                                                  .attachments),
+                                  child:
+                                      intentLocked &&
+                                          draft.currentStage !=
+                                              YorksV1ProjectCreationStage
+                                                  .attachments
+                                      ? _OriginalSetupIntentSummary(
+                                          operation: setupState.operation!,
+                                          language: language,
+                                        )
+                                      : content,
+                                ),
+                        ),
+                      );
+                    }
+                    final stackHeader =
+                        constraints.maxWidth < 600 &&
+                        (MediaQuery.textScalerOf(context).scale(1) > 1.3 ||
+                            ownedElsewhere ||
+                            _ownershipCheckFailed);
+                    final heading = Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          (_isEditing
+                                  ? YorksV1ProjectStrings.editProject
+                                  : YorksV1ProjectStrings.projectSetup)
+                              .active(language),
+                          style: AppTypography.headlineSmall.copyWith(
+                            color: AppColors.ink,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Semantics(
+                          liveRegion: true,
+                          child: Text(
+                            localStatus.active(language),
+                            style: AppTypography.bodySmall.copyWith(
+                              color: storageFailed
+                                  ? AppColors.error
+                                  : AppColors.muted,
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Padding(
+                          padding: EdgeInsets.fromLTRB(
+                            rail ? 24 : 14,
+                            16,
+                            rail ? 24 : 14,
+                            12,
+                          ),
+                          child: Flex(
+                            direction: stackHeader
+                                ? Axis.vertical
+                                : Axis.horizontal,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (stackHeader)
+                                SizedBox(width: double.infinity, child: heading)
+                              else
+                                Expanded(child: heading),
+                              SizedBox(width: 12, height: stackHeader ? 8 : 0),
+                              if (_ownershipCheckFailed)
+                                TextButton(
+                                  onPressed: _verifyResumedOwnership,
+                                  child: Text(
+                                    YorksV1ProjectStrings.retry.active(
+                                      language,
+                                    ),
+                                  ),
+                                ),
+                              if (ownedElsewhere)
+                                TextButton(
+                                  onPressed: () async {
+                                    final generation = _contextGeneration;
+                                    _draftSaveTimer?.cancel();
+                                    _pendingDraft = null;
+                                    await _draftController(
+                                      authUserId,
+                                    ).takeOver();
+                                    if (_isCurrentContext(generation)) {
+                                      setState(() {
+                                        _restoredEditor = false;
+                                        _removedBuilding = null;
+                                        _removedBuildingIndex = null;
+                                        _buildingUndoRows = null;
+                                        _removedParty = null;
+                                        _removedPartyIndex = null;
+                                        _restoredNavigationStage = null;
+                                        _ownershipCheckFailed = false;
+                                      });
+                                    }
+                                  },
+                                  child: Text(
+                                    YorksV1ProjectStrings.takeOverDraft.active(
+                                      language,
+                                    ),
+                                  ),
+                                ),
+                              OutlinedButton.icon(
+                                onPressed:
+                                    saving || readOnly || _manualSavePending
+                                    ? null
+                                    : () => _saveDraft(
+                                        _currentDraft(),
+                                        manual: true,
+                                      ),
+                                icon: const Icon(Icons.save_outlined, size: 18),
+                                label: Text(
+                                  YorksV1ProjectStrings.saveDraft.active(
+                                    language,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        YorksV1ActionAvailabilityNotice(
+                          access: permission,
+                          language: language,
+                          onRetry: () => ref
+                              .read(
+                                yorksV1CurrentPermissionSnapshotProvider
+                                    .notifier,
+                              )
+                              .retryVerification(),
+                        ),
+                        if (!rail)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                            child: navigation,
+                          ),
+                        Expanded(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              if (rail)
+                                SizedBox(
+                                  width: 214,
+                                  child: Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      14,
+                                      10,
+                                      12,
+                                      20,
+                                    ),
+                                    child: navigation,
+                                  ),
+                                ),
+                              Expanded(
+                                child: SingleChildScrollView(
+                                  controller: _scrollController,
+                                  padding: EdgeInsets.fromLTRB(
+                                    rail ? 12 : 14,
                                     12,
-                                    24,
+                                    rail ? 20 : 14,
                                     24,
                                   ),
                                   child: Align(
-                                    alignment: Alignment.topCenter,
-                                    child: Container(
-                                      padding: const EdgeInsets.all(20),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.blueContainer
-                                            .withValues(alpha: .45),
-                                        borderRadius: BorderRadius.circular(
-                                          AppSpacing.radiusLg,
-                                        ),
+                                    alignment: AlignmentDirectional.topStart,
+                                    child: ConstrainedBox(
+                                      constraints: const BoxConstraints(
+                                        maxWidth: 920,
                                       ),
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          const Icon(
-                                            Icons.info_outline,
-                                            color: AppColors.blue,
+                                      child: Container(
+                                        padding: EdgeInsets.all(rail ? 28 : 16),
+                                        decoration: BoxDecoration(
+                                          color:
+                                              AppColors.surfaceContainerLowest,
+                                          border: Border.all(
+                                            color: AppColors.line,
                                           ),
-                                          const SizedBox(height: 12),
-                                          Text(
-                                            _stageCopy(
-                                              draft.currentStage,
-                                            ).active(language),
-                                            style: AppTypography.titleMedium,
+                                          borderRadius: BorderRadius.circular(
+                                            AppSpacing.radiusLg,
                                           ),
-                                          const SizedBox(height: 8),
-                                          Text(
-                                            _stageDescription(
-                                              draft.currentStage,
-                                            ).active(language),
-                                            style: AppTypography.bodyMedium,
-                                          ),
-                                          const SizedBox(height: 12),
-                                          Text(
-                                            YorksV1ProjectStrings
-                                                .permittedDetailsHelp
-                                                .active(language),
-                                            style: AppTypography.bodySmall,
-                                          ),
-                                        ],
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.stretch,
+                                          children: [
+                                            _R35CreationStageHeader(
+                                              stage: draft.currentStage,
+                                              language: language,
+                                            ),
+                                            const SizedBox(height: 20),
+                                            if (_validationErrors.isNotEmpty &&
+                                                !intentLocked)
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                  bottom: 16,
+                                                ),
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      YorksV1ProjectStrings
+                                                          .stageNeedsAttention
+                                                          .active(language),
+                                                      style: AppTypography
+                                                          .titleSmall,
+                                                    ),
+                                                    for (final error
+                                                        in _validationErrors)
+                                                      TextButton.icon(
+                                                        onPressed: readOnly
+                                                            ? null
+                                                            : () =>
+                                                                  _focusInvalidField(
+                                                                    error,
+                                                                  ),
+                                                        icon: const Icon(
+                                                          Icons.error_outline,
+                                                          size: 18,
+                                                        ),
+                                                        label: Text(
+                                                          '${_validationTargetLabel(error).active(language)}: ${_messageForValidation({error}).active(language)}',
+                                                        ),
+                                                      ),
+                                                  ],
+                                                ),
+                                              ),
+                                            if (setupState.operation != null ||
+                                                setupState.recoveryError !=
+                                                    null) ...[
+                                              _ProjectSetupOutcomePanel(
+                                                state: setupState,
+                                                language: language,
+                                                onRecover: _createProject,
+                                                onOpen:
+                                                    setupState.project == null
+                                                    ? null
+                                                    : () => context.go(
+                                                        RoutePaths.yorksV1ProjectPath(
+                                                          setupState
+                                                              .project!
+                                                              .id,
+                                                        ),
+                                                      ),
+                                                onReselect: () => _setStage(
+                                                  YorksV1ProjectCreationStage
+                                                      .attachments,
+                                                ),
+                                                onRetryFile: _retrySetupFile,
+                                                onRemovePendingFile:
+                                                    _removePendingSetupFile,
+                                              ),
+                                              const SizedBox(height: 16),
+                                            ],
+                                            if (recoveryRequired)
+                                              Container(
+                                                padding: const EdgeInsets.all(
+                                                  16,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: AppColors
+                                                      .neutralContainer,
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                        AppSpacing.radiusMd,
+                                                      ),
+                                                ),
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      YorksV1ProjectStrings
+                                                          .draftNeedsRecovery
+                                                          .active(language),
+                                                    ),
+                                                    TextButton(
+                                                      onPressed:
+                                                          _reviewRecoveredDraft,
+                                                      child: Text(
+                                                        YorksV1ProjectStrings
+                                                            .reviewRecoveredDraft
+                                                            .active(language),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            AbsorbPointer(
+                                              absorbing:
+                                                  saving ||
+                                                  readOnly ||
+                                                  (intentLocked &&
+                                                      draft.currentStage !=
+                                                          YorksV1ProjectCreationStage
+                                                              .attachments),
+                                              child:
+                                                  intentLocked &&
+                                                      draft.currentStage !=
+                                                          YorksV1ProjectCreationStage
+                                                              .attachments
+                                                  ? _OriginalSetupIntentSummary(
+                                                      operation:
+                                                          setupState.operation!,
+                                                      language: language,
+                                                    )
+                                                  : content,
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
                               ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 18,
-                          vertical: 12,
-                        ),
-                        decoration: const BoxDecoration(
-                          color: AppColors.surfaceContainerLowest,
-                          border: Border(
-                            top: BorderSide(color: AppColors.line),
+                              if (showHelp)
+                                SizedBox(
+                                  width: 260,
+                                  child: Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      0,
+                                      12,
+                                      24,
+                                      24,
+                                    ),
+                                    child: Align(
+                                      alignment: Alignment.topCenter,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(20),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.blueContainer
+                                              .withValues(alpha: .45),
+                                          borderRadius: BorderRadius.circular(
+                                            AppSpacing.radiusLg,
+                                          ),
+                                        ),
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            const Icon(
+                                              Icons.info_outline,
+                                              color: AppColors.blue,
+                                            ),
+                                            const SizedBox(height: 12),
+                                            Text(
+                                              _stageCopy(
+                                                draft.currentStage,
+                                              ).active(language),
+                                              style: AppTypography.titleMedium,
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Text(
+                                              _stageDescription(
+                                                draft.currentStage,
+                                              ).active(language),
+                                              style: AppTypography.bodyMedium,
+                                            ),
+                                            const SizedBox(height: 12),
+                                            Text(
+                                              YorksV1ProjectStrings
+                                                  .permittedDetailsHelp
+                                                  .active(language),
+                                              style: AppTypography.bodySmall,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
-                        child: _StageActions(
-                          stage: draft.currentStage,
-                          language: language,
-                          saving: saving,
-                          onBack: _back,
-                          onContinue: _continue,
-                          onSkip: _skipAttachments,
-                          onCreate: permission.canWrite && !readOnly
-                              ? _createProject
-                              : null,
-                          primaryLabel: intentLocked
-                              ? (setupState.outcomeUncertain
-                                    ? YorksV1ProjectStrings.checkSavedStatus
-                                    : YorksV1ProjectStrings
-                                          .continueFileRecovery)
-                              : _isEditing
-                              ? YorksV1ProjectStrings.saveChanges
-                              : YorksV1ProjectStrings.createProject,
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 18,
+                            vertical: 12,
+                          ),
+                          decoration: const BoxDecoration(
+                            color: AppColors.surfaceContainerLowest,
+                            border: Border(
+                              top: BorderSide(color: AppColors.line),
+                            ),
+                          ),
+                          child: _StageActions(
+                            stage: draft.currentStage,
+                            language: language,
+                            saving: saving,
+                            onBack: _back,
+                            onContinue: _continue,
+                            onSkip: _skipAttachments,
+                            onCreate: permission.canWrite && !readOnly
+                                ? _createProject
+                                : null,
+                            primaryLabel: intentLocked
+                                ? (setupState.outcomeUncertain
+                                      ? YorksV1ProjectStrings.checkSavedStatus
+                                      : YorksV1ProjectStrings
+                                            .continueFileRecovery)
+                                : _isEditing
+                                ? YorksV1ProjectStrings.saveChanges
+                                : YorksV1ProjectStrings.createProject,
+                          ),
                         ),
-                      ),
-                    ],
-                  );
-                },
+                      ],
+                    );
+                  },
+                ),
               ),
             ),
           ),
@@ -1278,8 +1317,9 @@ class _YorksV1ProjectCreateFlowScreenState
     AppLanguage language,
     YorksV1Role role,
     String authUserId,
-    bool saving,
-  ) {
+    bool saving, {
+    required bool compact,
+  }) {
     final project = operation.project!;
     final confirmed = YorksV1ProjectCreationResult.fromRpcJson(
       operation.core.result!,
@@ -1406,7 +1446,7 @@ class _YorksV1ProjectCreateFlowScreenState
     }
 
     return YorksV1ProjectSetupCompletion(
-      compact: YorksProjectSetupMobileTheme.isMobileLayout(context),
+      compact: compact,
       operation: operation,
       copy: YorksV1ProjectSetupCompletionCopy.localized(language),
       busy: saving,
@@ -1552,6 +1592,7 @@ class _YorksV1ProjectCreateFlowScreenState
               'contactsExpanded': expanded,
             },
           ),
+          semanticEdit: false,
         ),
         startDateController: _startDateController,
         endDateController: _endDateController,
@@ -2233,8 +2274,17 @@ class _YorksV1ProjectCreateFlowScreenState
         _ownershipCheckFailed) {
       return;
     }
-    _pendingDraft = transform(_currentDraft());
-    if (semanticEdit) _leaveAuthorizedGeneration = null;
+    final current = _currentDraft();
+    final next = transform(current);
+    _pendingDraft = next;
+    // Controller listeners also report selection/composition/focus updates.
+    // Only changed recoverable input invalidates an explicit save; a cursor
+    // move in a hydrated date or unfinished editor is not a content edit.
+    if (semanticEdit &&
+        _localInputIdentity(current) != _localInputIdentity(next)) {
+      _leaveAuthorizedGeneration = null;
+      _manuallySavedInput = null;
+    }
     if (mounted) setState(() {});
     _draftSaveTimer?.cancel();
     _draftSaveTimer = Timer(const Duration(milliseconds: 250), () {
@@ -2286,8 +2336,11 @@ class _YorksV1ProjectCreateFlowScreenState
       await controller.flush(saveTrigger: 'navigation');
       if (!_isCurrentContext(generation)) return true;
       final saved = _currentDraft();
-      if (saved.storageState != YorksV1ProjectDraftStorageState.failed &&
-          saved.acknowledgedRevision == saved.revision) {
+      if (saved.isAcknowledged && _pendingDraft == null) {
+        // Explicit Save draft is already a deliberate acknowledgement of the
+        // recoverable input. Navigation/focus checkpoints may advance its
+        // storage revision without changing that input. New edits still ask.
+        if (_manuallySavedInput == _localInputIdentity(saved)) return true;
         final language = ref.read(languageProvider);
         if (!mounted) return true;
         _leaveDecision ??= showDialog<bool>(
@@ -2351,7 +2404,31 @@ class _YorksV1ProjectCreateFlowScreenState
     return true;
   }
 
-  Future<void> _saveDraft(YorksV1ProjectCreationDraft draft) async {
+  String _localInputIdentity(YorksV1ProjectCreationDraft draft) {
+    final json = draft.toJson();
+    for (final key in const {
+      'revision',
+      'acknowledgedRevision',
+      'writerEpoch',
+      'updatedAt',
+      'currentStage',
+      'visitedStages',
+    }) {
+      json.remove(key);
+    }
+    json['rawEditorState'] = {
+      for (final entry in draft.rawEditorState.entries)
+        if (!const {'sectionContext', 'contactsExpanded'}.contains(entry.key))
+          entry.key: entry.value,
+    };
+    return yorksV1CanonicalSetupJson(json);
+  }
+
+  Future<void> _saveDraft(
+    YorksV1ProjectCreationDraft draft, {
+    bool manual = false,
+  }) async {
+    if (manual && _manualSavePending) return;
     final generation = _contextGeneration;
     _draftSaveTimer?.cancel();
     _pendingDraft = null;
@@ -2363,13 +2440,49 @@ class _YorksV1ProjectCreateFlowScreenState
         !_isCurrentContext(generation)) {
       return;
     }
+    if (manual) {
+      setState(() {
+        _manualSavePending = true;
+        _manuallySavedInput = null;
+      });
+    }
     try {
       final stableDraft = _withLocalRowIds(draft);
-      await _draftController(owner).save(
-        stableDraft.copyWith(rawEditorState: _rawEditorState(stableDraft)),
+      final snapshot = stableDraft.copyWith(
+        rawEditorState: _rawEditorState(stableDraft),
       );
+      final controller = _draftController(owner);
+      await controller.save(
+        snapshot,
+        saveTrigger: manual ? 'manual' : 'checkpoint',
+      );
+      if (!manual || !_isCurrentContext(generation)) return;
+      await controller.flush(saveTrigger: 'manual');
+      if (!_isCurrentContext(generation)) return;
+      final saved = _currentDraft();
+      if (saved.isAcknowledged &&
+          _pendingDraft == null &&
+          _localInputIdentity(saved) == _localInputIdentity(snapshot)) {
+        _manuallySavedInput = _localInputIdentity(saved);
+        _showMessage(
+          _isEditing
+              ? YorksV1ProjectStrings.editSavedLocally
+              : YorksV1ProjectStrings.draftSaved,
+        );
+      } else {
+        _showMessage(YorksV1ProjectStrings.changedDuringLocalSave);
+      }
     } catch (_) {
-      if (_isCurrentContext(generation)) setState(() {});
+      if (_isCurrentContext(generation)) {
+        setState(() {});
+        if (manual) {
+          _showMessage(YorksV1ProjectStrings.localSaveFailed, error: true);
+        }
+      }
+    } finally {
+      if (manual && _isCurrentContext(generation)) {
+        setState(() => _manualSavePending = false);
+      }
     }
   }
 
@@ -2631,12 +2744,23 @@ class _YorksV1ProjectCreateFlowScreenState
 
   void _showMessage(TranslatableString copy, {bool error = false}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
+    final featureBox = _featureScaffoldKey.currentContext?.findRenderObject();
+    final availableWidth = featureBox is RenderBox && featureBox.hasSize
+        ? featureBox.size.width
+        : MediaQuery.sizeOf(context).width;
+    // Leave the setup stage rail and sticky actions available while feedback
+    // is visible. Use this nested Scaffold's actual content width rather than
+    // the viewport, which also includes the persistent office sidebar.
+    final sideMargin = ((availableWidth - 560) / 2).clamp(
+      16.0,
+      double.infinity,
+    );
+    (_featureMessengerKey.currentState ?? ScaffoldMessenger.of(context))
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+          margin: EdgeInsets.fromLTRB(sideMargin, 8, sideMargin, 100),
           backgroundColor: error ? AppColors.error : null,
           content: Text(copy.active(ref.read(languageProvider))),
         ),

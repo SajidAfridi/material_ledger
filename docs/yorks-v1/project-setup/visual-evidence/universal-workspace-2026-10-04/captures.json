@@ -1,0 +1,247 @@
+{
+  "fixture": "tool/project_setup_visual_fixture.dart",
+  "backend": "none; synthetic permitted read context and local browser storage",
+  "captures": [
+    {
+      "path": "desktop-details.jpg",
+      "clip": {
+        "x": 0,
+        "y": 0,
+        "width": 1367,
+        "height": 910
+      },
+      "dpr": 0.8899999856948853,
+      "height": 1023,
+      "scrollWidth": 1536,
+      "width": 1536
+    },
+    {
+      "path": "desktop-save-confirmed.jpg",
+      "clip": {
+        "x": 0,
+        "y": 0,
+        "width": 1367,
+        "height": 910
+      },
+      "dpr": 0.8899999856948853,
+      "height": 1023,
+      "scrollWidth": 1536,
+      "width": 1536
+    },
+    {
+      "path": "desktop-saved-exit.jpg",
+      "clip": {
+        "x": 0,
+        "y": 0,
+        "width": 1367,
+        "height": 910
+      },
+      "dpr": 0.8899999856948853,
+      "height": 1023,
+      "scrollWidth": 1536,
+      "width": 1536
+    },
+    {
+      "path": "desktop-draft-restored.jpg",
+      "clip": {
+        "x": 0,
+        "y": 0,
+        "width": 1367,
+        "height": 910
+      },
+      "dpr": 0.8899999856948853,
+      "height": 1023,
+      "scrollWidth": 1536,
+      "width": 1536
+    },
+    {
+      "path": "mobile-details.jpg",
+      "clip": {
+        "x": 0,
+        "y": 0,
+        "width": 320,
+        "height": 712
+      },
+      "dpr": 0.8899999856948853,
+      "height": 800,
+      "scrollWidth": 360,
+      "width": 360
+    },
+    {
+      "path": "desktop-parties.jpg",
+      "clip": {
+        "x": 0,
+        "y": 0,
+        "width": 1438,
+        "height": 809
+      },
+      "dpr": 1.7799999713897705,
+      "height": 809,
+      "scrollWidth": 1438,
+      "width": 1438
+    },
+    {
+      "path": "desktop-buildings.jpg",
+      "clip": {
+        "x": 0,
+        "y": 0,
+        "width": 1438,
+        "height": 809
+      },
+      "dpr": 1.7799999713897705,
+      "height": 809,
+      "scrollWidth": 1438,
+      "width": 1438
+    },
+    {
+      "path": "desktop-building-editor.jpg",
+      "clip": {
+        "x": 0,
+        "y": 0,
+        "width": 1438,
+        "height": 809
+      },
+      "dpr": 1.7799999713897705,
+      "height": 809,
+      "scrollWidth": 1438,
+      "width": 1438
+    },
+    {
+      "path": "desktop-attachments.jpg",
+      "clip": {
+        "x": 0,
+        "y": 0,
+        "width": 1438,
+        "height": 809
+      },
+      "dpr": 1.7799999713897705,
+      "height": 809,
+      "scrollWidth": 1438,
+      "width": 1438
+    },
+    {
+      "path": "desktop-review.jpg",
+      "clip": {
+        "x": 0,
+        "y": 0,
+        "width": 1438,
+        "height": 809
+      },
+      "dpr": 1.7799999713897705,
+      "height": 809,
+      "scrollWidth": 1438,
+      "width": 1438
+    },
+    {
+      "path": "desktop-review-saved.jpg",
+      "clip": {
+        "x": 0,
+        "y": 0,
+        "width": 1438,
+        "height": 809
+      },
+      "dpr": 1.7799999713897705,
+      "height": 809,
+      "scrollWidth": 1438,
+      "width": 1438
+    },
+    {
+      "path": "mobile-parties.jpg",
+      "clip": {
+        "x": 0,
+        "y": 0,
+        "width": 320,
+        "height": 712
+      },
+      "dpr": 0.8899999856948853,
+      "height": 800,
+      "scrollWidth": 360,
+      "width": 360
+    },
+    {
+      "path": "mobile-building-editor.jpg",
+      "clip": {
+        "x": 0,
+        "y": 0,
+        "width": 320,
+        "height": 712
+      },
+      "dpr": 0.8899999856948853,
+      "height": 800,
+      "scrollWidth": 360,
+      "width": 360
+    },
+    {
+      "path": "mobile-attachments.jpg",
+      "clip": {
+        "x": 0,
+        "y": 0,
+        "width": 320,
+        "height": 712
+      },
+      "dpr": 0.8899999856948853,
+      "height": 800,
+      "scrollWidth": 360,
+      "width": 360
+    },
+    {
+      "path": "mobile-review.jpg",
+      "clip": {
+        "x": 0,
+        "y": 0,
+        "width": 320,
+        "height": 712
+      },
+      "dpr": 0.8899999856948853,
+      "height": 800,
+      "scrollWidth": 360,
+      "width": 360
+    },
+    {
+      "path": "mobile-created.jpg",
+      "clip": {
+        "x": 0,
+        "y": 0,
+        "width": 320,
+        "height": 712
+      },
+      "dpr": 0.8899999856948853,
+      "height": 800,
+      "scrollWidth": 360,
+      "width": 360
+    },
+    {
+      "path": "mobile-arabic-200pct.jpg",
+      "clip": {
+        "x": 0,
+        "y": 0,
+        "width": 320,
+        "height": 712
+      },
+      "dpr": 0.8899999856948853,
+      "height": 800,
+      "scrollWidth": 360,
+      "width": 360
+    },
+    {
+      "path": "desktop-created.jpg",
+      "clip": {
+        "x": 0,
+        "y": 0,
+        "width": 1438,
+        "height": 809
+      },
+      "dpr": 1.7799999713897705,
+      "height": 809,
+      "scrollWidth": 1438,
+      "width": 1438
+    }
+  ],
+  "checks": {
+    "desktopManualSaveCaptureExitRestore": "passed",
+    "phoneManualSaveExit": "passed",
+    "freshPhoneAllStagesAndArabic200pct": "no captured console errors",
+    "postAccessibilityBreakpointResize": "open Flutter engine semantics-map issue; editor and exit remained operational",
+    "plainSharedWorkspaceResize": "no captured errors; does not independently reproduce nested form failure"
+  }
+}

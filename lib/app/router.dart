@@ -542,10 +542,12 @@ Page<void> _slide(
 Page<void> _yorksV1Slide(LocalKey key, Widget child) =>
     _slide(key, YorksV1WorkspaceShell(child: child));
 
-/// Setup keeps its reference chrome while participating in the same protected
-/// Yorks navigation, search and history as the rest of the workspace.
-Page<void> _yorksV1ProjectSetupSlide(LocalKey key, Widget child) =>
-    _slide(key, YorksV1WorkspaceShell(featureOwnsChrome: true, child: child));
+/// Setup uses the universal Yorks chrome. Its draft-aware feature guard owns
+/// system Back while the same workspace history and route exit guard remain.
+Page<void> _yorksV1ProjectSetupSlide(LocalKey key, Widget child) => _slide(
+  key,
+  YorksV1WorkspaceShell(featureOwnsBackNavigation: true, child: child),
+);
 
 /// Slide-in page for screens that were originally office-shell *tabs* and so
 /// have no `Scaffold`/`Material` of their own. When reached as a full-screen

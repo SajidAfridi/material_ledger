@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,13 +9,16 @@ import 'package:material_ledger/app/router.dart';
 import 'package:material_ledger/app/yorks_navigation_history.dart';
 import 'package:material_ledger/app/yorks_v1_workspace_search.dart';
 import 'package:material_ledger/app/yorks_v1_workspace_shell.dart';
+import 'package:material_ledger/core/constants/app_spacing.dart';
 import 'package:material_ledger/core/theme/app_theme.dart';
+import 'package:material_ledger/core/widgets/yorks_mobile_ui.dart';
 import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_project_create_flow_screen.dart';
 import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_projects_screen.dart';
 import 'package:material_ledger/shared/models/yorks_v1_feature_flags.dart';
 import 'package:material_ledger/shared/models/yorks_v1_permission_management.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_creation_draft.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_strings.dart';
+import 'package:material_ledger/shared/models/yorks_v1_project_setup_shell_strings.dart';
 import 'package:material_ledger/shared/models/yorks_v1_role.dart';
 import 'package:material_ledger/shared/models/yorks_v1_shell_strings.dart';
 import 'package:material_ledger/shared/models/yorks_v1_workspace_search.dart';
@@ -44,6 +49,8 @@ const _owner = 'workspace-setup-test-owner';
 const _navigationKey = ValueKey('project-setup-workspace-navigation');
 const _searchKey = ValueKey('project-setup-workspace-search');
 const _drawerKey = ValueKey('yorks-workspace-navigation-drawer');
+const _sidebarToggleKey = ValueKey('yorks-workspace-sidebar-toggle');
+const _saveDraftKey = ValueKey('project-setup-save-draft');
 const _engineerCapabilities = <String>{
   YorksV1CapabilityKeys.projectsView,
   YorksV1CapabilityKeys.projectsCreate,
@@ -66,79 +73,143 @@ void main() {
     await font.load();
   });
 
-  for (final size in [const Size(1536, 1024), const Size(431, 863)]) {
-    final platform = size.width >= 1100 ? 'desktop' : 'phone';
+  for (final size in [
+    const Size(1536, 1024),
+    const Size(1366, 768),
+    const Size(1280, 800),
+    const Size(360, 800),
+  ]) {
+    final desktop = size.width >= AppSpacing.yorksV1ShellDesktopBreakpoint;
+    final wideContent = size.width - AppSpacing.sidebarWidth >= 1100;
+    final platform = desktop
+        ? 'desktop ${size.width.toInt()}x${size.height.toInt()}'
+        : 'phone ${size.width.toInt()}x${size.height.toInt()}';
 
     testWidgets(
-      '$platform setup retains its geometry and opens real navigation',
+      '$platform Projects opens setup inside the original workspace chrome',
       (tester) async {
-        final fixture = await _pumpWorkspace(tester, size: size);
+        final fixture = await _pumpWorkspace(
+          tester,
+          size: size,
+          initialLocation: RoutePaths.yorksV1Projects,
+        );
+        final originalHeader = desktop
+            ? tester.getRect(find.byKey(_sidebarToggleKey))
+            : tester.getRect(find.byType(YorksMobileAppBar));
+        await _openCreateProject(tester);
         final shell = find.byKey(
-          ValueKey(
-            'project-setup-${platform == 'desktop' ? 'desktop' : 'mobile'}-shell',
-          ),
+          ValueKey('project-setup-${wideContent ? 'desktop' : 'mobile'}-shell'),
         );
-        expect(tester.getRect(shell), Offset.zero & size);
-        expect(find.byKey(_navigationKey), findsOneWidget);
-        expect(find.byKey(_searchKey), findsOneWidget);
-        expect(find.byType(NotificationBell), findsOneWidget);
+        expect(find.byType(YorksV1ProjectCreateFlowScreen), findsOneWidget);
+        expect(find.byKey(_navigationKey), findsNothing);
+        expect(find.byKey(_searchKey), findsNothing);
         expect(
-          find.text(YorksV1ShellStrings.companyName.primary),
-          findsOneWidget,
+          find.byKey(const ValueKey('project-setup-mobile-header')),
+          findsNothing,
         );
+        expect(find.byKey(_drawerKey), findsNothing);
+        expect(find.byKey(_saveDraftKey), findsOneWidget);
         expect(find.byType(NavigationBar), findsNothing);
         expect(find.byType(NavigationRail), findsNothing);
-        expect(
-          find.byKey(const ValueKey('yorks-workspace-sidebar-toggle')),
-          findsNothing,
-        );
-        expect(
-          find.byKey(const ValueKey('yorks-mobile-navigation')),
-          findsNothing,
-        );
+        if (desktop) {
+          expect(find.byKey(_sidebarToggleKey), findsOneWidget);
+          expect(tester.getRect(find.byKey(_sidebarToggleKey)), originalHeader);
+          expect(find.byType(NotificationBell), findsOneWidget);
+          expect(
+            find.text(YorksV1ShellStrings.companyName.primary),
+            findsNWidgets(2),
+          );
+          expect(
+            find.text(YorksV1ShellStrings.companyLegalName.primary),
+            findsOneWidget,
+          );
+          _expectEngineerNavigation(_sidebarSurface());
+          expect(
+            tester.getRect(shell),
+            Rect.fromLTWH(
+              AppSpacing.sidebarWidth,
+              AppSpacing.topBarHeight,
+              size.width - AppSpacing.sidebarWidth,
+              size.height - AppSpacing.topBarHeight,
+            ),
+          );
+          if (wideContent) {
+            final rail = tester.getRect(
+              find.byKey(const ValueKey('project-setup-desktop-rail')),
+            );
+            expect(rail.left, AppSpacing.sidebarWidth);
+            expect(rail.top, AppSpacing.topBarHeight);
+            expect(rail.right, lessThan(tester.getRect(shell).right));
+          } else {
+            expect(
+              find.byKey(const ValueKey('project-setup-desktop-rail')),
+              findsNothing,
+            );
+          }
+          // Collapsing the universal sidebar changes its own width. The
+          // project stage rail stays inside the work area and never takes over
+          // the application's left edge.
+          await tester.tap(find.byKey(_sidebarToggleKey));
+          await tester.pumpAndSettle();
+          expect(fixture.container.read(yorksV1SidebarExpandedProvider), false);
+          final collapsedContent = find.byKey(
+            const ValueKey('project-setup-desktop-shell'),
+          );
+          expect(
+            tester.getRect(collapsedContent).left,
+            AppSpacing.sidebarCollapsedWidth,
+          );
+          expect(
+            tester
+                .getRect(
+                  find.byKey(const ValueKey('project-setup-desktop-rail')),
+                )
+                .left,
+            AppSpacing.sidebarCollapsedWidth,
+          );
+          expect(find.byKey(_sidebarToggleKey), findsOneWidget);
+          expect(find.byType(NotificationBell), findsOneWidget);
+          await tester.tap(find.byKey(_sidebarToggleKey));
+          await tester.pumpAndSettle();
+          expect(fixture.container.read(yorksV1SidebarExpandedProvider), true);
+          _expectEngineerNavigation(_sidebarSurface());
+        } else {
+          expect(find.byKey(_sidebarToggleKey), findsNothing);
+          expect(find.byType(YorksMobileAppBar), findsOneWidget);
+          expect(
+            tester.getRect(find.byType(YorksMobileAppBar)),
+            originalHeader,
+          );
+          final header = tester.getRect(find.byType(YorksMobileAppBar));
+          expect(tester.getRect(shell).top, header.bottom);
+          expect(tester.getRect(shell).width, size.width);
+          // The canonical workspace intentionally omits bottom navigation for
+          // focused setup routes so it cannot cover the feature's fixed actions.
+          expect(
+            find.byKey(const ValueKey('yorks-mobile-navigation')),
+            findsNothing,
+          );
+          expect(
+            find.byKey(const ValueKey('yorks-compact-navigation-legacy')),
+            findsNothing,
+          );
+        }
         expect(
           fixture.container.read(yorksNavigationHistoryProvider).locations,
-          [RoutePaths.engineerCreateProject],
+          [RoutePaths.yorksV1Projects, RoutePaths.engineerCreateProject],
         );
-        if (platform == 'desktop') {
-          final rail = tester.getRect(
-            find.byKey(const ValueKey('project-setup-desktop-rail')),
-          );
-          expect(rail.left, 0);
-          expect(rail.top, 56);
-        } else {
-          final header = tester.getRect(
-            find.byKey(const ValueKey('project-setup-mobile-header')),
-          );
-          expect(header.top, 0);
-          expect(header.height, 48);
-        }
-
-        await tester.tap(find.byKey(_navigationKey));
-        await tester.pumpAndSettle();
-        expect(find.byKey(_drawerKey), findsOneWidget);
-        expect(
-          tester.widget<Drawer>(find.byKey(_drawerKey)).semanticLabel,
-          YorksV1ShellStrings.quickNavigation.primary,
-        );
-        _expectEngineerNavigation(find.byKey(_drawerKey));
         expect(fixture.commands.calls, 0);
         expect(tester.takeException(), isNull);
       },
     );
 
     testWidgets(
-      '$platform header search uses the same permitted canonical destinations',
+      '$platform shared search retains permitted canonical destinations',
       (tester) async {
         final fixture = await _pumpWorkspace(tester, size: size);
-        await tester.tap(find.byKey(_navigationKey));
-        await tester.pumpAndSettle();
-        _expectEngineerNavigation(find.byKey(_drawerKey));
-        await tester.tapAt(Offset(size.width - 8, 100));
-        await tester.pumpAndSettle();
-
-        await tester.tap(find.byKey(_searchKey));
-        await tester.pumpAndSettle();
+        // Ctrl+K belongs to the universal shell on every viewport, not a
+        // replacement search widget built by project setup.
+        await _openWorkspaceSearch(tester);
         final dialog = tester.widget<YorksV1WorkspaceSearchDialog>(
           find.byType(YorksV1WorkspaceSearchDialog),
         );
@@ -157,7 +228,7 @@ void main() {
     );
 
     testWidgets(
-      '$platform canonical navigation awaits draft acknowledgement and the leave decision',
+      '$platform workspace navigation guards automatic-only draft and resumes it',
       (tester) async {
         final fixture = await _pumpWorkspace(tester, size: size);
         final originalDraftId = fixture.container
@@ -169,14 +240,20 @@ void main() {
           find.byKey(const ValueKey('yorks-v1-project-name')),
           proposedName,
         );
-        await tester.tap(find.byKey(_navigationKey));
-        await tester.pumpAndSettle();
-        await tester.tap(
-          find.descendant(
-            of: find.byKey(_drawerKey),
-            matching: find.text(YorksV1ShellStrings.projects.primary),
-          ),
-        );
+        if (desktop) {
+          await tester.tap(
+            find.descendant(
+              of: _sidebarSurface(),
+              matching: find.text(YorksV1ShellStrings.projects.primary),
+            ),
+          );
+        } else {
+          await tester.tap(
+            find
+                .text(YorksV1ProjectSetupShellStrings.returnToProjects.primary)
+                .first,
+          );
+        }
         await tester.pumpAndSettle();
         expect(
           find.text(YorksV1ProjectStrings.leaveSetupTitle.primary),
@@ -193,73 +270,35 @@ void main() {
           fixture.router.routerDelegate.currentConfiguration.uri.path,
           RoutePaths.engineerCreateProject,
         );
-
-        // A declined exit keeps the real drawer available for another deliberate
-        // destination selection. The GoRouter onExit invokes the mounted editor.
-        await tester.tap(
-          find.descendant(
-            of: find.byKey(_drawerKey),
-            matching: find.text(YorksV1ShellStrings.projects.primary),
-          ),
-        );
+        if (desktop) {
+          await tester.tap(
+            find.descendant(
+              of: _sidebarSurface(),
+              matching: find.text(YorksV1ShellStrings.projects.primary),
+            ),
+          );
+        } else {
+          await tester.tap(
+            find
+                .text(YorksV1ProjectSetupShellStrings.returnToProjects.primary)
+                .first,
+          );
+        }
         await tester.pumpAndSettle();
         await tester.tap(
           find.text(YorksV1ProjectStrings.leaveWithSavedDraft.primary),
         );
         await tester.pumpAndSettle();
-        expect(
-          fixture.router.routeInformationProvider.value.uri.path,
-          RoutePaths.yorksV1Projects,
-        );
-        expect(find.byType(YorksV1ProjectsScreen), findsOneWidget);
-        expect(find.byType(YorksV1ProjectCreateFlowScreen), findsNothing);
+        _expectPortfolio(fixture);
         final draft = fixture.container.read(
           yorksV1ProjectSetupCreationDraftProvider(_owner),
         );
         expect(draft.name, proposedName);
         expect(draft.storageState, YorksV1ProjectDraftStorageState.saved);
         expect(draft.acknowledgedRevision, draft.revision);
-        expect(
-          fixture.container.read(yorksNavigationHistoryProvider).locations,
-          [RoutePaths.engineerCreateProject, RoutePaths.yorksV1Projects],
-        );
 
-        // Re-enter through the real portfolio action, rather than sending the
-        // router a test-only location. Both layouts must resume this draft.
-        final create = find
-            .descendant(
-              of: find.byType(YorksV1ProjectsScreen),
-              matching: find.text(YorksV1ProjectStrings.createProject.primary),
-            )
-            .first;
-        await tester.ensureVisible(create);
-        await tester.tap(create);
-        await tester.pumpAndSettle();
-        expect(
-          fixture
-              .router
-              .routerDelegate
-              .currentConfiguration
-              .last
-              .matchedLocation,
-          RoutePaths.engineerCreateProject,
-        );
-        expect(find.byType(YorksV1ProjectCreateFlowScreen), findsOneWidget);
-        expect(find.byKey(_navigationKey), findsOneWidget);
-        expect(find.byKey(_searchKey), findsOneWidget);
-        final name = tester.widget<EditableText>(
-          find.descendant(
-            of: find.byKey(const ValueKey('yorks-v1-project-name')),
-            matching: find.byType(EditableText),
-          ),
-        );
-        expect(name.controller.text, proposedName);
-        final resumed = fixture.container.read(
-          yorksV1ProjectSetupCreationDraftProvider(_owner),
-        );
-        expect(resumed.draftId, originalDraftId);
-        expect(resumed.name, proposedName);
-        expect(resumed.acknowledgedRevision, resumed.revision);
+        await _openCreateProject(tester);
+        _expectResumedDraft(tester, fixture, originalDraftId, proposedName);
         expect(
           fixture.container.read(yorksNavigationHistoryProvider).locations,
           [
@@ -272,7 +311,224 @@ void main() {
         expect(tester.takeException(), isNull);
       },
     );
+
+    testWidgets(
+      '$platform explicit Save draft acknowledges storage and Back resumes that draft',
+      (tester) async {
+        final fixture = await _pumpWorkspace(
+          tester,
+          size: size,
+          initialLocation: RoutePaths.yorksV1Projects,
+        );
+        await _openCreateProject(tester);
+        final originalDraftId = fixture.container
+            .read(yorksV1ProjectSetupCreationDraftProvider(_owner))
+            .draftId;
+        const proposedName = 'Explicitly saved inside Yorks workspace';
+        await tester.enterText(
+          find.byKey(const ValueKey('yorks-v1-project-name')),
+          proposedName,
+        );
+        await tester.tap(find.byKey(_saveDraftKey));
+        await tester.pumpAndSettle();
+        final saved = fixture.container.read(
+          yorksV1ProjectSetupCreationDraftProvider(_owner),
+        );
+        expect(saved.storageState, YorksV1ProjectDraftStorageState.saved);
+        expect(saved.acknowledgedRevision, saved.revision);
+        expect(
+          find.text(YorksV1ProjectStrings.draftSaved.primary),
+          findsOneWidget,
+        );
+        final storageKey = yorksV1ProjectDraftStorageKey(
+          backendIdentity: fixture.container.read(
+            yorksV1ProjectDraftBackendIdentityProvider,
+          ),
+          ownerAuthUserId: _owner,
+          mode: YorksV1ProjectDraftMode.create,
+        );
+        final stored = fixture.preferences.getString(storageKey);
+        expect(stored, isNotNull);
+        final envelope = jsonDecode(stored!) as Map<String, dynamic>;
+        final restored = YorksV1ProjectCreationDraft.fromJson(
+          Map<String, dynamic>.from(envelope['draft'] as Map),
+        );
+        expect(restored.draftId, originalDraftId);
+        expect(restored.name, proposedName);
+
+        // Match the reported Save draft -> Back to projects sequence. A
+        // confirmed explicit save of unchanged input needs no leave warning.
+        await tester.tap(
+          find
+              .text(YorksV1ProjectSetupShellStrings.returnToProjects.primary)
+              .first,
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.text(YorksV1ProjectStrings.leaveSetupTitle.primary),
+          findsNothing,
+        );
+        _expectPortfolio(fixture);
+        await _openCreateProject(tester);
+        _expectResumedDraft(tester, fixture, originalDraftId, proposedName);
+        expect(fixture.commands.calls, 0);
+        expect(tester.takeException(), isNull);
+      },
+    );
   }
+
+  testWidgets(
+    'manual save and unfinished input survive desktop phone and transient viewport resize',
+    (tester) async {
+      final fixture = await _pumpWorkspace(
+        tester,
+        initialLocation: RoutePaths.yorksV1Projects,
+      );
+      await _openCreateProject(tester);
+      final flowState = tester.state(
+        find.byType(YorksV1ProjectCreateFlowScreen),
+      );
+      final draftId = fixture.container
+          .read(yorksV1ProjectSetupCreationDraftProvider(_owner))
+          .draftId;
+      const proposedName = 'Viewport recovery preserves the saved proposal';
+      const partialDate = '12/10/';
+      const notes = 'Unpublished notes remain local through every layout.';
+      await tester.enterText(
+        find.byKey(const ValueKey('yorks-v1-project-name')),
+        proposedName,
+      );
+      final date = find.byKey(
+        ValueKey('yorks-v1-project-date-${YorksV1ProjectStrings.startDate.en}'),
+      );
+      await tester.ensureVisible(date);
+      await tester.enterText(date, partialDate);
+      final notesField = find.byKey(const ValueKey('yorks-v1-project-notes'));
+      await tester.ensureVisible(notesField);
+      await tester.enterText(notesField, notes);
+      await tester.tap(find.byKey(_saveDraftKey));
+      await tester.pumpAndSettle();
+      expect(
+        find.text(YorksV1ProjectStrings.draftSaved.primary),
+        findsOneWidget,
+      );
+      final saved = fixture.container.read(
+        yorksV1ProjectSetupCreationDraftProvider(_owner),
+      );
+      expect(saved.isAcknowledged, true);
+      expect(saved.rawEditorState['dateStartText'], partialDate);
+      final notesEditor = tester.widget<EditableText>(
+        find.descendant(of: notesField, matching: find.byType(EditableText)),
+      );
+      final controller = notesEditor.controller;
+      final focusNode = notesEditor.focusNode;
+      const selection = TextSelection(baseOffset: 4, extentOffset: 15);
+      controller.selection = selection;
+      focusNode.requestFocus();
+      await tester.pump();
+
+      for (final size in const [Size(360, 800), Size(1, 1), Size(1536, 1024)]) {
+        await _resizeWorkspace(tester, size);
+        expect(
+          tester.state(find.byType(YorksV1ProjectCreateFlowScreen)),
+          same(flowState),
+        );
+        final current = fixture.container.read(
+          yorksV1ProjectSetupCreationDraftProvider(_owner),
+        );
+        expect(current.draftId, draftId);
+        expect(current.name, proposedName);
+        expect(current.notes, notes);
+        expect(current.rawEditorState['dateStartText'], partialDate);
+        expect(current.isAcknowledged, true);
+        expect(tester.takeException(), isNull);
+      }
+      final resumedEditor = tester.widget<EditableText>(
+        find.descendant(of: notesField, matching: find.byType(EditableText)),
+      );
+      expect(resumedEditor.controller, same(controller));
+      expect(resumedEditor.focusNode, same(focusNode));
+      expect(controller.selection, selection);
+      expect(controller.text, notes);
+      // The temporarily hidden 1×1 body has no keyboard target. Its original
+      // focus node remains usable once the real viewport returns.
+      focusNode.requestFocus();
+      await tester.pump();
+      expect(focusNode.hasFocus, true);
+
+      await tester.tap(
+        find
+            .text(YorksV1ProjectSetupShellStrings.returnToProjects.primary)
+            .first,
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.text(YorksV1ProjectStrings.leaveSetupTitle.primary),
+        findsNothing,
+      );
+      _expectPortfolio(fixture);
+      await _openCreateProject(tester);
+      _expectResumedDraft(tester, fixture, draftId, proposedName);
+      final restored = fixture.container.read(
+        yorksV1ProjectSetupCreationDraftProvider(_owner),
+      );
+      expect(restored.rawEditorState['dateStartText'], partialDate);
+      expect(restored.notes, notes);
+      expect(fixture.commands.calls, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'universal desktop Back keeps rejected draft exit history and resumes with Forward',
+    (tester) async {
+      final fixture = await _pumpWorkspace(
+        tester,
+        initialLocation: RoutePaths.yorksV1Projects,
+      );
+      await _openCreateProject(tester);
+      final originalDraftId = fixture.container
+          .read(yorksV1ProjectSetupCreationDraftProvider(_owner))
+          .draftId;
+      const proposedName = 'Guarded universal history proposal';
+      await tester.enterText(
+        find.byKey(const ValueKey('yorks-v1-project-name')),
+        proposedName,
+      );
+      final before = fixture.container.read(yorksNavigationHistoryProvider);
+      await tester.tap(find.byKey(const ValueKey('yorks-workspace-back')));
+      await tester.pumpAndSettle();
+      expect(
+        find.text(YorksV1ProjectStrings.leaveSetupTitle.primary),
+        findsOneWidget,
+      );
+      await tester.tap(find.text(YorksV1ProjectStrings.keepWorking.primary));
+      await tester.pumpAndSettle();
+      expect(
+        fixture.router.routerDelegate.currentConfiguration.last.matchedLocation,
+        RoutePaths.engineerCreateProject,
+      );
+      final retained = fixture.container.read(yorksNavigationHistoryProvider);
+      expect(retained.locations, before.locations);
+      expect(retained.cursor, before.cursor);
+      expect(
+        find.byKey(const ValueKey('yorks-workspace-sidebar-toggle')),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const ValueKey('yorks-workspace-back')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.text(YorksV1ProjectStrings.leaveWithSavedDraft.primary),
+      );
+      await tester.pumpAndSettle();
+      _expectPortfolio(fixture);
+      await tester.tap(find.byKey(const ValueKey('yorks-workspace-forward')));
+      await tester.pumpAndSettle();
+      _expectResumedDraft(tester, fixture, originalDraftId, proposedName);
+      expect(fixture.commands.calls, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'connected loading permissions expose only verification, never the setup feature',
@@ -299,7 +555,7 @@ void main() {
   );
 
   testWidgets(
-    'confirmed create denial cannot expose an editor through focused workspace chrome',
+    'confirmed create denial cannot expose an editor inside the universal workspace',
     (tester) async {
       final fixture = await _pumpWorkspace(
         tester,
@@ -323,6 +579,76 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+}
+
+Finder _sidebarSurface() => find
+    .ancestor(
+      of: find.text(YorksV1ShellStrings.companyLegalName.primary),
+      matching: find.byType(SafeArea),
+    )
+    .first;
+
+Future<void> _openCreateProject(WidgetTester tester) async {
+  final create = find
+      .descendant(
+        of: find.byType(YorksV1ProjectsScreen),
+        matching: find.text(YorksV1ProjectStrings.createProject.primary),
+      )
+      .first;
+  await tester.ensureVisible(create);
+  await tester.tap(create);
+  await tester.pumpAndSettle();
+}
+
+Future<void> _resizeWorkspace(WidgetTester tester, Size size) async {
+  tester.view.physicalSize = size;
+  await tester.binding.setSurfaceSize(size);
+  await tester.pumpAndSettle();
+}
+
+Future<void> _openWorkspaceSearch(WidgetTester tester) async {
+  await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+  await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+  await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+  await tester.pumpAndSettle();
+  expect(find.byType(YorksV1WorkspaceSearchDialog), findsOneWidget);
+}
+
+void _expectPortfolio(_WorkspaceFixture fixture) {
+  expect(
+    fixture.router.routeInformationProvider.value.uri.path,
+    RoutePaths.yorksV1Projects,
+  );
+  expect(find.byType(YorksV1ProjectsScreen), findsOneWidget);
+  expect(find.byType(YorksV1ProjectCreateFlowScreen), findsNothing);
+}
+
+void _expectResumedDraft(
+  WidgetTester tester,
+  _WorkspaceFixture fixture,
+  String originalDraftId,
+  String proposedName,
+) {
+  expect(
+    fixture.router.routerDelegate.currentConfiguration.last.matchedLocation,
+    RoutePaths.engineerCreateProject,
+  );
+  expect(find.byType(YorksV1ProjectCreateFlowScreen), findsOneWidget);
+  expect(find.byKey(_navigationKey), findsNothing);
+  expect(find.byKey(_searchKey), findsNothing);
+  final name = tester.widget<EditableText>(
+    find.descendant(
+      of: find.byKey(const ValueKey('yorks-v1-project-name')),
+      matching: find.byType(EditableText),
+    ),
+  );
+  expect(name.controller.text, proposedName);
+  final resumed = fixture.container.read(
+    yorksV1ProjectSetupCreationDraftProvider(_owner),
+  );
+  expect(resumed.draftId, originalDraftId);
+  expect(resumed.name, proposedName);
+  expect(resumed.acknowledgedRevision, resumed.revision);
 }
 
 void _expectEngineerNavigation(Finder surface) {
@@ -355,6 +681,7 @@ Future<_WorkspaceFixture> _pumpWorkspace(
   Size size = const Size(1536, 1024),
   YorksV1CurrentPermissionSnapshotState? permission,
   bool settle = true,
+  String initialLocation = RoutePaths.engineerCreateProject,
 }) async {
   tester.view.devicePixelRatio = 1;
   tester.view.physicalSize = size;
@@ -422,7 +749,7 @@ Future<_WorkspaceFixture> _pumpWorkspace(
   // uses the same route components, canonical paths and mounted onExit guard
   // without changing kIsWeb or substituting a fake feature/navigation widget.
   final router = GoRouter(
-    initialLocation: RoutePaths.engineerCreateProject,
+    initialLocation: initialLocation,
     routes: [
       GoRoute(
         path: RoutePaths.engineerCreateProject,
@@ -430,7 +757,7 @@ Future<_WorkspaceFixture> _pumpWorkspace(
             .read(yorksV1ProjectSetupNavigationGuardProvider)
             .canLeave(),
         builder: (_, _) => const YorksV1WorkspaceShell(
-          featureOwnsChrome: true,
+          featureOwnsBackNavigation: true,
           child: YorksV1ProjectCreateFlowScreen(),
         ),
       ),
@@ -462,14 +789,20 @@ Future<_WorkspaceFixture> _pumpWorkspace(
     await tester.pump();
   });
   addTearDown(() => expect(client.calls, 0));
-  return _WorkspaceFixture(container, router, commands);
+  return _WorkspaceFixture(container, router, commands, preferences);
 }
 
 class _WorkspaceFixture {
-  const _WorkspaceFixture(this.container, this.router, this.commands);
+  const _WorkspaceFixture(
+    this.container,
+    this.router,
+    this.commands,
+    this.preferences,
+  );
   final ProviderContainer container;
   final GoRouter router;
   final _NoProjectCommands commands;
+  final SharedPreferences preferences;
 }
 
 class _NoProjectCommands
