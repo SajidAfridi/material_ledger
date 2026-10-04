@@ -1,6 +1,6 @@
 # Universal Yorks workspace and explicit local draft save — 4 October 2026
 
-Status: implementation and local gates passed; staging release verification in progress.
+Status: implementation and local gates passed; staging refreshed and verified.
 
 ## Product-owner correction
 
@@ -69,8 +69,9 @@ Production remains a later release.
 
 [Browser captures and scope](visual-evidence/universal-workspace-2026-10-04/README.md)
 cover all five stages and confirmed-result presentation on desktop and 360px,
-manual Save/exit/reentry, building-edit guarding and Arabic at 200% text. They
-use a synthetic local fixture, not a remote project creation. The previous
+manual Save/exit/reentry, building-edit guarding and Arabic at 200% text using
+a synthetic local fixture. Separate authenticated staging captures verify the
+existing-project local edit draft and shared navigation. The previous
 post-accessibility breakpoint-resize Flutter engine semantics-map error remains
 an open browser accessibility gate. Fresh phone/RTL sessions were error-free;
 state/input/save decisions remained operational through the resize reproduction.
@@ -83,10 +84,53 @@ earlier reports rather than relabelled as a pass for this change.
 
 ## Staging release
 
-Source/artifact identity, route verification and authenticated staging browser
-evidence will be added after release. Only the existing staging alias is
-authorized. Production remains at its inspected prior deployment.
+- Source: pushed commit `cf15c70c8bf129db72a69809048f0eddfc3ed8f8` on
+  `codex/project-creation-ux`; local HEAD and remote ref matched before building.
+  Subsequent documentation commits do not change the deployed source.
+- The full `lib/main.dart` application was rebuilt from that clean source with
+  `YORKS_V1_PROJECT_SETUP=true`, the staging configuration and PostHog disabled.
+  No fixture entrypoint or CI backend appeared in the release artifact.
+- Backend: staging `iqltcyimlqtcwyzlemwx`; production backend markers were absent.
+  No service-role JWT or secret key was found in the compiled assets.
+- Isolated upload: 59 static files / 54,032,461 bytes, without repository build
+  context. Main JavaScript: 10,030,686 bytes, verifier gzip 2,888,218, SHA-256
+  `67c798d097602b09fe4be7dbb0707be72db03d329651283c2c848b77938f7cba`.
+- Vercel accepted a preview deployment, `dpl_G1EJYYDsSwXZNcpmTarzfLHn2V7g`,
+  and reported READY. [Immutable preview](https://yorks-r35-qvah0q2wf-sajid-alis-projects-0ec775a2.vercel.app).
+- Only [the staging alias](https://yorks-r35-staging.vercel.app/yorks/projects#/yorks/projects)
+  was assigned. Twenty-three routes/assets and two additional create/edit deep
+  routes matched the built hashes on both the immutable preview and stable alias.
+  This includes deferred modules and PWA worker files. Project settings were
+  unchanged.
+- Production remained `dpl_Gj1cfA1CbEJnkVwi4bG8eKabkRJy`; the read-only before/after
+  checks matched its main JavaScript size of 9,678,001 and SHA-256
+  `739de306598a9c0d135c5c7721d133a8c800321538b05894bda2627b8471b19f`.
+
+### Authenticated staging browser verification
+
+Using the already signed-in Local Admin in a separate tab, the existing
+`YRA-123` project opened inside the original workspace. On Review, **Save draft**
+displayed **Changes saved on this device. Not applied to the project.** Leaving
+returned directly to Projects without an exit warning. Reopening Edit restored
+the review stage and project values, with **No project detail changes**. The
+save/exit sequence also passed in the desktop content layout at 1367×911.
+
+The portfolio's Create Project entry resumed the user's retained confirmed
+project result with its pending file re-selection notice. That retained state
+was preserved. It proves integration of the completion view, not a newly issued
+Create command. No final Create Project, Save changes, upload, access mutation
+or production command was used for live verification. The fresh staging tab
+reported no captured warning/error console logs during these checks. Temporary
+viewport overrides were reset, and the user's original tab was left untouched.
+Browser-resident JavaScript hashing was unavailable through the resource API;
+the HTTP artifact hashes and observed UI are the verified evidence.
+
+[Machine-readable release evidence](UNIVERSAL_WORKSPACE_AND_DRAFT_SAVE_2026-10-04.json)
+records deployment identities, route results and validation boundaries. The
+draft [PR #44](https://github.com/SajidAfridi/material_ledger/pull/44) remains open;
+Vercel check success is not hosted Flutter CI acceptance.
 
 Rollback is the default-off `YORKS_V1_PROJECT_SETUP` flag or the previous verified
-staging deployment. Preserve draft, journal, quarantine and tombstone namespaces.
+staging deployment `dpl_6RaX6nWDp1cnXPbV2hh1xVet6ovq`. Preserve draft, journal,
+quarantine and tombstone namespaces.
 No database rollback or historical-data mutation is needed.

@@ -1,6 +1,4 @@
 {
-  "fixture": "tool/project_setup_visual_fixture.dart",
-  "backend": "none; synthetic permitted read context and local browser storage",
   "captures": [
     {
       "path": "desktop-details.jpg",
@@ -13,7 +11,8 @@
       "dpr": 0.8899999856948853,
       "height": 1023,
       "scrollWidth": 1536,
-      "width": 1536
+      "width": 1536,
+      "provenance": "synthetic-local-fixture"
     },
     {
       "path": "desktop-save-confirmed.jpg",
@@ -26,7 +25,8 @@
       "dpr": 0.8899999856948853,
       "height": 1023,
       "scrollWidth": 1536,
-      "width": 1536
+      "width": 1536,
+      "provenance": "synthetic-local-fixture"
     },
     {
       "path": "desktop-saved-exit.jpg",
@@ -39,7 +39,8 @@
       "dpr": 0.8899999856948853,
       "height": 1023,
       "scrollWidth": 1536,
-      "width": 1536
+      "width": 1536,
+      "provenance": "synthetic-local-fixture"
     },
     {
       "path": "desktop-draft-restored.jpg",
@@ -52,7 +53,8 @@
       "dpr": 0.8899999856948853,
       "height": 1023,
       "scrollWidth": 1536,
-      "width": 1536
+      "width": 1536,
+      "provenance": "synthetic-local-fixture"
     },
     {
       "path": "mobile-details.jpg",
@@ -65,7 +67,8 @@
       "dpr": 0.8899999856948853,
       "height": 800,
       "scrollWidth": 360,
-      "width": 360
+      "width": 360,
+      "provenance": "synthetic-local-fixture"
     },
     {
       "path": "desktop-parties.jpg",
@@ -78,7 +81,8 @@
       "dpr": 1.7799999713897705,
       "height": 809,
       "scrollWidth": 1438,
-      "width": 1438
+      "width": 1438,
+      "provenance": "synthetic-local-fixture"
     },
     {
       "path": "desktop-buildings.jpg",
@@ -91,7 +95,8 @@
       "dpr": 1.7799999713897705,
       "height": 809,
       "scrollWidth": 1438,
-      "width": 1438
+      "width": 1438,
+      "provenance": "synthetic-local-fixture"
     },
     {
       "path": "desktop-building-editor.jpg",
@@ -104,7 +109,8 @@
       "dpr": 1.7799999713897705,
       "height": 809,
       "scrollWidth": 1438,
-      "width": 1438
+      "width": 1438,
+      "provenance": "synthetic-local-fixture"
     },
     {
       "path": "desktop-attachments.jpg",
@@ -117,7 +123,8 @@
       "dpr": 1.7799999713897705,
       "height": 809,
       "scrollWidth": 1438,
-      "width": 1438
+      "width": 1438,
+      "provenance": "synthetic-local-fixture"
     },
     {
       "path": "desktop-review.jpg",
@@ -130,7 +137,8 @@
       "dpr": 1.7799999713897705,
       "height": 809,
       "scrollWidth": 1438,
-      "width": 1438
+      "width": 1438,
+      "provenance": "synthetic-local-fixture"
     },
     {
       "path": "desktop-review-saved.jpg",
@@ -143,7 +151,8 @@
       "dpr": 1.7799999713897705,
       "height": 809,
       "scrollWidth": 1438,
-      "width": 1438
+      "width": 1438,
+      "provenance": "synthetic-local-fixture"
     },
     {
       "path": "mobile-parties.jpg",
@@ -156,7 +165,8 @@
       "dpr": 0.8899999856948853,
       "height": 800,
       "scrollWidth": 360,
-      "width": 360
+      "width": 360,
+      "provenance": "synthetic-local-fixture"
     },
     {
       "path": "mobile-building-editor.jpg",
@@ -169,7 +179,8 @@
       "dpr": 0.8899999856948853,
       "height": 800,
       "scrollWidth": 360,
-      "width": 360
+      "width": 360,
+      "provenance": "synthetic-local-fixture"
     },
     {
       "path": "mobile-attachments.jpg",
@@ -182,7 +193,8 @@
       "dpr": 0.8899999856948853,
       "height": 800,
       "scrollWidth": 360,
-      "width": 360
+      "width": 360,
+      "provenance": "synthetic-local-fixture"
     },
     {
       "path": "mobile-review.jpg",
@@ -195,7 +207,8 @@
       "dpr": 0.8899999856948853,
       "height": 800,
       "scrollWidth": 360,
-      "width": 360
+      "width": 360,
+      "provenance": "synthetic-local-fixture"
     },
     {
       "path": "mobile-created.jpg",
@@ -208,7 +221,8 @@
       "dpr": 0.8899999856948853,
       "height": 800,
       "scrollWidth": 360,
-      "width": 360
+      "width": 360,
+      "provenance": "synthetic-local-fixture"
     },
     {
       "path": "mobile-arabic-200pct.jpg",
@@ -221,7 +235,8 @@
       "dpr": 0.8899999856948853,
       "height": 800,
       "scrollWidth": 360,
-      "width": 360
+      "width": 360,
+      "provenance": "synthetic-local-fixture"
     },
     {
       "path": "desktop-created.jpg",
@@ -234,14 +249,78 @@
       "dpr": 1.7799999713897705,
       "height": 809,
       "scrollWidth": 1438,
-      "width": 1438
+      "width": 1438,
+      "provenance": "synthetic-local-fixture"
+    },
+    {
+      "path": "live-staging-review-saved.jpg",
+      "clip": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 720
+      },
+      "dpr": 2,
+      "height": 720,
+      "scrollWidth": 1280,
+      "width": 1280,
+      "provenance": "authenticated-staging-existing-project-local-draft"
+    },
+    {
+      "path": "live-staging-saved-exit.jpg",
+      "clip": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 720
+      },
+      "dpr": 2,
+      "height": 720,
+      "scrollWidth": 1280,
+      "width": 1280,
+      "provenance": "authenticated-staging-existing-project-local-draft"
+    },
+    {
+      "path": "live-staging-draft-restored.jpg",
+      "clip": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 720
+      },
+      "dpr": 2,
+      "height": 720,
+      "scrollWidth": 1280,
+      "width": 1280,
+      "provenance": "authenticated-staging-existing-project-local-draft"
+    },
+    {
+      "path": "live-staging-retained-completion.jpg",
+      "clip": {
+        "x": 0,
+        "y": 0,
+        "width": 1367,
+        "height": 911
+      },
+      "dpr": 1,
+      "height": 911,
+      "scrollWidth": 1367,
+      "width": 1367,
+      "provenance": "authenticated-staging-existing-project-local-draft"
+    },
+    {
+      "path": "live-staging-desktop-details-saved.jpg",
+      "clip": {
+        "x": 0,
+        "y": 0,
+        "width": 1367,
+        "height": 911
+      },
+      "dpr": 1,
+      "height": 911,
+      "scrollWidth": 1367,
+      "width": 1367,
+      "provenance": "authenticated-staging-existing-project-local-draft"
     }
-  ],
-  "checks": {
-    "desktopManualSaveCaptureExitRestore": "passed",
-    "phoneManualSaveExit": "passed",
-    "freshPhoneAllStagesAndArabic200pct": "no captured console errors",
-    "postAccessibilityBreakpointResize": "open Flutter engine semantics-map issue; editor and exit remained operational",
-    "plainSharedWorkspaceResize": "no captured errors; does not independently reproduce nested form failure"
-  }
+  ]
 }

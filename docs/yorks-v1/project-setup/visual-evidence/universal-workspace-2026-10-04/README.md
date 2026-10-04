@@ -1,6 +1,6 @@
 # Universal workspace and Save draft verification — 4 October 2026
 
-These browser captures use `tool/project_setup_visual_fixture.dart` with
+The local fixture captures use `tool/project_setup_visual_fixture.dart` with
 synthetic permitted read context and ordinary browser draft storage. The fixture
 has no remote backend. Completion is a synthetic confirmed result; it is not
 evidence that a live Create or upload command ran.
@@ -12,7 +12,7 @@ forms and actions only. The owner correction supersedes the mockups' global
 chrome. Field requirements and attachment restrictions retain the approved
 behavior/security contract rather than adopting inconsistent sample copy.
 
-## Captures
+## Local fixture captures
 
 - [Desktop details](desktop-details.jpg), [parties](desktop-parties.jpg),
   [buildings](desktop-buildings.jpg), [building editor](desktop-building-editor.jpg),
@@ -36,6 +36,27 @@ browser size or a 1536 CSS pixel override. All temporary overrides were reset.
 Phone editors/lists are scrollable with fixed reachable actions; these viewport
 captures are supplemented by top/bottom widget goldens at 431px and interaction
 checks at 360px. Canonical integration tests also cover 1280px and 1366px.
+
+## Authenticated staging captures
+
+These captures use the full application at
+`https://yorks-r35-staging.vercel.app/yorks/projects#/yorks/projects`, signed in
+as Local Admin. They show the existing `YRA-123` project; Save draft writes only
+the private local edit draft. No final Create, Save changes or upload was issued.
+
+- [Review save acknowledgement](live-staging-review-saved.jpg),
+  [direct saved exit](live-staging-saved-exit.jpg) and
+  [restored edit draft](live-staging-draft-restored.jpg): save → Projects → Edit
+  restored the review stage and values without another exit warning.
+- [Desktop details save](live-staging-desktop-details-saved.jpg): original
+  workspace header/sidebar and content stage rail at 1367×911 CSS pixels.
+- [Retained completion](live-staging-retained-completion.jpg): the Create entry
+  resumed the user's existing confirmed project with pending attachment recovery.
+  The retained state was preserved; this is not new server creation evidence.
+
+The first three captures use the normal 1280×720 viewport. Live capture metadata
+is labelled separately from synthetic fixtures in [captures.json](captures.json).
+There were no captured warning/error console logs in the fresh staging tab.
 
 ## Browser accessibility boundary
 
