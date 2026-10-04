@@ -123,6 +123,132 @@ void main() {
     },
   );
 
+  test(
+    'retained SQL finalization receipt preserves exact identities and skips immutable upload on replay',
+    () async {
+      final fixture = _Fixture();
+      fixture.rpc.retainedReceipt = {
+        'document_id': 'document-1',
+        'document_version_id': 'version-1',
+        'revision_number': 1,
+      };
+      final intent = YorksV1DocumentUploadIntent.fromRpcJson(
+        await fixture.rpc.invoke(
+              functionName: 'v1_prepare_document_upload',
+              parameters: const {},
+            )
+            as Map<String, dynamic>,
+      );
+      expect(intent.finalizedDocumentId, 'document-1');
+      expect(intent.finalizedVersionId, 'version-1');
+      expect(intent.plannedRevisionNumber, 1);
+      fixture.rpc.prepareCalls.clear();
+
+      await fixture.repository.upload(_input());
+      await fixture.repository.upload(_input());
+      expect(fixture.rpc.prepareCalls, hasLength(2));
+      expect(fixture.rpc.prepareCalls.first, fixture.rpc.prepareCalls.last);
+      expect(fixture.storage.uploads, 0);
+      expect(fixture.finalizer.calls, isEmpty);
+      expect(fixture.rpc.workspaceReads, 2);
+    },
+  );
+
+  final malformedRetainedReceipts = <String, Map<String, Object?>>{
+    'missing document identity': {
+      'document_version_id': 'version-1',
+      'revision_number': 1,
+    },
+    'missing version identity': {
+      'document_id': 'document-1',
+      'revision_number': 1,
+    },
+    'missing revision': {
+      'document_id': 'document-1',
+      'document_version_id': 'version-1',
+    },
+    'empty version identity': {
+      'document_id': 'document-1',
+      'document_version_id': ' ',
+      'revision_number': 1,
+    },
+    'wrong planned revision': {
+      'document_id': 'document-1',
+      'document_version_id': 'version-1',
+      'revision_number': 2,
+    },
+    'non-integer revision': {
+      'document_id': 'document-1',
+      'document_version_id': 'version-1',
+      'revision_number': 1.0,
+    },
+    'fractional planned revision': {
+      'document_id': 'document-1',
+      'document_version_id': 'version-1',
+      'revision_number': 1,
+      'planned_revision_number': 1.5,
+    },
+    'contradictory alias type': {
+      'document_id': 'document-1',
+      'document_version_id': 'version-1',
+      'revision_number': 1,
+      'finalized_document_id': 123,
+      'finalized_version_id': 456,
+    },
+  };
+  for (final receipt in malformedRetainedReceipts.entries) {
+    test('${receipt.key} retained prepare receipt fails closed', () async {
+      final fixture = _Fixture();
+      fixture.rpc.retainedReceipt = receipt.value;
+      await expectLater(
+        fixture.repository.upload(_input()),
+        throwsA(_domainCode(YorksV1DomainErrorCode.unexpectedResponse)),
+      );
+      expect(fixture.storage.uploads, 0);
+      expect(fixture.finalizer.calls, isEmpty);
+      expect(fixture.rpc.workspaceReads, 0);
+    });
+  }
+
+  test('matching retained receipt aliases remain compatible', () async {
+    final fixture = _Fixture();
+    fixture.rpc.finalizedDocumentId = 'document-1';
+    fixture.rpc.finalizedVersionId = 'version-1';
+    fixture.rpc.retainedReceipt = {
+      'document_id': 'document-1',
+      'document_version_id': 'version-1',
+      'revision_number': 1,
+    };
+    expect((await fixture.repository.upload(_input())).projectId, 'project-1');
+    expect(fixture.storage.uploads, 0);
+    expect(fixture.finalizer.calls, isEmpty);
+    expect(fixture.rpc.workspaceReads, 1);
+  });
+
+  for (final identity in ['document', 'version']) {
+    test('conflicting $identity receipt aliases fail closed', () async {
+      final fixture = _Fixture();
+      fixture.rpc.finalizedDocumentId = identity == 'document'
+          ? 'another-document'
+          : 'document-1';
+      fixture.rpc.finalizedVersionId = identity == 'version'
+          ? 'another-version'
+          : 'version-1';
+      fixture.rpc.retainedReceipt = {
+        'document_id': 'document-1',
+        'document_version_id': 'version-1',
+        'revision_number': 1,
+      };
+      await expectLater(
+        fixture.repository.upload(_input()),
+        throwsA(_domainCode(YorksV1DomainErrorCode.unexpectedResponse)),
+      );
+      expect(fixture.storage.uploads, 0);
+      expect(fixture.finalizer.calls, isEmpty);
+      expect(fixture.rpc.workspaceReads, 0);
+    });
+  }
+
   for (final onlyDocument in [true, false]) {
     test(
       'partial finalized prepare identity fails closed (document=$onlyDocument)',
@@ -160,6 +286,25 @@ void main() {
   );
 
   test(
+    'retained SQL receipt cannot substitute another replacement document',
+    () async {
+      final fixture = _Fixture();
+      fixture.rpc.retainedReceipt = {
+        'document_id': 'different-document',
+        'document_version_id': 'version-1',
+        'revision_number': 1,
+      };
+      await expectLater(
+        fixture.repository.upload(_input(documentId: 'existing-document')),
+        throwsA(_domainCode(YorksV1DomainErrorCode.unexpectedResponse)),
+      );
+      expect(fixture.rpc.workspaceReads, 0);
+      expect(fixture.storage.uploads, 0);
+      expect(fixture.finalizer.calls, isEmpty);
+    },
+  );
+
+  test(
     'lost finalizer receipt is reconciled through the original prepared upload key',
     () async {
       final fixture = _Fixture();
@@ -171,8 +316,11 @@ void main() {
       final originalPayload = fixture.rpc.prepareCalls.single['p_payload'];
       // The server has finalized the first immutable upload despite the lost
       // response. Its retained prepare receipt is the retry authority.
-      fixture.rpc.finalizedDocumentId = 'document-1';
-      fixture.rpc.finalizedVersionId = 'version-1';
+      fixture.rpc.retainedReceipt = {
+        'document_id': 'document-1',
+        'document_version_id': 'version-1',
+        'revision_number': 1,
+      };
       expect(
         (await fixture.repository.upload(_input())).projectId,
         'project-1',
@@ -240,6 +388,7 @@ class _Rpc implements YorksV1MaterialRequestRpcClient {
   Object? error;
   String? finalizedDocumentId;
   String? finalizedVersionId;
+  Map<String, Object?> retainedReceipt = const {};
   @override
   Future<Object?> invoke({
     required String functionName,
@@ -258,6 +407,7 @@ class _Rpc implements YorksV1MaterialRequestRpcClient {
         'planned_revision_number': 1,
         'finalized_document_id': finalizedDocumentId,
         'finalized_version_id': finalizedVersionId,
+        ...retainedReceipt,
       };
     }
     if (functionName == 'v1_document_workspace_projection') {
