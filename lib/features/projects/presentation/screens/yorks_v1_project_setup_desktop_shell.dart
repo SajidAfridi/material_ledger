@@ -206,26 +206,6 @@ class _YorksV1ProjectSetupDesktopShellState
                             ),
                           ),
                         ),
-                        const Spacer(),
-                        Padding(
-                          padding: const EdgeInsetsDirectional.fromSTEB(
-                            18,
-                            12,
-                            10,
-                            20,
-                          ),
-                          child: TextButton.icon(
-                            onPressed: widget.saving
-                                ? null
-                                : widget.onReturnToProjects,
-                            icon: const Icon(Icons.arrow_back, size: 21),
-                            label: Text(
-                              YorksV1ProjectSetupShellStrings.returnToProjects
-                                  .active(language),
-                              style: _text(14, color: _muted),
-                            ),
-                          ),
-                        ),
                       ],
                     ),
                   ),

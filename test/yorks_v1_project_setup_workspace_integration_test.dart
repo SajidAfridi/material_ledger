@@ -364,11 +364,11 @@ void main() {
 
         // Match the reported Save draft -> Back to projects sequence. A
         // confirmed explicit save of unchanged input needs no leave warning.
-        await tester.tap(
-          find
-              .text(YorksV1ProjectSetupShellStrings.returnToProjects.primary)
-              .first,
+        final footerExit = find.text(
+          YorksV1ProjectSetupShellStrings.returnToProjects.primary,
         );
+        expect(footerExit, findsOneWidget);
+        await tester.tap(footerExit);
         await tester.pumpAndSettle();
         expect(
           find.text(YorksV1ProjectStrings.leaveSetupTitle.primary),
@@ -382,6 +382,103 @@ void main() {
       },
     );
   }
+
+  testWidgets(
+    'desktop setup exits only from its first-stage footer and later footer Back keeps the draft',
+    (tester) async {
+      final fixture = await _pumpWorkspace(
+        tester,
+        initialLocation: RoutePaths.yorksV1Projects,
+      );
+      await _openCreateProject(tester);
+      final universalBack = find.byKey(const ValueKey('yorks-workspace-back'));
+      final headerBackRect = tester.getRect(universalBack);
+      final rail = find.byKey(const ValueKey('project-setup-desktop-rail'));
+      final returnLabel =
+          YorksV1ProjectSetupShellStrings.returnToProjects.primary;
+      expect(
+        find.descendant(of: rail, matching: find.text(returnLabel)),
+        findsNothing,
+      );
+      expect(find.text(returnLabel), findsOneWidget);
+      final footerExit = find.ancestor(
+        of: find.text(returnLabel),
+        matching: find.byWidgetPredicate((widget) => widget is OutlinedButton),
+      );
+      expect(footerExit, findsOneWidget);
+      expect(
+        tester.getRect(footerExit).top,
+        greaterThanOrEqualTo(tester.getRect(rail).bottom),
+      );
+      expect(find.byKey(_sidebarToggleKey), findsOneWidget);
+      await tester.tap(footerExit);
+      await tester.pumpAndSettle();
+      _expectPortfolio(fixture);
+      expect(
+        find.text(YorksV1ProjectStrings.leaveSetupTitle.primary),
+        findsNothing,
+      );
+
+      await _openCreateProject(tester);
+      final provider = yorksV1ProjectSetupCreationDraftProvider(_owner);
+      final writer = fixture.container.read(provider.notifier);
+      final draftId = fixture.container.read(provider).draftId;
+      await writer.save(
+        fixture.container
+            .read(provider)
+            .copyWith(
+              reference: 'FOOTER-NAVIGATION',
+              name: 'Retain this proposal through previous-step navigation',
+              siteLocation: 'Desktop footer test site',
+              startDate: DateTime(2026, 10, 4),
+            ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('yorks-v1-project-continue')));
+      await tester.pumpAndSettle();
+      expect(
+        fixture.container.read(provider).currentStage,
+        YorksV1ProjectCreationStage.partiesAndAccess,
+      );
+      expect(find.text(returnLabel), findsNothing);
+      final previous = find.ancestor(
+        of: find.text(YorksV1ProjectStrings.back.primary),
+        matching: find.byWidgetPredicate((widget) => widget is OutlinedButton),
+      );
+      expect(previous, findsOneWidget);
+      expect(
+        tester.getRect(previous).top,
+        greaterThanOrEqualTo(tester.getRect(rail).bottom),
+      );
+      expect(tester.getRect(universalBack), headerBackRect);
+      expect(find.byKey(_sidebarToggleKey), findsOneWidget);
+      await tester.tap(previous);
+      await tester.pumpAndSettle();
+      final resumed = fixture.container.read(provider);
+      expect(resumed.currentStage, YorksV1ProjectCreationStage.projectDetails);
+      expect(resumed.draftId, draftId);
+      expect(resumed.reference, 'FOOTER-NAVIGATION');
+      expect(
+        resumed.name,
+        'Retain this proposal through previous-step navigation',
+      );
+      expect(
+        fixture.router.routerDelegate.currentConfiguration.last.matchedLocation,
+        RoutePaths.engineerCreateProject,
+      );
+      expect(find.text(returnLabel), findsOneWidget);
+      expect(
+        find.descendant(of: rail, matching: find.text(returnLabel)),
+        findsNothing,
+      );
+      expect(
+        find.text(YorksV1ProjectStrings.leaveSetupTitle.primary),
+        findsNothing,
+      );
+      expect(fixture.commands.calls, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'manual save and unfinished input survive desktop phone and transient viewport resize',
