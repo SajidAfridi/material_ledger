@@ -55,6 +55,49 @@ void main() {
   });
 
   test(
+    'browser refresh hints are asynchronous and emitted only for changed commits',
+    () async {
+      final first = BrowserProjectDraftStorage();
+      final second = BrowserProjectDraftStorage();
+      final key = '$prefix-change-events';
+      final events = <Set<String>>[];
+      final listener = second.changes.listen(events.add);
+      addTearDown(listener.cancel);
+      await first.transaction(key, (tx) {
+        tx.read(key);
+      });
+      await first.transaction(key, (tx) {
+        tx.remove(key);
+      });
+      await Future<void>.delayed(Duration.zero);
+      expect(events, isEmpty);
+      var deliveredDuringCommit = false;
+      await first.transaction(key, (tx) {
+        tx.write(key, 'acknowledged');
+        deliveredDuringCommit = events.isNotEmpty;
+      });
+      expect(deliveredDuringCommit, false);
+      await Future<void>.delayed(Duration.zero);
+      expect(events, [
+        {key},
+      ]);
+      await first.transaction(key, (tx) {
+        tx.write(key, 'acknowledged');
+      });
+      await Future<void>.delayed(Duration.zero);
+      expect(events, hasLength(1));
+      await first.transaction(key, (tx) {
+        tx.remove(key);
+      });
+      await Future<void>.delayed(Duration.zero);
+      expect(events, [
+        {key},
+        {key},
+      ]);
+    },
+  );
+
+  test(
     'takeover fences a resumed writer through the actual browser adapter',
     () async {
       final key = '$prefix-fencing';
@@ -97,6 +140,13 @@ void main() {
       );
       addTearDown(() => child!.close());
       final done = Completer<void>();
+      final storageHint = Completer<Set<String>>();
+      final subscription = BrowserProjectDraftStorage().changes.listen((keys) {
+        if (keys.contains(key) && !storageHint.isCompleted) {
+          storageHint.complete(keys);
+        }
+      });
+      addTearDown(subscription.cancel);
       final token = '$prefix-child-done';
       final listener = ((web.Event event) {
         final message = event as web.MessageEvent;
@@ -129,6 +179,9 @@ void main() {
         );
         child.document.close();
         await done.future.timeout(const Duration(seconds: 10));
+        expect(await storageHint.future.timeout(const Duration(seconds: 10)), {
+          key,
+        });
         await expectLater(
           primary.save(primary.state.copyWith(name: 'Primary resumed stale')),
           throwsA(isA<ProjectDraftStorageException>()),

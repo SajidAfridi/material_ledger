@@ -13,10 +13,14 @@ ProjectDraftAtomicStorage createProjectDraftAtomicStorage(
 /// must keep that unsupported guarantee guarded; browser persistence has a real
 /// cross-tab primitive. This boundary never silently upgrades process safety.
 class SharedPreferencesProjectDraftStorage
-    implements ProjectDraftAtomicStorage {
+    implements ProjectDraftAtomicStorage, ProjectDraftStorageChanges {
   SharedPreferencesProjectDraftStorage(this.preferences);
   final SharedPreferences preferences;
   static final Map<String, Future<void>> _tails = {};
+  static final _changes = StreamController<Set<String>>.broadcast();
+
+  @override
+  Stream<Set<String>> get changes => _changes.stream;
 
   @override
   bool get supportsAtomicOwnership => false;
@@ -37,6 +41,9 @@ class SharedPreferencesProjectDraftStorage
       final tx = _PreferenceTransaction(preferences);
       final result = work(tx);
       await tx.commit();
+      if (tx.changedKeys.isNotEmpty) {
+        _changes.add(Set.unmodifiable(tx.changedKeys));
+      }
       return result;
     } finally {
       finished.complete();
@@ -49,6 +56,7 @@ class _PreferenceTransaction implements ProjectDraftAtomicTransaction {
   _PreferenceTransaction(this.preferences);
   final SharedPreferences preferences;
   final Map<String, String?> _writes = {};
+  final Set<String> changedKeys = {};
 
   @override
   String? read(String key) =>
@@ -62,12 +70,14 @@ class _PreferenceTransaction implements ProjectDraftAtomicTransaction {
 
   Future<void> commit() async {
     for (final entry in _writes.entries) {
+      final previous = preferences.getString(entry.key);
       final acknowledged = entry.value == null
           ? await preferences.remove(entry.key)
           : await preferences.setString(entry.key, entry.value!);
       if (!acknowledged) {
         throw const ProjectDraftStorageException('write_not_acknowledged');
       }
+      if (previous != entry.value) changedKeys.add(entry.key);
     }
   }
 }

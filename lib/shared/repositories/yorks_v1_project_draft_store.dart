@@ -1,3 +1,5 @@
+import 'dart:async';
+
 /// A dedicated recovery boundary. It does not change generic CollectionStore
 /// behavior or put local proposals into a server collection.
 abstract interface class ProjectDraftAtomicStorage {
@@ -12,6 +14,13 @@ abstract interface class ProjectDraftAtomicStorage {
 
   /// True only when the platform coordinates independent browser tabs/processes.
   bool get supportsAtomicOwnership;
+}
+
+/// Refresh hints only. An empty set means the storage area was cleared. Readers
+/// must re-read and validate their own scope; events never convey draft data or
+/// transfer ownership. Implementations emit asynchronously after local commits.
+abstract interface class ProjectDraftStorageChanges {
+  Stream<Set<String>> get changes;
 }
 
 abstract interface class ProjectDraftAtomicTransaction {

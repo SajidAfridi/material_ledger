@@ -16,6 +16,7 @@ import 'package:material_ledger/core/widgets/yorks_mobile_ui.dart';
 import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_project_create_flow_screen.dart';
 import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_projects_screen.dart';
 import 'package:material_ledger/shared/controllers/yorks_v1_project_creation_draft_controller.dart';
+import 'package:material_ledger/shared/models/app_language.dart';
 import 'package:material_ledger/shared/models/yorks_v1_document.dart';
 import 'package:material_ledger/shared/models/yorks_v1_feature_flags.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project.dart';
@@ -57,6 +58,8 @@ const _searchKey = ValueKey('project-setup-workspace-search');
 const _drawerKey = ValueKey('yorks-workspace-navigation-drawer');
 const _sidebarToggleKey = ValueKey('yorks-workspace-sidebar-toggle');
 const _saveDraftKey = ValueKey('project-setup-save-draft');
+const _savedLocalDraftKey = ValueKey('yorks-v1-project-saved-local-draft');
+const _resumeLocalDraftKey = ValueKey('yorks-v1-project-resume-local-draft');
 const _engineerCapabilities = <String>{
   YorksV1CapabilityKeys.projectsView,
   YorksV1CapabilityKeys.projectsCreate,
@@ -326,15 +329,24 @@ void main() {
           size: size,
           initialLocation: RoutePaths.yorksV1Projects,
         );
+        expect(find.byKey(_savedLocalDraftKey), findsNothing);
         await _openCreateProject(tester);
         final originalDraftId = fixture.container
             .read(yorksV1ProjectSetupCreationDraftProvider(_owner))
             .draftId;
         const proposedName = 'Explicitly saved inside Yorks workspace';
+        const proposedReference = 'YRA-WORKSPACE-LOCAL';
+        await tester.enterText(
+          find.byKey(const ValueKey('yorks-v1-project-reference')),
+          proposedReference,
+        );
         await tester.enterText(
           find.byKey(const ValueKey('yorks-v1-project-name')),
           proposedName,
         );
+        await tester.ensureVisible(find.byKey(_saveDraftKey));
+        await tester.pumpAndSettle();
+        expect(find.byKey(_saveDraftKey).hitTestable(), findsOneWidget);
         await tester.tap(find.byKey(_saveDraftKey));
         await tester.pumpAndSettle();
         final saved = fixture.container.read(
@@ -375,13 +387,367 @@ void main() {
           findsNothing,
         );
         _expectPortfolio(fixture);
-        await _openCreateProject(tester);
+        final localCard = find.byKey(_savedLocalDraftKey);
+        expect(localCard, findsOneWidget);
+        expect(
+          find.descendant(
+            of: localCard,
+            matching: find.textContaining(proposedReference),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: localCard,
+            matching: find.textContaining(proposedName),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: localCard,
+            matching: find.textContaining(
+              YorksV1ProjectStrings.projectDetails.primary,
+            ),
+          ),
+          findsOneWidget,
+        );
+        final resume = find.byKey(_resumeLocalDraftKey);
+        expect(resume, findsOneWidget);
+        expect(tester.getSize(resume).height, greaterThanOrEqualTo(44));
+        expect(tester.getSize(resume).width, greaterThanOrEqualTo(44));
+        final beforeSummaryRead = fixture.preferences.getString(storageKey);
+        await tester.pumpAndSettle();
+        expect(fixture.preferences.getString(storageKey), beforeSummaryRead);
+        await Scrollable.ensureVisible(tester.element(resume), alignment: .5);
+        await tester.pumpAndSettle();
+        expect(resume.hitTestable(), findsOneWidget);
+        await tester.tap(resume);
+        await tester.pumpAndSettle();
         _expectResumedDraft(tester, fixture, originalDraftId, proposedName);
+        expect(
+          fixture.container
+              .read(yorksV1ProjectSetupCreationDraftProvider(_owner))
+              .reference,
+          proposedReference,
+        );
         expect(fixture.commands.calls, 0);
         expect(tester.takeException(), isNull);
       },
     );
   }
+
+  testWidgets(
+    'untouched Create checkpoint stays hidden while a saved unfinished date resumes from Projects',
+    (tester) async {
+      final fixture = await _pumpWorkspace(
+        tester,
+        initialLocation: RoutePaths.yorksV1Projects,
+      );
+      expect(find.byKey(_savedLocalDraftKey), findsNothing);
+      await _openCreateProject(tester);
+      final provider = yorksV1ProjectSetupCreationDraftProvider(_owner);
+      final originalDraftId = fixture.container.read(provider).draftId;
+      await tester.tap(
+        find.text(YorksV1ProjectSetupShellStrings.returnToProjects.primary),
+      );
+      await tester.pumpAndSettle();
+      _expectPortfolio(fixture);
+      final untouched = fixture.container.read(provider);
+      expect(untouched.rawEditorState['sectionContext'], isNotNull);
+      expect(untouched.reference, isEmpty);
+      expect(untouched.name, isEmpty);
+      expect(find.byKey(_savedLocalDraftKey), findsNothing);
+
+      await _openCreateProject(tester);
+      final date = find.byKey(
+        ValueKey('yorks-v1-project-date-${YorksV1ProjectStrings.startDate.en}'),
+      );
+      await tester.ensureVisible(date);
+      await tester.enterText(date, '12/');
+      await tester.tap(find.byKey(_saveDraftKey));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.text(YorksV1ProjectSetupShellStrings.returnToProjects.primary),
+      );
+      await tester.pumpAndSettle();
+      _expectPortfolio(fixture);
+      expect(find.byKey(_savedLocalDraftKey), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('yorks-v1-local-draft-reference')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('yorks-v1-local-draft-name')),
+        findsNothing,
+      );
+      await tester.tap(find.byKey(_resumeLocalDraftKey));
+      await tester.pumpAndSettle();
+      expect(fixture.container.read(provider).draftId, originalDraftId);
+      expect(
+        fixture.container.read(provider).rawEditorState['dateStartText'],
+        '12/',
+      );
+      final input = tester.widget<EditableText>(
+        find.descendant(of: date, matching: find.byType(EditableText)),
+      );
+      expect(input.controller.text, '12/');
+      expect(fixture.commands.calls, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'saved unfinished building resumes its actual stage from the Projects card',
+    (tester) async {
+      final fixture = await _pumpWorkspace(
+        tester,
+        initialLocation: RoutePaths.yorksV1Projects,
+      );
+      await _openCreateProject(tester);
+      final provider = yorksV1ProjectSetupCreationDraftProvider(_owner);
+      final writer = fixture.container.read(provider.notifier);
+      final originalDraftId = fixture.container.read(provider).draftId;
+      await writer.save(
+        fixture.container
+            .read(provider)
+            .copyWith(
+              reference: 'YRA-BUILDING-LOCAL',
+              name: 'Unfinished building setup',
+              siteLocation: 'Local setup test site',
+              startDate: DateTime(2026, 10, 5),
+            ),
+      );
+      await tester.pumpAndSettle();
+      final continueButton = find.byKey(
+        const ValueKey('yorks-v1-project-continue'),
+      );
+      await tester.tap(continueButton);
+      await tester.pumpAndSettle();
+      await tester.tap(continueButton);
+      await tester.pumpAndSettle();
+      expect(
+        fixture.container.read(provider).currentStage,
+        YorksV1ProjectCreationStage.buildings,
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('yorks-v1-building-name')),
+        'Unapplied roof building',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('yorks-v1-building-floors')),
+        'Ground, Roof,',
+      );
+      await tester.tap(find.byKey(_saveDraftKey));
+      await tester.pumpAndSettle();
+      final saved = fixture.container.read(provider);
+      expect(saved.buildings, isEmpty);
+      expect(saved.rawEditorState['buildingName'], 'Unapplied roof building');
+      expect(saved.rawEditorState['buildingFloors'], 'Ground, Roof,');
+      expect(saved.acknowledgedRevision, saved.revision);
+      await tester.tap(
+        find.descendant(
+          of: _sidebarSurface(),
+          matching: find.text(YorksV1ShellStrings.projects.primary),
+        ),
+      );
+      await tester.pumpAndSettle();
+      _expectPortfolio(fixture);
+      expect(
+        find.text(YorksV1ProjectStrings.leaveSetupTitle.primary),
+        findsNothing,
+      );
+      final card = find.byKey(_savedLocalDraftKey);
+      expect(card, findsOneWidget);
+      expect(
+        find.descendant(
+          of: card,
+          matching: find.textContaining(
+            YorksV1ProjectStrings.buildings.primary,
+          ),
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(_resumeLocalDraftKey));
+      await tester.pumpAndSettle();
+      final resumed = fixture.container.read(provider);
+      expect(resumed.draftId, originalDraftId);
+      expect(resumed.currentStage, YorksV1ProjectCreationStage.buildings);
+      for (final field in {
+        'yorks-v1-building-name': 'Unapplied roof building',
+        'yorks-v1-building-floors': 'Ground, Roof,',
+      }.entries) {
+        final input = tester.widget<EditableText>(
+          find.descendant(
+            of: find.byKey(ValueKey(field.key)),
+            matching: find.byType(EditableText),
+          ),
+        );
+        expect(input.controller.text, field.value);
+      }
+      expect(resumed.buildings, isEmpty);
+      expect(fixture.commands.calls, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  for (final boundary in [
+    'flag-off',
+    'role-denied',
+    'capability-denied',
+    'stale-permission',
+    'different-owner',
+    'different-backend',
+  ]) {
+    testWidgets(
+      'Projects local setup card respects $boundary before private reads',
+      (tester) async {
+        late _ReadSpyDraftStorage storage;
+        final originalKey = yorksV1ProjectDraftStorageKey(
+          backendIdentity: 'local',
+          ownerAuthUserId: _owner,
+          mode: YorksV1ProjectDraftMode.create,
+        );
+        final role = boundary == 'role-denied'
+            ? YorksV1Role.procurement
+            : YorksV1Role.projectEngineer;
+        final privateDraft =
+            YorksV1ProjectCreationDraft.empty(
+              ownerAuthUserId: _owner,
+              creationIdempotencyKey: 'private-local-draft',
+            ).copyWith(
+              reference: 'PRIVATE-LOCAL-REF',
+              name: 'Private saved local setup',
+              revision: 7,
+              acknowledgedRevision: 7,
+              writerEpoch: 2,
+              updatedAt: DateTime.utc(2026, 10, 5),
+              storageState: YorksV1ProjectDraftStorageState.saved,
+            );
+        final envelope = jsonEncode({
+          'recordVersion': 1,
+          'ownerWriterId': 'retained-foreign-lease',
+          'writerEpoch': 2,
+          'retired': false,
+          'draft': privateDraft.toJson(),
+        });
+        final fixture = await _pumpWorkspace(
+          tester,
+          initialLocation: RoutePaths.yorksV1Projects,
+          role: role,
+          ownerAuthUserId: boundary == 'different-owner'
+              ? 'different-auth-owner'
+              : _owner,
+          backendIdentity: boundary == 'different-backend'
+              ? 'https://isolated-other-project.invalid'
+              : 'local',
+          projectSetup: boundary != 'flag-off',
+          permission: yorksV1TrustedFeaturePermissionState(
+            role: role,
+            capabilities: boundary == 'capability-denied'
+                ? const {YorksV1CapabilityKeys.projectsView}
+                : _engineerCapabilities,
+            stale: boundary == 'stale-permission',
+          ),
+          draftStorageFactory: (preferences) =>
+              storage = _ReadSpyDraftStorage(preferences),
+          seed: (_, preferences) async {
+            await preferences.setString(originalKey, envelope);
+          },
+        );
+        expect(find.byKey(_savedLocalDraftKey), findsNothing);
+        expect(find.byKey(_resumeLocalDraftKey), findsNothing);
+        expect(find.textContaining(privateDraft.reference), findsNothing);
+        expect(find.textContaining(privateDraft.name), findsNothing);
+        expect(storage.readKeys, isNot(contains(originalKey)));
+        if (!boundary.startsWith('different-')) {
+          expect(storage.readKeys, isEmpty);
+        }
+        expect(storage.transactions, 0);
+        expect(fixture.preferences.getString(originalKey), envelope);
+        expect(fixture.commands.calls, 0);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets(
+    '360px Arabic saved setup card keeps readable text and 44px Resume without acquiring its lease',
+    (tester) async {
+      late _ReadSpyDraftStorage storage;
+      late String storageKey;
+      late String envelope;
+      final fixture = await _pumpWorkspace(
+        tester,
+        size: const Size(360, 800),
+        initialLocation: RoutePaths.yorksV1Projects,
+        language: AppLanguage.arabic,
+        textScaler: const TextScaler.linear(2),
+        draftStorageFactory: (preferences) =>
+            storage = _ReadSpyDraftStorage(preferences),
+        seed: (container, preferences) async {
+          final draft =
+              YorksV1ProjectCreationDraft.empty(
+                ownerAuthUserId: _owner,
+                creationIdempotencyKey: 'rtl-persisted-draft',
+              ).copyWith(
+                reference: 'YRA-RTL-LOCAL',
+                name: 'مسودة مشروع محفوظة على هذا الجهاز لاختبار الاستئناف',
+                currentStage: YorksV1ProjectCreationStage.buildings,
+                revision: 3,
+                acknowledgedRevision: 3,
+                writerEpoch: 1,
+                updatedAt: DateTime.utc(2026, 10, 5),
+                storageState: YorksV1ProjectDraftStorageState.saved,
+              );
+          storageKey = yorksV1ProjectDraftStorageKey(
+            backendIdentity: draft.backendIdentity,
+            ownerAuthUserId: _owner,
+            mode: YorksV1ProjectDraftMode.create,
+          );
+          envelope = jsonEncode({
+            'recordVersion': 1,
+            'ownerWriterId': 'other-browser-tab-writer',
+            'writerEpoch': 1,
+            'retired': false,
+            'draft': draft.toJson(),
+          });
+          await preferences.setString(storageKey, envelope);
+        },
+      );
+      final card = find.byKey(_savedLocalDraftKey);
+      expect(card, findsOneWidget);
+      expect(Directionality.of(tester.element(card)), TextDirection.rtl);
+      expect(
+        find.descendant(
+          of: card,
+          matching: find.textContaining('YRA-RTL-LOCAL'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: card,
+          matching: find.textContaining(
+            YorksV1ProjectStrings.buildings.active(AppLanguage.arabic),
+          ),
+        ),
+        findsOneWidget,
+      );
+      final resume = find.byKey(_resumeLocalDraftKey);
+      await tester.ensureVisible(resume);
+      await tester.pumpAndSettle();
+      final rect = tester.getRect(resume);
+      expect(rect.width, greaterThanOrEqualTo(44));
+      expect(rect.height, greaterThanOrEqualTo(44));
+      expect(rect.left, greaterThanOrEqualTo(0));
+      expect(rect.right, lessThanOrEqualTo(360));
+      expect(storage.transactions, 0);
+      expect(fixture.preferences.getString(storageKey), envelope);
+      expect(fixture.commands.calls, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'desktop setup exits only from its first-stage footer and later footer Back keeps the draft',
@@ -1163,6 +1529,9 @@ void main() {
               }
             },
           );
+          if (historical != 'uncertain') {
+            expect(find.byKey(_savedLocalDraftKey), findsNothing);
+          }
           await _openCreateProject(tester);
           final provider = yorksV1ProjectSetupCreationDraftProvider(_owner);
           final fresh = fixture.container.read(provider);
@@ -1328,10 +1697,14 @@ Future<void> _openCreateProject(WidgetTester tester) async {
   final create = find
       .descendant(
         of: find.byType(YorksV1ProjectsScreen),
-        matching: find.text(YorksV1ProjectStrings.createProject.primary),
+        matching: find.byWidgetPredicate(
+          (widget) => widget is FilledButton && widget.onPressed != null,
+        ),
       )
       .first;
-  await tester.ensureVisible(create);
+  await Scrollable.ensureVisible(tester.element(create), alignment: .5);
+  await tester.pumpAndSettle();
+  expect(create.hitTestable(), findsOneWidget);
   await tester.tap(create);
   await tester.pumpAndSettle();
 }
@@ -1421,6 +1794,12 @@ Future<_WorkspaceFixture> _pumpWorkspace(
   Future<void> Function(ProviderContainer, SharedPreferences)? seed,
   ProjectDraftAtomicStorage Function(SharedPreferences)? draftStorageFactory,
   ValueChanged<YorksV1Project>? onProjectCreated,
+  YorksV1Role role = YorksV1Role.projectEngineer,
+  String? ownerAuthUserId = _owner,
+  String backendIdentity = 'local',
+  bool projectSetup = true,
+  AppLanguage language = AppLanguage.english,
+  TextScaler textScaler = TextScaler.noScaling,
 }) async {
   tester.view.devicePixelRatio = 1;
   tester.view.physicalSize = size;
@@ -1444,10 +1823,10 @@ Future<_WorkspaceFixture> _pumpWorkspace(
         ),
       ),
       yorksV1FeatureFlagsProvider.overrideWithValue(
-        const YorksV1FeatureFlags(
+        YorksV1FeatureFlags(
           foundation: true,
           projects: true,
-          projectSetup: true,
+          projectSetup: projectSetup,
           boq: true,
           excel: true,
           requests: true,
@@ -1457,13 +1836,16 @@ Future<_WorkspaceFixture> _pumpWorkspace(
           documents: true,
         ),
       ),
-      yorksV1AuthUserIdProvider.overrideWithValue(_owner),
-      yorksV1CurrentRoleProvider.overrideWithValue(YorksV1Role.projectEngineer),
+      yorksV1AuthUserIdProvider.overrideWithValue(ownerAuthUserId),
+      yorksV1CurrentRoleProvider.overrideWithValue(role),
+      yorksV1ProjectDraftBackendIdentityProvider.overrideWithValue(
+        backendIdentity,
+      ),
       yorksV1CurrentPermissionSnapshotProvider.overrideWith(
         (ref) => YorksV1TestPermissionController(
           permission ??
               yorksV1TrustedFeaturePermissionState(
-                role: YorksV1Role.projectEngineer,
+                role: role,
                 capabilities: _engineerCapabilities,
               ),
         ),
@@ -1485,6 +1867,9 @@ Future<_WorkspaceFixture> _pumpWorkspace(
   );
   addTearDown(container.dispose);
   if (seed != null) await seed(container, preferences);
+  if (language != AppLanguage.english) {
+    await container.read(languageProvider.notifier).setLanguage(language);
+  }
 
   // The browser-only rollout choice is tested separately. This VM integration
   // uses the same route components, canonical paths and mounted onExit guard
@@ -1519,6 +1904,15 @@ Future<_WorkspaceFixture> _pumpWorkspace(
         theme: AppTheme.light,
         debugShowCheckedModeBanner: false,
         routerConfig: router,
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+          child: Directionality(
+            textDirection: language == AppLanguage.arabic
+                ? TextDirection.rtl
+                : TextDirection.ltr,
+            child: child!,
+          ),
+        ),
       ),
     ),
   );
@@ -1576,6 +1970,27 @@ class _SupportedDraftStorage extends SharedPreferencesProjectDraftStorage {
   _SupportedDraftStorage(super.preferences);
   @override
   bool get supportsAtomicOwnership => true;
+}
+
+class _ReadSpyDraftStorage extends _SupportedDraftStorage {
+  _ReadSpyDraftStorage(super.preferences);
+  final List<String> readKeys = [];
+  int transactions = 0;
+
+  @override
+  String? read(String key) {
+    readKeys.add(key);
+    return super.read(key);
+  }
+
+  @override
+  Future<T> transaction<T>(
+    String lockKey,
+    T Function(ProjectDraftAtomicTransaction) work,
+  ) {
+    transactions++;
+    return super.transaction(lockKey, work);
+  }
 }
 
 class _ClaimGateDraftStorage extends _SupportedDraftStorage {

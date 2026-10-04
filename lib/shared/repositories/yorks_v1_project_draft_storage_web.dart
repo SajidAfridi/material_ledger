@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
 
@@ -14,7 +15,19 @@ ProjectDraftAtomicStorage createProjectDraftAtomicStorage(
 /// commit across tabs. Persisted fencing epochs protect resumed former writers.
 /// Broadcast delivery is not part of correctness. Browsers lacking Web Locks
 /// fail closed rather than falling back to a read/check/write race.
-class BrowserProjectDraftStorage implements ProjectDraftAtomicStorage {
+class BrowserProjectDraftStorage
+    implements ProjectDraftAtomicStorage, ProjectDraftStorageChanges {
+  static final JSFunction _storageListener = ((web.StorageEvent event) {
+    final key = event.key;
+    _changes.add(key == null ? const {} : {key});
+  }).toJS;
+  static final _changes = StreamController<Set<String>>.broadcast(
+    onListen: () => web.window.addEventListener('storage', _storageListener),
+    onCancel: () => web.window.removeEventListener('storage', _storageListener),
+  );
+
+  @override
+  Stream<Set<String>> get changes => _changes.stream;
   @override
   bool get supportsAtomicOwnership =>
       web.window.isSecureContext &&
@@ -42,6 +55,9 @@ class BrowserProjectDraftStorage implements ProjectDraftAtomicStorage {
               final tx = _BrowserTransaction();
               result = work(tx);
               tx.commit();
+              if (tx.changedKeys.isNotEmpty) {
+                _changes.add(Set.unmodifiable(tx.changedKeys));
+              }
             } catch (error, stack) {
               failure = error;
               failureStack = stack;
@@ -59,6 +75,7 @@ class BrowserProjectDraftStorage implements ProjectDraftAtomicStorage {
 
 class _BrowserTransaction implements ProjectDraftAtomicTransaction {
   final Map<String, String?> _writes = {};
+  final Set<String> changedKeys = {};
 
   @override
   String? read(String key) => _writes.containsKey(key)
@@ -73,11 +90,13 @@ class _BrowserTransaction implements ProjectDraftAtomicTransaction {
 
   void commit() {
     for (final entry in _writes.entries) {
+      final previous = web.window.localStorage.getItem(entry.key);
       if (entry.value == null) {
         web.window.localStorage.removeItem(entry.key);
       } else {
         web.window.localStorage.setItem(entry.key, entry.value!);
       }
+      if (previous != entry.value) changedKeys.add(entry.key);
     }
   }
 }
