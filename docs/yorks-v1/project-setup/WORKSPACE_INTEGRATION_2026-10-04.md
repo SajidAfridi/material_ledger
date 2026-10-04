@@ -41,8 +41,9 @@ Independent release inspection found that the stable staging alias
 | Compiled backend-reference occurrences | Staging `1`; production `0` |
 
 The earlier 4 October preview from source `9dc91b8` had not been assigned to
-that alias. A new preview must be built and byte-verified before assigning
-**only the staging alias**. Production release remains a later, separate step.
+that alias. The new full-app preview has now been built and byte-verified, and
+**only the staging alias** was assigned to it. Production release remains a later,
+separate step.
 These observations preserve the older [staging release report](STAGING_RELEASE_2026-10-04.md)
 as historical evidence rather than treating its preview as the current alias.
 
@@ -70,11 +71,39 @@ as historical evidence rather than treating its preview as the current alias.
   they do not establish authenticated remote navigation or live create/upload
   success.
 
-The [machine release record](WORKSPACE_INTEGRATION_2026-10-04.json) records
-completed local gates and explicit pending deployment statuses. The staging
-build identity, verified preview, alias assignment and production comparison
-will be recorded after deployment. A successful preview or alias assignment
-is not a production release or a complete source acceptance pass.
+## Verified staging release
+
+- [Open the integrated Yorks staging website](https://yorks-r35-staging.vercel.app/yorks/projects),
+  then use **Projects → Create project** with an authorized Engineering/Admin account.
+- Clean source/build identity: `d218cf57a2e899ebfd8b36dd012d468dd8817f30`;
+  committed and pushed before building the ordinary `lib/main.dart` application.
+- Deployment: `dpl_6RaX6nWDp1cnXPbV2hh1xVet6ovq`, READY preview;
+  [immutable preview](https://yorks-r35-qf5rat3sj-sajid-alis-projects-0ec775a2.vercel.app).
+- Artifact: 59 static files / 54,035,149 bytes; main JavaScript 10,033,379 bytes,
+  startup-verifier gzip 2,888,505; SHA-256
+  `82d70d8ffb2908298414bb1ee0bd7588833cbe21fdb6854b8bb737b4e6e60b3c`.
+- The bundle contains the dedicated staging reference twice, no production/CI/
+  visual-fixture markers and no service credentials. The isolated upload has the
+  reviewed existing Vercel project/team link and an explicit preview target.
+- Both immutable preview and staging alias passed byte verification for all
+  23 routes/assets, including six deferred modules and PWA files. Both additional
+  Create/Edit deep routes deliver the exact SPA shell; these are delivery checks.
+- The stable alias browser retained its existing Procurement session and rendered
+  the real view-only Projects portfolio without console warnings/errors.
+  Read-only browser resource inspection confirmed its resident main script
+  matches the new bundle byte-for-byte, including SHA-256. This
+  role correctly has no Create action. No privileges, business records or roles
+  were changed. Authorized Engineering/Admin live creation and upload remain
+  unrun; the positive entry/re-entry tests use simulated permitted reads.
+- Production alias still resolves to `dpl_Gj1cfA1CbEJnkVwi4bG8eKabkRJy`. Its
+  9,678,001-byte JavaScript is byte-identical before/after: SHA-256
+  `739de306598a9c0d135c5c7721d133a8c800321538b05894bda2627b8471b19f`.
+
+The [machine release record](WORKSPACE_INTEGRATION_2026-10-04.json) preserves
+source, deployment, old/new alias, hashes, checks and acceptance boundaries.
+This staging release is not a production release or a complete source acceptance
+pass. CI Android signature v2 and the CI Ephemeral certificate were verified;
+production Android signing is a separate release lane.
 
 Application rollback remains the default-off flag or prior verified staging
 deployment. Preserve draft, journal, quarantine and tombstone namespaces; no
