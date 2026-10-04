@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -12,12 +13,15 @@ import 'package:material_ledger/core/theme/app_theme.dart';
 import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_project_create_flow_screen.dart';
 import 'package:material_ledger/features/projects/presentation/widgets/yorks_v1_project_setup_completion.dart';
 import 'package:material_ledger/shared/models/yorks_v1_domain_error.dart';
+import 'package:material_ledger/shared/models/yorks_v1_document.dart';
 import 'package:material_ledger/shared/models/analytics_event.dart';
 import 'package:material_ledger/shared/models/app_language.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project.dart';
+import 'package:material_ledger/shared/models/yorks_v1_permission_management.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_portfolio.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_creation_draft.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_setup_operation.dart';
+import 'package:material_ledger/shared/models/yorks_v1_project_setup_shell_strings.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_strings.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_team_directory_member.dart';
 import 'package:material_ledger/shared/models/yorks_v1_role.dart';
@@ -136,19 +140,31 @@ void main() {
         find.text(YorksV1ProjectStrings.projectDetails.primary),
         findsWidgets,
       );
-      expect(
-        find.text(YorksV1ProjectStrings.partiesAndAccess.primary),
-        findsWidgets,
-      );
-      expect(find.text(YorksV1ProjectStrings.buildings.primary), findsWidgets);
-      expect(
-        find.text(YorksV1ProjectStrings.attachments.primary),
-        findsWidgets,
-      );
-      expect(
-        find.text(YorksV1ProjectStrings.reviewAndCreate.primary),
-        findsWidgets,
-      );
+      if (size.width >= 1100) {
+        for (final label in [
+          YorksV1ProjectStrings.partiesAndAccess,
+          YorksV1ProjectStrings.buildings,
+          YorksV1ProjectStrings.attachments,
+          YorksV1ProjectStrings.reviewAndCreate,
+        ]) {
+          expect(find.text(label.primary), findsWidgets);
+        }
+      } else {
+        expect(
+          find.byKey(const ValueKey('project-setup-mobile-shell')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey('project-setup-mobile-stepper')),
+          findsOneWidget,
+        );
+        for (final stage in YorksV1ProjectCreationStage.values) {
+          expect(
+            find.byKey(ValueKey('project-setup-mobile-step-${stage.name}')),
+            findsOneWidget,
+          );
+        }
+      }
       expect(
         find.text(YorksV1ProjectStrings.typedDateFormatHelp.primary),
         findsNWidgets(2),
@@ -346,7 +362,7 @@ void main() {
         textDirection: TextDirection.rtl,
       );
       final title = find.text(
-        YorksV1ProjectStrings.projectSetup.active(AppLanguage.arabic),
+        YorksV1ProjectSetupShellStrings.create.active(AppLanguage.arabic),
       );
       final save = find.text(
         YorksV1ProjectStrings.saveDraft.active(AppLanguage.arabic),
@@ -1098,80 +1114,486 @@ void main() {
     },
   );
 
+  for (final size in [const Size(1280, 900), const Size(390, 844)]) {
+    testWidgets(
+      '${size.width} keeps the confirmed result until the explicit Open project action',
+      (tester) async {
+        final repository = _FakeProjectRepository();
+        final container = await createContainer(
+          role: YorksV1Role.siteEngineer,
+          repository: repository,
+        );
+        await container
+            .read(
+              yorksV1ProjectSetupCreationDraftProvider(_authUserId).notifier,
+            )
+            .save(
+              container
+                  .read(yorksV1ProjectSetupCreationDraftProvider(_authUserId))
+                  .copyWith(
+                    reference: 'YRK-NAV-001',
+                    name: 'Project route handoff',
+                    currentStage: YorksV1ProjectCreationStage.reviewAndCreate,
+                    buildings: const [
+                      YorksV1ProjectBuildingInput(
+                        code: 'B1',
+                        name: 'Building One',
+                      ),
+                    ],
+                  ),
+            );
+        final router = GoRouter(
+          initialLocation: '/',
+          routes: [
+            GoRoute(
+              path: '/',
+              builder: (_, _) => const YorksV1ProjectCreateFlowScreen(),
+            ),
+            GoRoute(
+              path: '/yorks/projects/:projectId',
+              builder: (_, state) => Scaffold(
+                body: Text('Opened ${state.pathParameters['projectId']}'),
+              ),
+            ),
+          ],
+        );
+        await tester.binding.setSurfaceSize(size);
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = size;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: MaterialApp.router(
+              debugShowCheckedModeBanner: false,
+              theme: AppTheme.light,
+              routerConfig: router,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final createButton = find.byKey(
+          const ValueKey('yorks-v1-project-create'),
+        );
+        await tester.ensureVisible(createButton);
+        await tester.tap(createButton);
+        await tester.pumpAndSettle();
+
+        expect(repository.receivedCreationInputs, hasLength(1));
+        expect(find.text('Opened project-b2-001'), findsNothing);
+        expect(find.byType(YorksV1ProjectSetupCompletion), findsOneWidget);
+        await _openCompletion(tester);
+        expect(find.text('Opened project-b2-001'), findsOneWidget);
+        expect(
+          find.text(YorksV1ProjectStrings.projectCreated.primary),
+          findsNothing,
+        );
+      },
+    );
+  }
+
   testWidgets(
-    'desktop keeps the confirmed result until the explicit Open project action',
+    'phone completion retains known Draft without unauthorized next actions',
     (tester) async {
       final repository = _FakeProjectRepository();
       final container = await createContainer(
         role: YorksV1Role.siteEngineer,
         repository: repository,
+        permissionState: yorksV1TrustedFeaturePermissionState(
+          role: YorksV1Role.siteEngineer,
+          capabilities: const [YorksV1CapabilityKeys.projectsCreate],
+        ),
       );
+      final provider = yorksV1ProjectSetupCreationDraftProvider(_authUserId);
       await container
-          .read(yorksV1ProjectSetupCreationDraftProvider(_authUserId).notifier)
+          .read(provider.notifier)
           .save(
             container
-                .read(yorksV1ProjectSetupCreationDraftProvider(_authUserId))
+                .read(provider)
                 .copyWith(
-                  reference: 'YRK-NAV-001',
-                  name: 'Project route handoff',
+                  reference: 'YRA-PHONE-DENIED-ACTIONS',
+                  name: 'Known Draft with restricted next actions',
                   currentStage: YorksV1ProjectCreationStage.reviewAndCreate,
+                  visitedStages: YorksV1ProjectCreationStage.values.toSet(),
+                  buildings: const [
+                    YorksV1ProjectBuildingInput(name: 'Main building'),
+                  ],
+                ),
+          );
+      final opened = <YorksV1Project>[];
+      await _pumpScreen(
+        tester,
+        container,
+        size: const Size(390, 844),
+        onProjectCreated: opened.add,
+      );
+      final submit = find.byKey(const ValueKey('yorks-v1-project-create'));
+      await tester.ensureVisible(submit);
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+      final completion = tester.widget<YorksV1ProjectSetupCompletion>(
+        find.byType(YorksV1ProjectSetupCompletion),
+      );
+      expect(completion.operation.coreSucceeded, isTrue);
+      expect(
+        completion.operation.project?.state,
+        YorksV1ProjectLifecycle.draft,
+      );
+      expect(completion.permissions.canOpenProject, isFalse);
+      expect(completion.permissions.canEditProject, isFalse);
+      expect(completion.permissions.canAddBoq, isFalse);
+      expect(completion.permissions.canInviteTeam, isFalse);
+      expect(completion.permissions.canUploadDocuments, isFalse);
+      expect(completion.onOpenProject, isNull);
+      expect(completion.onEditProject, isNull);
+      final copy = YorksV1ProjectSetupCompletionCopy.localized(
+        AppLanguage.english,
+      );
+      expect(
+        find.text(copy[YorksV1ProjectSetupCompletionText.openProject]),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(YorksV1ProjectSetupCompletion),
+          matching: find.text(
+            copy[YorksV1ProjectSetupCompletionText.editProject],
+          ),
+        ),
+        findsNothing,
+      );
+      expect(opened, isEmpty);
+      expect(repository.receivedCreationInputs, hasLength(1));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'phone review wraps full names and keeps activation readiness separate from creation',
+    (tester) async {
+      const projectName =
+          'Nexus Power Transmission and Refrigeration Installation Project Phase One';
+      const engineerName = 'Abdul Raheem Mohammed Abdullah Al Mansouri';
+      const buildingName =
+          'Main Control and Refrigeration Equipment Services Building';
+      final repository = _FakeProjectRepository();
+      final container = await createContainer(
+        role: YorksV1Role.siteEngineer,
+        repository: repository,
+        teamDirectoryRepository: _FakeTeamDirectoryRepository(
+          members: const [
+            YorksV1ProjectTeamDirectoryMember(
+              authUserId: 'phone-review-engineer',
+              displayName: engineerName,
+              eligibleRole: YorksV1Role.projectEngineer,
+            ),
+          ],
+        ),
+      );
+      final provider = yorksV1ProjectSetupCreationDraftProvider(_authUserId);
+      await container
+          .read(provider.notifier)
+          .save(
+            container
+                .read(provider)
+                .copyWith(
+                  reference: 'YRA-PHONE-FULL-NAMES',
+                  name: projectName,
+                  currentStage: YorksV1ProjectCreationStage.reviewAndCreate,
+                  visitedStages: YorksV1ProjectCreationStage.values.toSet(),
+                  initialMembers: const [
+                    YorksV1InitialProjectMemberInput(
+                      authUserId: 'phone-review-engineer',
+                      projectRole: YorksV1ProjectMembershipRole.projectEngineer,
+                    ),
+                  ],
                   buildings: const [
                     YorksV1ProjectBuildingInput(
-                      code: 'B1',
-                      name: 'Building One',
+                      localRowId: 'phone-review-building',
+                      code: 'B01',
+                      name: buildingName,
+                      hasFrpRoom: true,
+                      flags: {'retained_flag': 'keep'},
                     ),
                   ],
                 ),
           );
-      final router = GoRouter(
-        initialLocation: '/',
-        routes: [
-          GoRoute(
-            path: '/',
-            builder: (_, _) => const YorksV1ProjectCreateFlowScreen(),
-          ),
-          GoRoute(
-            path: '/yorks/projects/:projectId',
-            builder: (_, state) => Scaffold(
-              body: Text('Opened ${state.pathParameters['projectId']}'),
-            ),
+      await _pumpScreen(tester, container, size: const Size(390, 844));
+      for (final name in [projectName, engineerName, buildingName]) {
+        final matches = find.textContaining(name);
+        expect(matches, findsWidgets);
+        final paragraphs = matches.evaluate().map(
+          (element) => element.renderObject! as RenderParagraph,
+        );
+        expect(
+          paragraphs.any((paragraph) => !paragraph.didExceedMaxLines),
+          isTrue,
+          reason: 'The complete name must remain readable: $name',
+        );
+      }
+      expect(
+        find.text(YorksV1ProjectStrings.expectedActiveProject.primary),
+        findsOneWidget,
+      );
+      final submit = find.byKey(const ValueKey('yorks-v1-project-create'));
+      expect(tester.widget<FilledButton>(submit).onPressed, isNotNull);
+      await container
+          .read(provider.notifier)
+          .save(container.read(provider).copyWith(initialMembers: const []));
+      await tester.pumpAndSettle();
+      expect(
+        find.text(YorksV1ProjectStrings.expectedDraftProject.primary),
+        findsOneWidget,
+      );
+      expect(
+        find.text(YorksV1ProjectStrings.expectedActiveProject.primary),
+        findsNothing,
+      );
+      expect(tester.widget<FilledButton>(submit).onPressed, isNotNull);
+      final building = container.read(provider).buildings.single;
+      expect(building.localRowId, 'phone-review-building');
+      expect(building.name, buildingName);
+      expect(building.hasFrpRoom, isTrue);
+      expect(building.flags['retained_flag'], 'keep');
+      expect(repository.receivedCreationInputs, isEmpty);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'phone footer requires applying the building editor and preserves stable rows',
+    (tester) async {
+      final repository = _FakeProjectRepository();
+      final container = await createContainer(
+        role: YorksV1Role.projectEngineer,
+        repository: repository,
+      );
+      final provider = yorksV1ProjectSetupCreationDraftProvider(_authUserId);
+      await container
+          .read(provider.notifier)
+          .save(
+            container
+                .read(provider)
+                .copyWith(
+                  reference: 'YRA-PHONE-APPLY',
+                  name: 'Phone building application',
+                  currentStage: YorksV1ProjectCreationStage.buildings,
+                  visitedStages: YorksV1ProjectCreationStage.values.toSet(),
+                  buildings: const [
+                    YorksV1ProjectBuildingInput(
+                      localRowId: 'preserved-phone-building',
+                      code: 'B01',
+                      name: 'Existing local building',
+                      flags: {'retained_flag': 'keep'},
+                    ),
+                  ],
+                ),
+          );
+      await _pumpScreen(tester, container, size: const Size(390, 844));
+      final add = find.byKey(const ValueKey('yorks-v1-mobile-add-building'));
+      await tester.ensureVisible(add);
+      await tester.tap(add);
+      await tester.pumpAndSettle();
+      final name = find.byKey(const ValueKey('yorks-v1-building-name'));
+      await tester.ensureVisible(name);
+      await tester.enterText(
+        name,
+        'New building with its own reviewed FRP room',
+      );
+      final frp = find.byKey(const ValueKey('yorks-v1-mobile-building-frp'));
+      await tester.ensureVisible(frp);
+      await tester.tap(frp);
+      await tester.pumpAndSettle();
+      final next = find.byKey(const ValueKey('yorks-v1-project-continue'));
+      expect(tester.widget<FilledButton>(next).onPressed, isNull);
+      expect(container.read(provider).buildings, hasLength(1));
+      final apply = find.byKey(
+        const ValueKey('yorks-v1-mobile-apply-building'),
+      );
+      await tester.ensureVisible(apply);
+      await tester.tap(apply);
+      await tester.pumpAndSettle();
+      final buildings = container.read(provider).buildings;
+      expect(buildings, hasLength(2));
+      expect(buildings.first.localRowId, 'preserved-phone-building');
+      expect(buildings.first.code, 'B01');
+      expect(buildings.first.name, 'Existing local building');
+      expect(buildings.first.hasFrpRoom, isFalse);
+      expect(buildings.first.flags['retained_flag'], 'keep');
+      expect(buildings.last.localRowId, isNotEmpty);
+      expect(buildings.last.localRowId, isNot(buildings.first.localRowId));
+      expect(buildings.last.hasFrpRoom, isTrue);
+      expect(
+        buildings.last.name,
+        'New building with its own reviewed FRP room',
+      );
+      expect(tester.widget<FilledButton>(next).onPressed, isNotNull);
+      await tester.tap(next);
+      await tester.pumpAndSettle();
+      expect(
+        container.read(provider).currentStage,
+        YorksV1ProjectCreationStage.attachments,
+      );
+      expect(
+        container
+            .read(provider)
+            .buildings
+            .map((building) => building.localRowId),
+        buildings.map((building) => building.localRowId),
+      );
+      expect(repository.receivedCreationInputs, isEmpty);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'phone remount retains known project and reselects only original file content',
+    (tester) async {
+      final bytes = Uint8List.fromList([1, 2, 3]);
+      final hash = sha256.convert(bytes).toString();
+      final picker = _QueuedDocumentFileService([
+        Uint8List.fromList([3, 2, 1]),
+        bytes,
+      ]);
+      final repository = _FakeProjectRepository();
+      final container = await createContainer(
+        role: YorksV1Role.siteEngineer,
+        repository: repository,
+        documentFileService: picker,
+      );
+      final provider = yorksV1ProjectSetupCreationDraftProvider(_authUserId);
+      await container
+          .read(provider.notifier)
+          .save(
+            container
+                .read(provider)
+                .copyWith(
+                  reference: 'YRA-PHONE-RECOVERY',
+                  name: 'Known project with one original pending file',
+                  currentStage: YorksV1ProjectCreationStage.reviewAndCreate,
+                  visitedStages: YorksV1ProjectCreationStage.values.toSet(),
+                  buildings: const [
+                    YorksV1ProjectBuildingInput(name: 'Main building'),
+                  ],
+                  attachments: [
+                    YorksV1ProjectAttachmentInput(
+                      localId: 'phone-file',
+                      fileName: 'site-plan.pdf',
+                      mimeType: 'application/pdf',
+                      sizeBytes: bytes.length,
+                      contentHash: hash,
+                    ),
+                  ],
+                  rawEditorState: {
+                    'reviewedOperationalFiles': ['phone-file:$hash'],
+                  },
+                ),
+          );
+      final draft = container.read(provider);
+      final scope = (
+        ownerAuthUserId: _authUserId,
+        draftId: draft.draftId,
+        projectId: null as String?,
+      );
+      final coordinator = container.read(
+        yorksV1ProjectSetupCoordinatorProvider(scope).notifier,
+      );
+      await coordinator.prepareCreate(
+        draft.toCreationInput(),
+        files: [
+          YorksV1ProjectSetupFile(
+            localId: 'phone-file',
+            idempotencyKey: 'phone-file-intent',
+            fileName: 'site-plan.pdf',
+            mimeType: 'application/pdf',
+            sizeBytes: bytes.length,
+            contentHash: hash,
+            classification: YorksV1DocumentClassification.operational,
           ),
         ],
       );
-      await tester.binding.setSurfaceSize(const Size(1280, 900));
-      tester.view.devicePixelRatio = 1;
-      tester.view.physicalSize = const Size(1280, 900);
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      addTearDown(() => tester.binding.setSurfaceSize(null));
-      await tester.pumpWidget(
-        UncontrolledProviderScope(
-          container: container,
-          child: MaterialApp.router(
-            debugShowCheckedModeBanner: false,
-            theme: AppTheme.light,
-            routerConfig: router,
-          ),
-        ),
+      await coordinator.submitCore();
+      final original = coordinator.currentState.operation!;
+      final opened = <YorksV1Project>[];
+      await _pumpScreen(
+        tester,
+        container,
+        size: const Size(390, 844),
+        onProjectCreated: opened.add,
       );
-      await tester.pumpAndSettle();
-
-      final createButton = find.byKey(
-        const ValueKey('yorks-v1-project-create'),
-      );
-      await tester.ensureVisible(createButton);
-      await tester.tap(createButton);
-      await tester.pumpAndSettle();
-
-      expect(repository.receivedCreationInputs, hasLength(1));
-      expect(find.text('Opened project-b2-001'), findsNothing);
       expect(find.byType(YorksV1ProjectSetupCompletion), findsOneWidget);
-      await _openCompletion(tester);
-      expect(find.text('Opened project-b2-001'), findsOneWidget);
-      expect(
-        find.text(YorksV1ProjectStrings.projectCreated.primary),
-        findsNothing,
+      expect(opened, isEmpty);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      container.invalidate(yorksV1ProjectSetupCoordinatorProvider(scope));
+      await _pumpScreen(
+        tester,
+        container,
+        size: const Size(390, 844),
+        onProjectCreated: opened.add,
       );
+      final restored = tester
+          .widget<YorksV1ProjectSetupCompletion>(
+            find.byType(YorksV1ProjectSetupCompletion),
+          )
+          .operation;
+      expect(restored.core.result, original.core.result);
+      expect(restored.core.idempotencyKey, original.core.idempotencyKey);
+      expect(restored.files.single.toJson(), original.files.single.toJson());
+      expect(restored.filesPending, isTrue);
+      expect(restored.cleanupComplete, isFalse);
+      final recover = find.text(
+        YorksV1ProjectStrings.continueFileRecovery.primary,
+      );
+      await tester.ensureVisible(recover.first);
+      await tester.tap(recover.first);
+      await tester.pumpAndSettle();
+      expect(
+        container.read(provider).currentStage,
+        YorksV1ProjectCreationStage.attachments,
+      );
+      final metadata = container
+          .read(provider)
+          .attachments
+          .single
+          .toDraftJson();
+      for (var selection = 0; selection < 2; selection++) {
+        final fileMenu = find.byKey(
+          const ValueKey('yorks-v1-mobile-file-menu-phone-file'),
+        );
+        await tester.ensureVisible(fileMenu);
+        await tester.tap(fileMenu);
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.text(YorksV1ProjectStrings.fileReselect.primary).last,
+        );
+        await tester.pumpAndSettle();
+        expect(picker.selections, selection + 1);
+        expect(
+          container.read(provider).attachments.single.toDraftJson(),
+          metadata,
+        );
+        final operation = container
+            .read(yorksV1ProjectSetupCoordinatorProvider(scope))
+            .operation!;
+        expect(operation.core.canonicalPayload, original.core.canonicalPayload);
+        expect(operation.core.idempotencyKey, original.core.idempotencyKey);
+        expect(
+          operation.files.single.idempotencyKey,
+          original.files.single.idempotencyKey,
+        );
+        expect(operation.files.single.contentHash, hash);
+        expect(
+          operation.files.single.status,
+          YorksV1ProjectSetupFileStatus.needsReselect,
+        );
+        expect(repository.receivedCreationInputs, hasLength(1));
+        expect(opened, isEmpty);
+        expect(tester.takeException(), isNull);
+      }
     },
   );
 
@@ -1408,14 +1830,8 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const ValueKey('yorks-v1-project-stage-projectDetails')),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const ValueKey('yorks-v1-project-stage-buildings')),
-    );
-    await tester.pumpAndSettle();
+    await _selectStage(tester, YorksV1ProjectCreationStage.projectDetails);
+    await _selectStage(tester, YorksV1ProjectCreationStage.buildings);
     expect(
       tester
           .widget<EditableText>(
@@ -1499,8 +1915,14 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
       await tester.pumpAndSettle();
       expect(
-        find.text(YorksV1ProjectStrings.draftSaved.primary),
+        find.text(YorksV1ProjectSetupShellStrings.saved.primary),
         findsOneWidget,
+      );
+      expect(
+        container
+            .read(yorksV1ProjectSetupCreationDraftProvider(_authUserId))
+            .isAcknowledged,
+        isTrue,
       );
       await tester.tap(find.byKey(const ValueKey('yorks-v1-project-continue')));
       await tester.pumpAndSettle();
@@ -1607,170 +2029,180 @@ void main() {
     },
   );
 
-  testWidgets(
-    'attachment classification is reviewed before committing and pending files remain visible',
-    (tester) async {
-      final repository = _FakeProjectRepository();
-      final container = await createContainer(
-        role: YorksV1Role.projectEngineer,
-        repository: repository,
-      );
-      final provider = yorksV1ProjectSetupCreationDraftProvider(_authUserId);
-      await container.read(provider.notifier).initialized;
-      await container
-          .read(provider.notifier)
-          .save(
-            container
-                .read(provider)
-                .copyWith(
-                  reference: 'YRA-FILES-PENDING',
-                  name: 'Files pending project',
-                  currentStage: YorksV1ProjectCreationStage.reviewAndCreate,
-                  visitedStages: YorksV1ProjectCreationStage.values.toSet(),
-                  buildings: const [
-                    YorksV1ProjectBuildingInput(name: 'Main building'),
-                  ],
-                  attachments: const [
-                    YorksV1ProjectAttachmentInput(
-                      localId: 'pending-file',
-                      fileName: 'site-plan.pdf',
-                      mimeType: 'application/pdf',
-                      sizeBytes: 3,
-                    ),
-                  ],
-                ),
-          );
-      YorksV1Project? created;
-      await _pumpScreen(
-        tester,
-        container,
-        onProjectCreated: (value) => created = value,
-      );
-      final submit = find.byKey(const ValueKey('yorks-v1-project-create'));
-      expect(tester.widget<FilledButton>(submit).onPressed, isNull);
-      expect(repository.receivedCreationInputs, isEmpty);
-      final editAttachments = find.bySemanticsLabel(
-        YorksV1ProjectStrings.editAttachments.primary,
-      );
-      await tester.ensureVisible(editAttachments);
-      await tester.tap(editAttachments);
-      await tester.pumpAndSettle();
-      expect(
-        container.read(provider).currentStage,
-        YorksV1ProjectCreationStage.attachments,
-      );
-      expect(
-        find.text(YorksV1ProjectStrings.operationalFilesOnly.primary),
-        findsOneWidget,
-      );
-      await tester.tap(find.byType(Checkbox));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('yorks-v1-project-continue')));
-      await tester.pumpAndSettle();
-      await tester.tap(submit);
-      await tester.pumpAndSettle();
-      expect(repository.receivedCreationInputs, hasLength(1));
-      expect(created, isNull);
-      expect(
-        find.byKey(const ValueKey('yorks-v1-project-operation-outcome')),
-        findsOneWidget,
-      );
-      expect(
-        find.text(YorksV1ProjectStrings.projectSavedFilesPending.primary),
-        findsWidgets,
-      );
-      expect(
-        find.text(YorksV1ProjectStrings.fileReselect.primary),
-        findsWidgets,
-      );
-      expect(find.byType(YorksV1ProjectSetupCompletion), findsOneWidget);
-      expect(container.read(provider).reference, 'YRA-FILES-PENDING');
-      final originalOperation = tester
-          .widget<YorksV1ProjectSetupCompletion>(
-            find.byType(YorksV1ProjectSetupCompletion),
-          )
-          .operation;
-      final originalDraftId = container.read(provider).draftId;
-      final storageKey = container.read(provider.notifier).storageKey;
-      final remove = find.byTooltip(
-        YorksV1ProjectStrings.removePendingFile.primary,
-      );
-      await tester.ensureVisible(remove);
-      await tester.tap(remove);
-      await tester.pumpAndSettle();
-      final settled = tester
-          .widget<YorksV1ProjectSetupCompletion>(
-            find.byType(YorksV1ProjectSetupCompletion),
-          )
-          .operation;
-      expect(
-        settled.files.single.status,
-        YorksV1ProjectSetupFileStatus.removed,
-      );
-      expect(settled.filesPending, isFalse);
-      expect(settled.cleanupComplete, isTrue);
-      expect(
-        find.byKey(const ValueKey('yorks-v1-project-operation-outcome')),
-        findsNothing,
-      );
-      expect(container.read(provider).attachments, isEmpty);
-      await container.read(provider.notifier).initialized;
-      await tester.pumpAndSettle();
-      final nextDraft = container.read(provider);
-      expect(nextDraft.draftId, isNot(originalDraftId));
-      expect(nextDraft.reference, isEmpty);
-      expect(nextDraft.attachments, isEmpty);
-      final preferences = container.read(sharedPreferencesProvider);
-      final active =
-          jsonDecode(preferences.getString(storageKey)!)
-              as Map<String, dynamic>;
-      expect(active['retired'], isFalse);
-      expect(
-        YorksV1ProjectCreationDraft.fromJson(
-          Map<String, dynamic>.from(active['draft'] as Map),
-        ).draftId,
-        nextDraft.draftId,
-      );
-      final retired =
-          jsonDecode(
-                preferences.getString('$storageKey:retired:$originalDraftId')!,
-              )
-              as Map<String, dynamic>;
-      expect(retired['retired'], isTrue);
-      expect(retired['resultProjectId'], settled.project!.id);
-      expect(
-        YorksV1ProjectCreationDraft.fromJson(
-          Map<String, dynamic>.from(retired['draft'] as Map),
-        ).draftId,
-        originalDraftId,
-      );
-      final persistedOperation = YorksV1ProjectSetupOperation.fromJson(
-        Map<String, dynamic>.from(
-          jsonDecode(
-                preferences.getString('$storageKey:journal:$originalDraftId')!,
-              )
-              as Map,
-        ),
-      );
-      expect(persistedOperation.cleanupComplete, isTrue);
-      expect(
-        persistedOperation.files.single.status,
-        YorksV1ProjectSetupFileStatus.removed,
-      );
-      expect(
-        persistedOperation.core.canonicalPayload,
-        originalOperation.core.canonicalPayload,
-      );
-      expect(
-        persistedOperation.core.idempotencyKey,
-        originalOperation.core.idempotencyKey,
-      );
-      expect(persistedOperation.core.result, originalOperation.core.result);
-      await _openCompletion(tester);
-      expect(created?.reference, 'YRA-FILES-PENDING');
-      expect(repository.receivedCreationInputs, hasLength(1));
-    },
-  );
+  for (final size in [const Size(1280, 900), const Size(390, 844)]) {
+    testWidgets(
+      '${size.width} attachment classification is reviewed before committing and pending files remain visible',
+      (tester) async {
+        final repository = _FakeProjectRepository();
+        final container = await createContainer(
+          role: YorksV1Role.projectEngineer,
+          repository: repository,
+        );
+        final provider = yorksV1ProjectSetupCreationDraftProvider(_authUserId);
+        await container.read(provider.notifier).initialized;
+        await container
+            .read(provider.notifier)
+            .save(
+              container
+                  .read(provider)
+                  .copyWith(
+                    reference: 'YRA-FILES-PENDING',
+                    name: 'Files pending project',
+                    currentStage: YorksV1ProjectCreationStage.reviewAndCreate,
+                    visitedStages: YorksV1ProjectCreationStage.values.toSet(),
+                    buildings: const [
+                      YorksV1ProjectBuildingInput(name: 'Main building'),
+                    ],
+                    attachments: const [
+                      YorksV1ProjectAttachmentInput(
+                        localId: 'pending-file',
+                        fileName: 'site-plan.pdf',
+                        mimeType: 'application/pdf',
+                        sizeBytes: 3,
+                      ),
+                    ],
+                  ),
+            );
+        YorksV1Project? created;
+        await _pumpScreen(
+          tester,
+          container,
+          onProjectCreated: (value) => created = value,
+          size: size,
+        );
+        final submit = find.byKey(const ValueKey('yorks-v1-project-create'));
+        expect(tester.widget<FilledButton>(submit).onPressed, isNull);
+        expect(repository.receivedCreationInputs, isEmpty);
+        final editAttachments = find.bySemanticsLabel(
+          YorksV1ProjectStrings.editAttachments.primary,
+        );
+        await tester.ensureVisible(editAttachments);
+        await tester.tap(editAttachments);
+        await tester.pumpAndSettle();
+        expect(
+          container.read(provider).currentStage,
+          YorksV1ProjectCreationStage.attachments,
+        );
+        expect(
+          find.text(YorksV1ProjectStrings.operationalFilesOnly.primary),
+          findsOneWidget,
+        );
+        await tester.ensureVisible(find.byType(Checkbox));
+        await tester.tap(find.byType(Checkbox));
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.byKey(const ValueKey('yorks-v1-project-continue')),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(submit);
+        await tester.pumpAndSettle();
+        expect(repository.receivedCreationInputs, hasLength(1));
+        expect(created, isNull);
+        expect(
+          find.byKey(const ValueKey('yorks-v1-project-operation-outcome')),
+          findsOneWidget,
+        );
+        expect(
+          find.text(YorksV1ProjectStrings.projectSavedFilesPending.primary),
+          findsWidgets,
+        );
+        expect(
+          find.text(YorksV1ProjectStrings.fileReselect.primary),
+          findsWidgets,
+        );
+        expect(find.byType(YorksV1ProjectSetupCompletion), findsOneWidget);
+        expect(container.read(provider).reference, 'YRA-FILES-PENDING');
+        final originalOperation = tester
+            .widget<YorksV1ProjectSetupCompletion>(
+              find.byType(YorksV1ProjectSetupCompletion),
+            )
+            .operation;
+        final originalDraftId = container.read(provider).draftId;
+        final storageKey = container.read(provider.notifier).storageKey;
+        final remove = find.byTooltip(
+          YorksV1ProjectStrings.removePendingFile.primary,
+        );
+        await tester.ensureVisible(remove);
+        await tester.tap(remove);
+        await tester.pumpAndSettle();
+        final settled = tester
+            .widget<YorksV1ProjectSetupCompletion>(
+              find.byType(YorksV1ProjectSetupCompletion),
+            )
+            .operation;
+        expect(
+          settled.files.single.status,
+          YorksV1ProjectSetupFileStatus.removed,
+        );
+        expect(settled.filesPending, isFalse);
+        expect(settled.cleanupComplete, isTrue);
+        expect(
+          find.byKey(const ValueKey('yorks-v1-project-operation-outcome')),
+          findsNothing,
+        );
+        expect(container.read(provider).attachments, isEmpty);
+        await container.read(provider.notifier).initialized;
+        await tester.pumpAndSettle();
+        final nextDraft = container.read(provider);
+        expect(nextDraft.draftId, isNot(originalDraftId));
+        expect(nextDraft.reference, isEmpty);
+        expect(nextDraft.attachments, isEmpty);
+        final preferences = container.read(sharedPreferencesProvider);
+        final active =
+            jsonDecode(preferences.getString(storageKey)!)
+                as Map<String, dynamic>;
+        expect(active['retired'], isFalse);
+        expect(
+          YorksV1ProjectCreationDraft.fromJson(
+            Map<String, dynamic>.from(active['draft'] as Map),
+          ).draftId,
+          nextDraft.draftId,
+        );
+        final retired =
+            jsonDecode(
+                  preferences.getString(
+                    '$storageKey:retired:$originalDraftId',
+                  )!,
+                )
+                as Map<String, dynamic>;
+        expect(retired['retired'], isTrue);
+        expect(retired['resultProjectId'], settled.project!.id);
+        expect(
+          YorksV1ProjectCreationDraft.fromJson(
+            Map<String, dynamic>.from(retired['draft'] as Map),
+          ).draftId,
+          originalDraftId,
+        );
+        final persistedOperation = YorksV1ProjectSetupOperation.fromJson(
+          Map<String, dynamic>.from(
+            jsonDecode(
+                  preferences.getString(
+                    '$storageKey:journal:$originalDraftId',
+                  )!,
+                )
+                as Map,
+          ),
+        );
+        expect(persistedOperation.cleanupComplete, isTrue);
+        expect(
+          persistedOperation.files.single.status,
+          YorksV1ProjectSetupFileStatus.removed,
+        );
+        expect(
+          persistedOperation.core.canonicalPayload,
+          originalOperation.core.canonicalPayload,
+        );
+        expect(
+          persistedOperation.core.idempotencyKey,
+          originalOperation.core.idempotencyKey,
+        );
+        expect(persistedOperation.core.result, originalOperation.core.result);
+        await _openCompletion(tester);
+        expect(created?.reference, 'YRA-FILES-PENDING');
+        expect(repository.receivedCreationInputs, hasLength(1));
+      },
+    );
+  }
 
   testWidgets('owner switch clears the previous owner building undo buffer', (
     tester,
@@ -2053,16 +2485,19 @@ void main() {
           .first;
       final before = tester.state<ScrollableState>(scrollable).position.pixels;
       expect(before, greaterThan(0));
-      await tester.tap(
-        find.byKey(const ValueKey('yorks-v1-project-stage-partiesAndAccess')),
-      );
+      // The stepper is inside the scroll area on phones. Use the fixed footer
+      // so leaving does not first scroll the current section back to its top.
+      await tester.tap(find.byKey(const ValueKey('yorks-v1-project-continue')));
       await tester.pumpAndSettle();
       final contexts =
           container.read(provider).rawEditorState['sectionContext'] as Map;
       expect((contexts['projectDetails'] as Map)['focusedField'], 'notes');
       expect((contexts['projectDetails'] as Map)['scroll'], closeTo(before, 1));
       await tester.tap(
-        find.byKey(const ValueKey('yorks-v1-project-stage-projectDetails')),
+        find.descendant(
+          of: find.byKey(const ValueKey('project-setup-mobile-footer')),
+          matching: find.text(YorksV1ProjectStrings.back.primary),
+        ),
       );
       await tester.pumpAndSettle();
       expect(
@@ -2151,71 +2586,73 @@ void main() {
     },
   );
 
-  testWidgets(
-    'physical building reorder and undo preserve source IDs FRP and flags',
-    (tester) async {
-      final container = await createContainer(
-        role: YorksV1Role.projectEngineer,
-        repository: _FakeProjectRepository(),
-      );
-      final provider = yorksV1ProjectSetupCreationDraftProvider(_authUserId);
-      await container.read(provider.notifier).initialized;
-      await container
-          .read(provider.notifier)
-          .save(
-            container
-                .read(provider)
-                .copyWith(
-                  currentStage: YorksV1ProjectCreationStage.buildings,
-                  buildings: const [
-                    YorksV1ProjectBuildingInput(
-                      localRowId: 'row-a',
-                      sourceScopeId: 'scope-a',
-                      name: 'First building',
-                      hasFrpRoom: true,
-                      flags: {'future_flag': 'keep'},
-                      deliveryAddress: 'Address A',
-                    ),
-                    YorksV1ProjectBuildingInput(
-                      localRowId: 'row-b',
-                      sourceScopeId: 'scope-b',
-                      name: 'Second building',
-                      deliveryAddress: 'Address B',
-                    ),
-                  ],
-                ),
-          );
-      await _pumpScreen(tester, container);
-      await _buildingMenuAction(
-        tester,
-        container.read(provider).buildings.first,
-        YorksV1ProjectStrings.moveBuildingDown.primary,
-      );
-      expect(
-        container
-            .read(provider)
-            .buildings
-            .map((building) => building.sourceScopeId),
-        ['scope-b', 'scope-a'],
-      );
-      await tester.tap(
-        find.text(YorksV1ProjectStrings.undoBuildingChange.primary),
-      );
-      await tester.pumpAndSettle();
-      final restored = container.read(provider).buildings;
-      expect(restored.map((building) => building.sourceScopeId), [
-        'scope-a',
-        'scope-b',
-      ]);
-      expect(restored.map((building) => building.localRowId), [
-        'row-a',
-        'row-b',
-      ]);
-      expect(restored.first.hasFrpRoom, isTrue);
-      expect(restored.first.flags['future_flag'], 'keep');
-      expect(restored.first.deliveryAddress, 'Address A');
-    },
-  );
+  for (final size in [const Size(1280, 900), const Size(390, 844)]) {
+    testWidgets(
+      '${size.width} physical building reorder and undo preserve source IDs FRP and flags',
+      (tester) async {
+        final container = await createContainer(
+          role: YorksV1Role.projectEngineer,
+          repository: _FakeProjectRepository(),
+        );
+        final provider = yorksV1ProjectSetupCreationDraftProvider(_authUserId);
+        await container.read(provider.notifier).initialized;
+        await container
+            .read(provider.notifier)
+            .save(
+              container
+                  .read(provider)
+                  .copyWith(
+                    currentStage: YorksV1ProjectCreationStage.buildings,
+                    buildings: const [
+                      YorksV1ProjectBuildingInput(
+                        localRowId: 'row-a',
+                        sourceScopeId: 'scope-a',
+                        name: 'First building',
+                        hasFrpRoom: true,
+                        flags: {'future_flag': 'keep'},
+                        deliveryAddress: 'Address A',
+                      ),
+                      YorksV1ProjectBuildingInput(
+                        localRowId: 'row-b',
+                        sourceScopeId: 'scope-b',
+                        name: 'Second building',
+                        deliveryAddress: 'Address B',
+                      ),
+                    ],
+                  ),
+            );
+        await _pumpScreen(tester, container, size: size);
+        await _buildingMenuAction(
+          tester,
+          container.read(provider).buildings.first,
+          YorksV1ProjectStrings.moveBuildingDown.primary,
+        );
+        expect(
+          container
+              .read(provider)
+              .buildings
+              .map((building) => building.sourceScopeId),
+          ['scope-b', 'scope-a'],
+        );
+        await tester.tap(
+          find.text(YorksV1ProjectStrings.undoBuildingChange.primary),
+        );
+        await tester.pumpAndSettle();
+        final restored = container.read(provider).buildings;
+        expect(restored.map((building) => building.sourceScopeId), [
+          'scope-a',
+          'scope-b',
+        ]);
+        expect(restored.map((building) => building.localRowId), [
+          'row-a',
+          'row-b',
+        ]);
+        expect(restored.first.hasFrpRoom, isTrue);
+        expect(restored.first.flags['future_flag'], 'keep');
+        expect(restored.first.deliveryAddress, 'Address A');
+      },
+    );
+  }
 
   testWidgets('an unchanged edit leaves without submitting an update command', (
     tester,
@@ -2253,10 +2690,7 @@ void main() {
       editItem: item,
       onProjectUpdated: (value) => updated = value,
     );
-    await tester.tap(
-      find.byKey(const ValueKey('yorks-v1-project-stage-reviewAndCreate')),
-    );
-    await tester.pumpAndSettle();
+    await _selectStage(tester, YorksV1ProjectCreationStage.reviewAndCreate);
     await tester.tap(find.byKey(const ValueKey('yorks-v1-project-create')));
     await tester.pumpAndSettle();
     expect(updated?.id, 'existing-project');
@@ -2264,257 +2698,256 @@ void main() {
     expect(repository.updateCalls, 0);
   });
 
-  testWidgets(
-    'completed edit shortcuts preserve the blank draft and Edit opens the confirmed version',
-    (tester) async {
-      final repository = _FakeProjectRepository();
-      final now = DateTime.utc(2026, 8, 1);
-      final item = YorksV1ProjectPortfolioItem(
-        project: YorksV1Project(
-          id: 'edited-project',
-          reference: 'YRA-EDITED',
-          name: 'Original project name',
-          state: YorksV1ProjectLifecycle.active,
-          version: 4,
-          createdAt: now,
-          updatedAt: now,
-          siteLocation: 'Original site',
-          notes: 'Original notes',
-        ),
-        activeBuildingCount: 1,
-        activeProjectEngineerCount: 1,
-        activeSiteEngineerCount: 0,
-        activeMembers: [
-          YorksV1ProjectMember(
-            id: 'edit-membership',
-            projectId: 'edited-project',
-            memberAuthUserId: _authUserId,
-            projectRole: YorksV1ProjectMembershipRole.projectEngineer,
-            effectiveFrom: now,
+  for (final size in [const Size(1280, 900), const Size(390, 844)]) {
+    testWidgets(
+      '${size.width} completed edit shortcuts preserve the blank draft and Edit opens the confirmed version',
+      (tester) async {
+        final repository = _FakeProjectRepository();
+        final now = DateTime.utc(2026, 8, 1);
+        final item = YorksV1ProjectPortfolioItem(
+          project: YorksV1Project(
+            id: 'edited-project',
+            reference: 'YRA-EDITED',
+            name: 'Original project name',
+            state: YorksV1ProjectLifecycle.active,
+            version: 4,
             createdAt: now,
+            updatedAt: now,
+            siteLocation: 'Original site',
+            notes: 'Original notes',
           ),
-        ],
-        buildings: const [
-          YorksV1ProjectBuildingInput(
-            sourceScopeId: 'edit-building',
-            name: 'Original building',
-            hasFrpRoom: true,
-          ),
-        ],
-      );
-      final container = await createContainer(
-        role: YorksV1Role.projectEngineer,
-        repository: repository,
-        portfolioItems: () => [
-          YorksV1ProjectPortfolioItem(
-            project: repository._updatedProject ?? item.project,
-            activeBuildingCount: item.activeBuildingCount,
-            activeProjectEngineerCount: item.activeProjectEngineerCount,
-            activeSiteEngineerCount: item.activeSiteEngineerCount,
-            activeMembers: item.activeMembers,
-            buildings: item.buildings,
-          ),
-        ],
-      );
-      final router = GoRouter(
-        initialLocation: '/yorks/projects/edited-project/edit',
-        routes: [
-          GoRoute(
-            path: '/yorks/projects/:projectId/edit',
-            pageBuilder: (_, state) => MaterialPage<void>(
-              key: state.pageKey,
-              child: YorksV1ProjectEditFlowScreen(
-                projectId: state.pathParameters['projectId']!,
+          activeBuildingCount: 1,
+          activeProjectEngineerCount: 1,
+          activeSiteEngineerCount: 0,
+          activeMembers: [
+            YorksV1ProjectMember(
+              id: 'edit-membership',
+              projectId: 'edited-project',
+              memberAuthUserId: _authUserId,
+              projectRole: YorksV1ProjectMembershipRole.projectEngineer,
+              effectiveFrom: now,
+              createdAt: now,
+            ),
+          ],
+          buildings: const [
+            YorksV1ProjectBuildingInput(
+              sourceScopeId: 'edit-building',
+              name: 'Original building',
+              hasFrpRoom: true,
+            ),
+          ],
+        );
+        final container = await createContainer(
+          role: YorksV1Role.projectEngineer,
+          repository: repository,
+          portfolioItems: () => [
+            YorksV1ProjectPortfolioItem(
+              project: repository._updatedProject ?? item.project,
+              activeBuildingCount: item.activeBuildingCount,
+              activeProjectEngineerCount: item.activeProjectEngineerCount,
+              activeSiteEngineerCount: item.activeSiteEngineerCount,
+              activeMembers: item.activeMembers,
+              buildings: item.buildings,
+            ),
+          ],
+        );
+        final router = GoRouter(
+          initialLocation: '/yorks/projects/edited-project/edit',
+          routes: [
+            GoRoute(
+              path: '/yorks/projects/:projectId/edit',
+              pageBuilder: (_, state) => MaterialPage<void>(
+                key: state.pageKey,
+                child: YorksV1ProjectEditFlowScreen(
+                  projectId: state.pathParameters['projectId']!,
+                ),
               ),
             ),
-          ),
-          GoRoute(
-            path: '/yorks/projects/:projectId',
-            builder: (_, _) => Scaffold(
-              body: Text(
-                'Opened ${repository._updatedProject?.name} '
-                'version ${repository._updatedProject?.version}',
+            GoRoute(
+              path: '/yorks/projects/:projectId',
+              builder: (_, _) => Scaffold(
+                body: Text(
+                  'Opened ${repository._updatedProject?.name} '
+                  'version ${repository._updatedProject?.version}',
+                ),
               ),
             ),
+          ],
+        );
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = size;
+        await tester.binding.setSurfaceSize(size);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        addTearDown(() async {
+          await tester.pumpWidget(const SizedBox.shrink());
+          await tester.pump();
+          router.dispose();
+        });
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: MaterialApp.router(
+              debugShowCheckedModeBanner: false,
+              theme: AppTheme.light,
+              routerConfig: router,
+            ),
           ),
-        ],
-      );
-      tester.view.devicePixelRatio = 1;
-      tester.view.physicalSize = const Size(1280, 900);
-      await tester.binding.setSurfaceSize(const Size(1280, 900));
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      addTearDown(() => tester.binding.setSurfaceSize(null));
-      addTearDown(() async {
-        await tester.pumpWidget(const SizedBox.shrink());
-        await tester.pump();
-        router.dispose();
-      });
-      await tester.pumpWidget(
-        UncontrolledProviderScope(
-          container: container,
-          child: MaterialApp.router(
-            debugShowCheckedModeBanner: false,
-            theme: AppTheme.light,
-            routerConfig: router,
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      final initialEditorState = tester.state(
-        find.byType(YorksV1ProjectCreateFlowScreen),
-      );
-      final provider = yorksV1ProjectEditDraftProvider(
-        const YorksV1ProjectEditDraftContext(
-          ownerAuthUserId: _authUserId,
-          projectId: 'edited-project',
-        ),
-      );
-      await container.read(provider.notifier).initialized;
-      final originalDraftId = container.read(provider).draftId;
-      final storageKey = container.read(provider.notifier).storageKey;
-      expect(container.read(provider).baseVersion, 4);
-      await tester.enterText(
-        find.byKey(const ValueKey('yorks-v1-project-name')),
-        'Reviewed project name',
-      );
-      await tester.tap(
-        find.byKey(const ValueKey('yorks-v1-project-stage-reviewAndCreate')),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('yorks-v1-project-create')));
-      await tester.pumpAndSettle();
-      expect(find.byType(YorksV1ProjectSetupCompletion), findsOneWidget);
-      final completed = tester
-          .widget<YorksV1ProjectSetupCompletion>(
-            find.byType(YorksV1ProjectSetupCompletion),
-          )
-          .operation;
-      expect(completed.cleanupComplete, isTrue);
-      expect(completed.coreSucceeded, isTrue);
-      expect(completed.project?.name, 'Reviewed project name');
-      expect(completed.project?.version, 5);
-      expect(repository.updateCalls, 1);
-      expect(repository.receivedCreationInputs, isEmpty);
-      expect(router.canPop(), isFalse);
-      await container.read(provider.notifier).initialized;
-      await tester.pumpAndSettle();
-      final freshDraftId = container.read(provider).draftId;
-      expect(freshDraftId, isNot(originalDraftId));
-      final preferences = container.read(sharedPreferencesProvider);
-      final freshEnvelope = preferences.getString(storageKey)!;
-      final tombstoneKey = '$storageKey:retired:$originalDraftId';
-      final tombstoneJson = preferences.getString(tombstoneKey)!;
-      final tombstone = jsonDecode(tombstoneJson) as Map<String, dynamic>;
-      expect(tombstone['retired'], isTrue);
-      expect(tombstone['resultProjectId'], 'edited-project');
-      final retiredDraft = YorksV1ProjectCreationDraft.fromJson(
-        Map<String, dynamic>.from(tombstone['draft'] as Map),
-      );
-      expect(retiredDraft.draftId, originalDraftId);
-      expect(retiredDraft.baseVersion, 4);
-      expect(retiredDraft.name, 'Reviewed project name');
-
-      void expectFreshDraftPreserved() {
-        final fresh = container.read(provider);
-        expect(fresh.draftId, freshDraftId);
-        expect(fresh.mode, YorksV1ProjectDraftMode.edit);
-        expect(fresh.projectId, 'edited-project');
-        expect(fresh.baseVersion, isNull);
-        expect(fresh.baseSnapshot, isEmpty);
-        expect(fresh.reference, isEmpty);
-        expect(fresh.name, isEmpty);
-        expect(fresh.siteLocation, isNull);
-        expect(fresh.notes, isNull);
-        expect(fresh.buildings, isEmpty);
-        expect(fresh.parties, isEmpty);
-        expect(fresh.attachments, isEmpty);
-        expect(fresh.rawEditorState, isEmpty);
-        expect(preferences.getString(storageKey), freshEnvelope);
-        expect(preferences.getString(tombstoneKey), tombstoneJson);
-      }
-
-      expectFreshDraftPreserved();
-      final open = find.text(
-        YorksV1ProjectSetupCompletionCopy.localized(
-          AppLanguage.english,
-        )[YorksV1ProjectSetupCompletionText.openProject],
-      );
-      await tester.ensureVisible(open);
-      final completionFocus = Focus.of(tester.element(open));
-      completionFocus.requestFocus();
-      await tester.pumpAndSettle();
-      expect(FocusManager.instance.primaryFocus, same(completionFocus));
-      for (final modifier in [
-        LogicalKeyboardKey.controlLeft,
-        LogicalKeyboardKey.metaLeft,
-      ]) {
-        await tester.sendKeyDownEvent(modifier);
-        await tester.sendKeyEvent(LogicalKeyboardKey.keyS);
-        await tester.sendKeyUpEvent(modifier);
+        );
         await tester.pumpAndSettle();
-        expectFreshDraftPreserved();
+        final initialEditorState = tester.state(
+          find.byType(YorksV1ProjectCreateFlowScreen),
+        );
+        final provider = yorksV1ProjectEditDraftProvider(
+          const YorksV1ProjectEditDraftContext(
+            ownerAuthUserId: _authUserId,
+            projectId: 'edited-project',
+          ),
+        );
+        await container.read(provider.notifier).initialized;
+        final originalDraftId = container.read(provider).draftId;
+        final storageKey = container.read(provider.notifier).storageKey;
+        expect(container.read(provider).baseVersion, 4);
+        await tester.enterText(
+          find.byKey(const ValueKey('yorks-v1-project-name')),
+          'Reviewed project name',
+        );
+        await _selectStage(tester, YorksV1ProjectCreationStage.reviewAndCreate);
+        await tester.tap(find.byKey(const ValueKey('yorks-v1-project-create')));
+        await tester.pumpAndSettle();
+        expect(find.byType(YorksV1ProjectSetupCompletion), findsOneWidget);
+        final completed = tester
+            .widget<YorksV1ProjectSetupCompletion>(
+              find.byType(YorksV1ProjectSetupCompletion),
+            )
+            .operation;
+        expect(completed.cleanupComplete, isTrue);
+        expect(completed.coreSucceeded, isTrue);
+        expect(completed.project?.name, 'Reviewed project name');
+        expect(completed.project?.version, 5);
         expect(repository.updateCalls, 1);
         expect(repository.receivedCreationInputs, isEmpty);
-        expect(tester.takeException(), isNull);
-      }
-      final edit = find.descendant(
-        of: find.byType(YorksV1ProjectSetupCompletion),
-        matching: find.text(
+        expect(router.canPop(), isFalse);
+        await container.read(provider.notifier).initialized;
+        await tester.pumpAndSettle();
+        final freshDraftId = container.read(provider).draftId;
+        expect(freshDraftId, isNot(originalDraftId));
+        final preferences = container.read(sharedPreferencesProvider);
+        final freshEnvelope = preferences.getString(storageKey)!;
+        final tombstoneKey = '$storageKey:retired:$originalDraftId';
+        final tombstoneJson = preferences.getString(tombstoneKey)!;
+        final tombstone = jsonDecode(tombstoneJson) as Map<String, dynamic>;
+        expect(tombstone['retired'], isTrue);
+        expect(tombstone['resultProjectId'], 'edited-project');
+        final retiredDraft = YorksV1ProjectCreationDraft.fromJson(
+          Map<String, dynamic>.from(tombstone['draft'] as Map),
+        );
+        expect(retiredDraft.draftId, originalDraftId);
+        expect(retiredDraft.baseVersion, 4);
+        expect(retiredDraft.name, 'Reviewed project name');
+
+        void expectFreshDraftPreserved() {
+          final fresh = container.read(provider);
+          expect(fresh.draftId, freshDraftId);
+          expect(fresh.mode, YorksV1ProjectDraftMode.edit);
+          expect(fresh.projectId, 'edited-project');
+          expect(fresh.baseVersion, isNull);
+          expect(fresh.baseSnapshot, isEmpty);
+          expect(fresh.reference, isEmpty);
+          expect(fresh.name, isEmpty);
+          expect(fresh.siteLocation, isNull);
+          expect(fresh.notes, isNull);
+          expect(fresh.buildings, isEmpty);
+          expect(fresh.parties, isEmpty);
+          expect(fresh.attachments, isEmpty);
+          expect(fresh.rawEditorState, isEmpty);
+          expect(preferences.getString(storageKey), freshEnvelope);
+          expect(preferences.getString(tombstoneKey), tombstoneJson);
+        }
+
+        expectFreshDraftPreserved();
+        final open = find.text(
           YorksV1ProjectSetupCompletionCopy.localized(
             AppLanguage.english,
-          )[YorksV1ProjectSetupCompletionText.editProject],
-        ),
-      );
-      await tester.ensureVisible(edit);
-      await tester.tap(edit);
-      await tester.pumpAndSettle();
-      expect(router.canPop(), isTrue);
-      expect(find.byType(YorksV1ProjectSetupCompletion), findsNothing);
-      expect(
-        tester.state(find.byType(YorksV1ProjectCreateFlowScreen)),
-        isNot(same(initialEditorState)),
-      );
-      final nextProposal = container.read(provider);
-      expect(nextProposal.draftId, freshDraftId);
-      expect(nextProposal.baseVersion, 5);
-      expect(nextProposal.name, 'Reviewed project name');
-      expect(nextProposal.reference, 'YRA-EDITED');
-      expect(
-        nextProposal.currentStage,
-        YorksV1ProjectCreationStage.projectDetails,
-      );
-      final nextBase = YorksV1ProjectCreationDraft.fromJson(
-        nextProposal.baseSnapshot,
-      );
-      expect(nextBase.baseVersion, 5);
-      expect(nextBase.name, 'Reviewed project name');
-      expect(
-        nextProposal.toCreationInput().toRpcPayload()
-          ..remove('idempotency_key'),
-        nextBase.toCreationInput().toRpcPayload()..remove('idempotency_key'),
-      );
-      final nameEditor = tester.widget<EditableText>(
-        find.descendant(
-          of: find.byKey(const ValueKey('yorks-v1-project-name')),
-          matching: find.byType(EditableText),
-        ),
-      );
-      expect(nameEditor.controller.text, 'Reviewed project name');
-      expect(repository.updateCalls, 1);
-      expect(repository.receivedCreationInputs, isEmpty);
-      expect(preferences.getString(tombstoneKey), tombstoneJson);
-      expect(tester.takeException(), isNull);
-      router.pop();
-      await tester.pumpAndSettle();
-      expect(find.byType(YorksV1ProjectSetupCompletion), findsOneWidget);
-      await _openCompletion(tester);
-      expect(
-        find.text('Opened Reviewed project name version 5'),
-        findsOneWidget,
-      );
-    },
-  );
+          )[YorksV1ProjectSetupCompletionText.openProject],
+        );
+        await tester.ensureVisible(open);
+        final completionFocus = Focus.of(tester.element(open));
+        completionFocus.requestFocus();
+        await tester.pumpAndSettle();
+        expect(FocusManager.instance.primaryFocus, same(completionFocus));
+        for (final modifier in [
+          LogicalKeyboardKey.controlLeft,
+          LogicalKeyboardKey.metaLeft,
+        ]) {
+          await tester.sendKeyDownEvent(modifier);
+          await tester.sendKeyEvent(LogicalKeyboardKey.keyS);
+          await tester.sendKeyUpEvent(modifier);
+          await tester.pumpAndSettle();
+          expectFreshDraftPreserved();
+          expect(repository.updateCalls, 1);
+          expect(repository.receivedCreationInputs, isEmpty);
+          expect(tester.takeException(), isNull);
+        }
+        final edit = find.descendant(
+          of: find.byType(YorksV1ProjectSetupCompletion),
+          matching: find.text(
+            YorksV1ProjectSetupCompletionCopy.localized(
+              AppLanguage.english,
+            )[YorksV1ProjectSetupCompletionText.editProject],
+          ),
+        );
+        await tester.ensureVisible(edit);
+        await tester.tap(edit);
+        await tester.pumpAndSettle();
+        expect(router.canPop(), isTrue);
+        expect(find.byType(YorksV1ProjectSetupCompletion), findsNothing);
+        expect(
+          tester.state(find.byType(YorksV1ProjectCreateFlowScreen)),
+          isNot(same(initialEditorState)),
+        );
+        final nextProposal = container.read(provider);
+        expect(nextProposal.draftId, freshDraftId);
+        expect(nextProposal.baseVersion, 5);
+        expect(nextProposal.name, 'Reviewed project name');
+        expect(nextProposal.reference, 'YRA-EDITED');
+        expect(
+          nextProposal.currentStage,
+          YorksV1ProjectCreationStage.projectDetails,
+        );
+        final nextBase = YorksV1ProjectCreationDraft.fromJson(
+          nextProposal.baseSnapshot,
+        );
+        expect(nextBase.baseVersion, 5);
+        expect(nextBase.name, 'Reviewed project name');
+        expect(
+          nextProposal.toCreationInput().toRpcPayload()
+            ..remove('idempotency_key'),
+          nextBase.toCreationInput().toRpcPayload()..remove('idempotency_key'),
+        );
+        final nameEditor = tester.widget<EditableText>(
+          find.descendant(
+            of: find.byKey(const ValueKey('yorks-v1-project-name')),
+            matching: find.byType(EditableText),
+          ),
+        );
+        expect(nameEditor.controller.text, 'Reviewed project name');
+        expect(repository.updateCalls, 1);
+        expect(repository.receivedCreationInputs, isEmpty);
+        expect(preferences.getString(tombstoneKey), tombstoneJson);
+        expect(tester.takeException(), isNull);
+        router.pop();
+        await tester.pumpAndSettle();
+        expect(find.byType(YorksV1ProjectSetupCompletion), findsOneWidget);
+        await _openCompletion(tester);
+        expect(
+          find.text('Opened Reviewed project name version 5'),
+          findsOneWidget,
+        );
+      },
+    );
+  }
 
   testWidgets(
     'throwing analytics cannot block navigation or its saved checkpoint',
@@ -2578,17 +3011,10 @@ Future<void> _pumpScreen(
   TextScaler textScaler = TextScaler.noScaling,
   TextDirection textDirection = TextDirection.ltr,
 }) async {
-  if (size.width >= 1100) {
-    tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = size;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-  } else {
-    // Retain the established compact/mobile golden viewport. Desktop cases
-    // explicitly set the view so MediaQuery exercises the new desktop branch.
-    tester.view.resetPhysicalSize();
-    tester.view.resetDevicePixelRatio();
-  }
+  tester.view.devicePixelRatio = 1;
+  tester.view.physicalSize = size;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
   await tester.binding.setSurfaceSize(size);
   addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(
@@ -2630,13 +3056,32 @@ Future<void> _openCompletion(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+Future<void> _selectStage(
+  WidgetTester tester,
+  YorksV1ProjectCreationStage stage,
+) async {
+  final desktop = find.byKey(ValueKey('yorks-v1-project-stage-${stage.name}'));
+  final target = desktop.evaluate().isNotEmpty
+      ? desktop
+      : find.byKey(ValueKey('project-setup-mobile-step-${stage.name}'));
+  expect(target, findsOneWidget);
+  await tester.ensureVisible(target);
+  await tester.tap(target);
+  await tester.pumpAndSettle();
+}
+
 Future<void> _buildingMenuAction(
   WidgetTester tester,
   YorksV1ProjectBuildingInput building,
   String action,
 ) async {
   final identity = building.localRowId ?? building.sourceScopeId ?? '0';
-  final menu = find.byKey(ValueKey('yorks-v1-desktop-building-menu-$identity'));
+  final desktopMenu = find.byKey(
+    ValueKey('yorks-v1-desktop-building-menu-$identity'),
+  );
+  final menu = desktopMenu.evaluate().isNotEmpty
+      ? desktopMenu
+      : find.byKey(ValueKey('yorks-v1-mobile-building-menu-$identity'));
   expect(menu, findsOneWidget);
   await tester.ensureVisible(menu);
   await tester.tap(menu);
@@ -2805,6 +3250,20 @@ class _FakeDocumentFileService implements YorksV1DocumentFileService {
     required String fileName,
     required String mimeType,
   }) async => true;
+}
+
+class _QueuedDocumentFileService extends _FakeDocumentFileService {
+  _QueuedDocumentFileService(this.bytes);
+  final List<Uint8List> bytes;
+  int selections = 0;
+
+  @override
+  Future<YorksV1SelectedDocument?> selectDocument() async =>
+      YorksV1SelectedDocument(
+        fileName: 'site-plan.pdf',
+        mimeType: 'application/pdf',
+        bytes: bytes[selections++],
+      );
 }
 
 class _SupportedTestDraftStorage extends SharedPreferencesProjectDraftStorage {

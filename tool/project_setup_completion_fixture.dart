@@ -142,6 +142,7 @@ YorksV1ProjectSetupOperation projectSetupCompletionFixtureOperation({
 /// Place this body in YorksV1ProjectSetupDesktopShell(completed: true).
 Widget buildProjectSetupCompletionFixture({
   AppLanguage language = AppLanguage.english,
+  bool compact = false,
   bool activationPending = false,
   bool filesPending = false,
   bool emptyFiles = false,
@@ -155,6 +156,7 @@ Widget buildProjectSetupCompletionFixture({
     emptyFiles: emptyFiles,
   );
   return YorksV1ProjectSetupCompletion(
+    compact: compact,
     operation: operation,
     copy: YorksV1ProjectSetupCompletionCopy.localized(language),
     permissions: const YorksV1ProjectSetupCompletionPermissions(

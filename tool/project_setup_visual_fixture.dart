@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ledger/app/router.dart';
-import 'package:material_ledger/app/yorks_v1_workspace_shell.dart';
 import 'package:material_ledger/core/theme/app_theme.dart';
 import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_project_create_flow_screen.dart';
 import 'package:material_ledger/shared/models/app_language.dart';
@@ -27,6 +26,8 @@ import 'package:material_ledger/shared/providers/yorks_v1_permission_provider.da
 import 'package:material_ledger/shared/models/yorks_v1_permission_management.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_permission_repository.dart';
 import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_project_setup_desktop_shell.dart';
+import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_project_setup_desktop_theme.dart';
+import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_project_setup_mobile_shell.dart';
 import 'project_setup_completion_fixture.dart';
 
 /// Actual setup presentation with synthetic read context and browser storage.
@@ -227,16 +228,9 @@ Future<void> main() async {
     routes: [
       GoRoute(
         path: RoutePaths.engineerCreateProject,
-        builder: (context, _) => LayoutBuilder(
-          builder: (context, constraints) => stageIndex == 5
-              ? const _VisualCompletionScreen()
-              : constraints.maxWidth >= 1100 &&
-                    MediaQuery.textScalerOf(context).scale(1) <= 1.1
-              ? const YorksV1ProjectCreateFlowScreen()
-              : const YorksV1WorkspaceShell(
-                  child: YorksV1ProjectCreateFlowScreen(),
-                ),
-        ),
+        builder: (context, _) => stageIndex == 5
+            ? const _VisualCompletionScreen()
+            : const YorksV1ProjectCreateFlowScreen(),
       ),
     ],
   );
@@ -285,7 +279,11 @@ class _VisualCompletionScreenState
   @override
   Widget build(BuildContext context) {
     final language = ref.watch(languageProvider);
-    return YorksV1ProjectSetupDesktopShell(
+    final desktop = YorksProjectSetupDesktopTheme.isDesktop(context);
+    final buildShell = desktop
+        ? YorksV1ProjectSetupDesktopShell.new
+        : YorksV1ProjectSetupMobileShell.new;
+    return buildShell(
       language: language,
       stage: YorksV1ProjectCreationStage.reviewAndCreate,
       visitedStages: YorksV1ProjectCreationStage.values.toSet(),
@@ -298,6 +296,7 @@ class _VisualCompletionScreenState
       completed: true,
       body: buildProjectSetupCompletionFixture(
         language: language,
+        compact: !desktop,
         onDismissBanner: () {},
       ),
       scrollController: _scroll,

@@ -144,3 +144,11 @@ These CI-placeholder artifacts were compiled from the validated candidate workin
 - `build/web/main.dart.js`: SHA256 `e2e13add113e44ed358fdcb924c481b8e15d7a87af4beea0984111449e8a6054`.
 - `build/app/outputs/flutter-apk/app-release.apk`: SHA256 `469b238481591a596bee8b9346eea91fe174e6b6a2ea9f8ff70d2a43bf335618`.
 - Android certificate verification: `apksigner verify --print-certs` passed; signer is Yorks CI Ephemeral, not a production signing identity.
+
+## Mobile follow-up — 4 October 2026
+
+The supplied six phone references are implemented with a dedicated responsive mobile shell, full sticky action labels, tablet reflow, focused building Apply/Cancel, protected Common/team behavior, truthful file-reselection states, review and explicit confirmed result actions. Desktop baselines remain unchanged. No mobile SQL or backend contract changed. The flag remains default off and no production rollout occurred.
+
+Final local gates: **2,251 Flutter tests passed / four retained skips**, **122 database files / 3,546 assertions passed**, clean analysis/formatting, CI web and ephemeral-signed APK builds passed. The final browser inspected all six normal states, lower controls, narrow phone, Arabic 200% and tablet review without a warning/error in the final state queries. Earlier transient startup sizing was corrected and covered by a same-mount recovery regression.
+
+[Mobile design and exact PNG baselines](MOBILE_DESIGN_2026-10-04.md), [final mobile validation and build identities](MOBILE_VALIDATION_2026-10-04.md), and [actual browser captures](visual-evidence/mobile-2026-10-04/README.md) supersede the earlier compact presentation evidence. Historical desktop evidence and old artifact identities above remain historical. Neither measured source comparison nor local validation constitutes literal pixel equality, complete source acceptance, live production success or production signing.

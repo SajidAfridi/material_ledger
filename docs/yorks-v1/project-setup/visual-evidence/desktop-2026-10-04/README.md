@@ -19,7 +19,7 @@ Both primary actions beside footer hints now end at the 26px right inset. The br
 
 The result view uses a synthetic confirmed operation to inspect the shared result component. Real server-confirmed completion, permission-negative Open, uncertain activation/file recovery, same-container remount and completed-edit shortcuts are exercised by repository/controller-backed widget tests. No browser live transaction is claimed.
 
-## Compact and accessibility views
+## Historical compact and accessibility views
 
 | Case | Browser capture |
 | --- | --- |
@@ -27,7 +27,7 @@ The result view uses a synthetic confirmed operation to inspect the shared resul
 | Tablet buildings, 1025×800 CSS | [Tablet editor](tablet-buildings-1025-browser.jpg) |
 | Arabic details, 359×800 CSS and 200% text | [Arabic enlarged text](arabic-details-359-200pct-browser.jpg) |
 
-The browser's integer viewport override and existing zoom give 359/1025 CSS widths; exact 360px regression snapshots remain in the existing mobile suite. Compact flows remain scrollable with reachable footer actions. The English mobile primary label is ellipsized at this narrow size by the retained compact button; matching the forthcoming mobile design, including final button treatment, remains the next presentation phase. Arabic 200% selects the readable compact layout and stacked actions. These checks do not claim tablet/mobile pixel matching without those references.
+These captures predate the supplied mobile references and the subsequent mobile implementation. The browser's integer viewport override and existing zoom gave 359/1025 CSS widths. The historical compact English action was ellipsized; the new mobile shell keeps full action labels and stacks them at narrow widths. Current mobile/tablet/Arabic evidence is recorded in [mobile validation](../../MOBILE_VALIDATION_2026-10-04.md). Retain these earlier captures as desktop-phase history, not the current mobile design.
 
 ## Diagnostics and limits
 

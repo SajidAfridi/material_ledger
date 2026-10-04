@@ -543,18 +543,12 @@ Page<void> _slide(
 Page<void> _yorksV1Slide(LocalKey key, Widget child) =>
     _slide(key, YorksV1WorkspaceShell(child: child));
 
-/// The approved desktop setup owns its dedicated header and stage rail. Small
-/// screens keep the established workspace framing and focused form until their
-/// separately supplied design is applied.
+/// Approved setup owns responsive chrome on every viewport. Keeping the zoom
+/// host outside that chrome preserves the desktop body-zoom boundary without
+/// adding a second office header to phones or tablets.
 Page<void> _yorksV1ProjectSetupSlide(LocalKey key, Widget child) => _slide(
   key,
-  LayoutBuilder(
-    builder: (context, constraints) =>
-        constraints.maxWidth >= 1100 &&
-            MediaQuery.textScalerOf(context).scale(1) <= 1.1
-        ? YorksWorkspaceZoomHost(routeKey: 'project-setup', child: child)
-        : YorksV1WorkspaceShell(child: child),
-  ),
+  YorksWorkspaceZoomHost(routeKey: 'project-setup', child: child),
 );
 
 /// Slide-in page for screens that were originally office-shell *tabs* and so

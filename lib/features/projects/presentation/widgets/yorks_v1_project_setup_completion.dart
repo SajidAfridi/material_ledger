@@ -53,6 +53,7 @@ class YorksV1ProjectSetupCompletion extends StatelessWidget {
     this.localRecoveryPending = false,
     this.busy = false,
     this.showBanner = true,
+    this.compact = false,
     this.onDismissBanner,
     this.onOpenProject,
     this.onEditProject,
@@ -70,6 +71,9 @@ class YorksV1ProjectSetupCompletion extends StatelessWidget {
   final bool localRecoveryPending;
   final bool busy;
   final bool showBanner;
+
+  /// Scoped phone/tablet sizing; operation and permission semantics are shared.
+  final bool compact;
   final VoidCallback? onDismissBanner;
   final VoidCallback? onOpenProject;
   final VoidCallback? onEditProject;
@@ -80,8 +84,10 @@ class YorksV1ProjectSetupCompletion extends StatelessWidget {
 
   String _text(YorksV1ProjectSetupCompletionText key) => copy[key];
 
-  TextStyle get _bodyStyle =>
-      AppTypography.bodyMedium.copyWith(fontSize: 14, height: 1.4);
+  TextStyle get _bodyStyle => AppTypography.bodyMedium.copyWith(
+    fontSize: compact ? 12 : 14,
+    height: 1.4,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -232,9 +238,9 @@ class YorksV1ProjectSetupCompletion extends StatelessWidget {
       child: Stack(
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.xl,
-              vertical: AppSpacing.xl + AppSpacing.xxs,
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 12 : AppSpacing.xl,
+              vertical: compact ? 14 : AppSpacing.xl + AppSpacing.xxs,
             ),
             decoration: BoxDecoration(
               color: AppColors.successContainer.withValues(alpha: 0.65),
@@ -247,19 +253,19 @@ class YorksV1ProjectSetupCompletion extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  width: 50,
-                  height: 50,
+                  width: compact ? 32 : 50,
+                  height: compact ? 32 : 50,
                   decoration: const BoxDecoration(
                     color: AppColors.success,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.check,
                     color: AppColors.onSuccess,
-                    size: 34,
+                    size: compact ? 24 : 34,
                   ),
                 ),
-                const SizedBox(width: AppSpacing.xxl),
+                SizedBox(width: compact ? 12 : AppSpacing.xxl),
                 Expanded(
                   child: Padding(
                     padding: EdgeInsetsDirectional.only(
@@ -285,7 +291,7 @@ class YorksV1ProjectSetupCompletion extends StatelessWidget {
                                 ),
                                 style: AppTypography.headlineMedium.copyWith(
                                   color: AppColors.navy,
-                                  fontSize: 28,
+                                  fontSize: compact ? 18 : 28,
                                 ),
                               ),
                             ),
@@ -460,8 +466,8 @@ class YorksV1ProjectSetupCompletion extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  width: 38,
-                  height: 38,
+                  width: compact ? 26 : 38,
+                  height: compact ? 26 : 38,
                   alignment: Alignment.center,
                   decoration: const BoxDecoration(
                     color: AppColors.blueContainer,
@@ -474,7 +480,7 @@ class YorksV1ProjectSetupCompletion extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(width: AppSpacing.xxl),
+                SizedBox(width: compact ? 12 : AppSpacing.xxl),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -505,7 +511,7 @@ class YorksV1ProjectSetupCompletion extends StatelessWidget {
     required bool canTeam,
     required bool canDocuments,
   }) => _panel(
-    padding: const EdgeInsets.all(AppSpacing.xl),
+    padding: EdgeInsets.all(compact ? 12 : AppSpacing.xl),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -641,7 +647,7 @@ class YorksV1ProjectSetupCompletion extends StatelessWidget {
           _text(title),
           style: AppTypography.headlineSmall.copyWith(
             color: AppColors.navy,
-            fontSize: 22,
+            fontSize: compact ? 16 : 22,
             fontWeight: FontWeight.w600,
             height: 1,
           ),
@@ -655,14 +661,15 @@ class YorksV1ProjectSetupCompletion extends StatelessWidget {
     ],
   );
 
-  Widget _panel({
-    required Widget child,
-    EdgeInsets padding = const EdgeInsets.symmetric(
-      horizontal: AppSpacing.xl + AppSpacing.xxs,
-      vertical: AppSpacing.lg + AppSpacing.xxs,
-    ),
-  }) => Container(
-    padding: padding,
+  Widget _panel({required Widget child, EdgeInsets? padding}) => Container(
+    padding:
+        padding ??
+        (compact
+            ? const EdgeInsets.all(12)
+            : const EdgeInsets.symmetric(
+                horizontal: AppSpacing.xl + AppSpacing.xxs,
+                vertical: AppSpacing.lg + AppSpacing.xxs,
+              )),
     decoration: BoxDecoration(
       color: AppColors.surfaceContainerLowest,
       border: Border.all(color: AppColors.line),

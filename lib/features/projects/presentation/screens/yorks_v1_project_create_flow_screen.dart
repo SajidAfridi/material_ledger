@@ -48,9 +48,13 @@ import 'yorks_v1_project_setup_desktop_theme.dart';
 import '../widgets/yorks_v1_project_setup_completion.dart';
 import '../../../../shared/providers/yorks_v1_feature_flags_provider.dart';
 import 'yorks_v1_project_setup_desktop_shell.dart';
+import 'yorks_v1_project_setup_mobile_shell.dart';
+import 'yorks_v1_project_setup_mobile_theme.dart';
+import '../../../../shared/models/yorks_v1_project_setup_mobile_strings.dart';
 import '../../../../shared/models/yorks_v1_project_setup_shell_strings.dart';
 
 part 'yorks_v1_project_setup_desktop_stages.dart';
+part 'yorks_v1_project_setup_mobile_stages.dart';
 
 /// The normalized Yorks V1 R35 project creation experience.
 ///
@@ -634,7 +638,8 @@ class _YorksV1ProjectCreateFlowScreenState
                     teamDirectory: teamDirectory,
                     setupState: setupState,
                   );
-                  if (YorksProjectSetupDesktopTheme.isDesktop(context)) {
+                  if (YorksProjectSetupDesktopTheme.isDesktop(context) ||
+                      YorksProjectSetupMobileTheme.isMobileLayout(context)) {
                     final knownOperation =
                         setupState.operation ?? _completedOperation;
                     final showCompletion =
@@ -669,7 +674,11 @@ class _YorksV1ProjectCreateFlowScreenState
                                 _hasUnreviewedAttachments))
                           stage,
                     };
-                    return YorksV1ProjectSetupDesktopShell(
+                    final buildShell =
+                        YorksProjectSetupDesktopTheme.isDesktop(context)
+                        ? YorksV1ProjectSetupDesktopShell.new
+                        : YorksV1ProjectSetupMobileShell.new;
+                    return buildShell(
                       language: language,
                       stage: draft.currentStage,
                       visitedStages: _isEditing
@@ -1397,6 +1406,7 @@ class _YorksV1ProjectCreateFlowScreenState
     }
 
     return YorksV1ProjectSetupCompletion(
+      compact: YorksProjectSetupMobileTheme.isMobileLayout(context),
       operation: operation,
       copy: YorksV1ProjectSetupCompletionCopy.localized(language),
       busy: saving,
@@ -3400,16 +3410,8 @@ class _YorksV1ProjectCreateFlowScreenState
         return;
       }
       if (draftRetired) _resetRetiredDraftProvider(draft.ownerAuthUserId);
-      if (!mounted) return;
-      if (YorksProjectSetupDesktopTheme.isDesktop(context)) return;
-      if (_isEditing) {
-        widget.onProjectUpdated?.call(project);
-      } else if (widget.onProjectCreated != null) {
-        widget.onProjectCreated!(project);
-      } else {
-        if (!mounted) return;
-        context.go(RoutePaths.yorksV1ProjectPath(project.id));
-      }
+      // Every viewport retains the server-confirmed result. Navigation and
+      // subsequent mutations require an explicit completion action.
     } on YorksV1ProjectSetupRecoveryException catch (error) {
       if (!_isCurrentContext(generation)) return;
       setState(() => _isCreating = false);
@@ -3993,6 +3995,9 @@ class _DetailsStage extends StatelessWidget {
     if (YorksProjectSetupDesktopTheme.isDesktop(context)) {
       return _DesktopDetailsStage(this);
     }
+    if (YorksProjectSetupMobileTheme.isMobileLayout(context)) {
+      return _MobileDetailsStage(this);
+    }
     final required = YorksV1ProjectStrings.requiredField.active(language);
     return Form(
       key: formKey,
@@ -4322,6 +4327,9 @@ class _PartiesAndAccessStage extends StatelessWidget {
   Widget build(BuildContext context) {
     if (YorksProjectSetupDesktopTheme.isDesktop(context)) {
       return _DesktopPartiesStage(this);
+    }
+    if (YorksProjectSetupMobileTheme.isMobileLayout(context)) {
+      return _MobilePartiesStage(this);
     }
     final subcontractors = <_IndexedParty>[
       for (var index = 0; index < draft.parties.length; index++)
@@ -5021,6 +5029,9 @@ class _BuildingsStage extends StatelessWidget {
     if (YorksProjectSetupDesktopTheme.isDesktop(context)) {
       return _DesktopBuildingsStage(this);
     }
+    if (YorksProjectSetupMobileTheme.isMobileLayout(context)) {
+      return _MobileBuildingsStage(this);
+    }
     final buildingError =
         validationErrors.contains(
           YorksV1ProjectValidationCode.missingBuilding,
@@ -5398,6 +5409,9 @@ class _AttachmentsStage extends StatelessWidget {
     if (YorksProjectSetupDesktopTheme.isDesktop(context)) {
       return _DesktopAttachmentsStage(this);
     }
+    if (YorksProjectSetupMobileTheme.isMobileLayout(context)) {
+      return _MobileAttachmentsStage(this);
+    }
     return NexusSectionCard(
       title: YorksV1ProjectStrings.attachments.active(language),
       child: Column(
@@ -5588,10 +5602,12 @@ class _ProjectAttachmentDropzoneState
                   ? AppColors.blue.withValues(alpha: 0.06)
                   : YorksProjectSetupDesktopTheme.isDesktop(context)
                   ? const Color(0xFFF7FBFE)
-                  : Colors.transparent,
+                  : const Color(0xFFF7FBFE),
               borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
             ),
-            padding: YorksProjectSetupDesktopTheme.isDesktop(context)
+            padding:
+                (YorksProjectSetupDesktopTheme.isDesktop(context) ||
+                    YorksProjectSetupMobileTheme.isMobileLayout(context))
                 ? EdgeInsets.zero
                 : const EdgeInsets.symmetric(
                     horizontal: AppSpacing.xl,
@@ -5599,6 +5615,12 @@ class _ProjectAttachmentDropzoneState
                   ),
             child: YorksProjectSetupDesktopTheme.isDesktop(context)
                 ? _DesktopDropzoneContents(
+                    language: widget.language,
+                    onPick: widget.onPick,
+                    dragging: _dragging,
+                  )
+                : YorksProjectSetupMobileTheme.isMobileLayout(context)
+                ? _MobileDropzoneContents(
                     language: widget.language,
                     onPick: widget.onPick,
                     dragging: _dragging,
@@ -5832,6 +5854,9 @@ class _ReviewStage extends StatelessWidget {
   Widget build(BuildContext context) {
     if (YorksProjectSetupDesktopTheme.isDesktop(context)) {
       return _DesktopReviewStage(this);
+    }
+    if (YorksProjectSetupMobileTheme.isMobileLayout(context)) {
+      return _MobileReviewStage(this);
     }
     final absent = YorksV1ProjectStrings.notProvided.active(language);
     String text(String? value) => _emptyToNull(value) ?? absent;

@@ -13,5 +13,7 @@ General project imports, building-paste mappings, cloud/collaborative drafts, mu
 - [Decision register](registers/Decisions.csv)
 - [Implementation evidence](IMPLEMENTATION_EVIDENCE.md)
 - [Six-screen desktop design and measured comparison](DESKTOP_DESIGN_2026-10-04.md)
+- [Six-screen mobile design, responsive verification and captures](MOBILE_DESIGN_2026-10-04.md)
+- [Final mobile validation and browser evidence](MOBILE_VALIDATION_2026-10-04.md)
 
 The source acceptance catalogue retains its original Not run status. Candidate evidence and unresolved gates are recorded separately in IMPLEMENTATION_EVIDENCE.md; source requirements must not be silently rewritten into passes.
