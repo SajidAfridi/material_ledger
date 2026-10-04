@@ -11,6 +11,10 @@ opens the authorized project after confirmation. Historical six-screen reports
 below retain earlier design evidence; [direct navigation and fresh Create](DIRECT_PROJECT_NAVIGATION_2026-10-04.md)
 governs the current completion/draft lifecycle.
 
+The later owner correction removes the redundant setup-sidebar exit and keeps
+the footer Back action. [Single Back navigation and staging evidence](SINGLE_BACK_NAVIGATION_2026-10-05.md)
+records this presentation change and the latest staging deployment.
+
 - [Requirements](registers/Requirements.csv)
 - [Acceptance catalogue](registers/Acceptance_Tests.csv)
 - [Full supplied specification](specification/Yorks_Project_Creation_Editing_SRS_v1.0.md)
@@ -24,5 +28,6 @@ governs the current completion/draft lifecycle.
 - [Workspace integration correction, staging alias and validation boundaries](WORKSPACE_INTEGRATION_2026-10-04.md)
 - [Universal workspace chrome and explicit local-save correction](UNIVERSAL_WORKSPACE_AND_DRAFT_SAVE_2026-10-04.md)
 - [Direct project navigation and fresh Create correction](DIRECT_PROJECT_NAVIGATION_2026-10-04.md)
+- [Single Back navigation and latest staging evidence](SINGLE_BACK_NAVIGATION_2026-10-05.md)
 
 The source acceptance catalogue retains its original Not run status. Candidate evidence and unresolved gates are recorded separately in IMPLEMENTATION_EVIDENCE.md; source requirements must not be silently rewritten into passes.
