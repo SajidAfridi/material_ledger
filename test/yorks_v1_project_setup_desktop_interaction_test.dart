@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:material_ledger/core/theme/app_theme.dart';
 import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_project_create_flow_screen.dart';
 import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_project_setup_desktop_shell.dart';
@@ -17,6 +18,7 @@ import 'package:material_ledger/shared/models/yorks_v1_document.dart';
 import 'package:material_ledger/shared/models/yorks_v1_domain_error.dart';
 import 'package:material_ledger/shared/models/yorks_v1_permission_management.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project.dart';
+import 'package:material_ledger/shared/models/yorks_v1_project_portfolio.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_creation_draft.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_strings.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_setup_operation.dart';
@@ -439,7 +441,7 @@ void main() {
   );
 
   testWidgets(
-    'confirmed desktop create retires the draft and stays on completion until Open',
+    'confirmed desktop create opens once and releases the next creation form',
     (tester) async {
       final repository = _RecordingProjectRepository();
       final fixture = await _fixture(
@@ -453,16 +455,11 @@ void main() {
       await tester.tap(_key('yorks-v1-project-create'));
       await tester.pumpAndSettle();
 
-      final completion = tester.widget<YorksV1ProjectSetupCompletion>(
-        find.byType(YorksV1ProjectSetupCompletion),
-      );
-      expect(
-        completion.operation.project!.state,
-        YorksV1ProjectLifecycle.active,
-      );
-      expect(completion.operation.cleanupComplete, isTrue);
-      expect(completion.permissions.canOpenProject, isTrue);
-      expect(opened, isEmpty);
+      expect(find.byType(YorksV1ProjectSetupCompletion), findsNothing);
+      expect(opened.single.id, 'created-desktop-project');
+      expect(opened.single.state, YorksV1ProjectLifecycle.active);
+      final completed = _operationForDraft(fixture, draftId);
+      expect(completed.cleanupComplete, isTrue);
       expect(repository.creates, hasLength(1));
       expect(repository.activations, hasLength(1));
       expect(_key('yorks-v1-project-create'), findsNothing);
@@ -489,18 +486,8 @@ void main() {
         isNotNull,
       );
 
-      // Rebuild and dismiss the receipt banner without navigating or sending a
-      // second command. Only the allowed explicit Open action invokes routing.
-      completion.onDismissBanner!();
       await tester.pumpAndSettle();
-      expect(find.byType(YorksV1ProjectSetupCompletion), findsOneWidget);
-      expect(opened, isEmpty);
-      expect(repository.creates, hasLength(1));
-      expect(repository.activations, hasLength(1));
-      await tester.tap(find.text(_completionCopy.openProject));
-      await tester.pumpAndSettle();
-      expect(opened.single.id, 'created-desktop-project');
-      expect(opened.single.state, YorksV1ProjectLifecycle.active);
+      expect(opened, hasLength(1));
       expect(repository.creates, hasLength(1));
       expect(repository.activations, hasLength(1));
 
@@ -525,7 +512,7 @@ void main() {
   );
 
   testWidgets(
-    'confirmed completion hides Open when the protected view capability is absent',
+    'confirmed desktop create returns to the portfolio without protected view capability',
     (tester) async {
       final repository = _RecordingProjectRepository();
       final fixture = await _fixture(
@@ -537,16 +524,37 @@ void main() {
         ),
       );
       final opened = <YorksV1Project>[];
-      await _pump(tester, fixture.container, onProjectCreated: opened.add);
+      final router = GoRouter(
+        initialLocation: '/',
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (_, _) =>
+                YorksV1ProjectCreateFlowScreen(onProjectCreated: opened.add),
+          ),
+          GoRoute(
+            path: '/yorks/projects',
+            builder: (_, _) =>
+                const Scaffold(body: Text('Authorized portfolio fallback')),
+          ),
+          GoRoute(
+            path: '/yorks/projects/:projectId',
+            builder: (_, _) =>
+                const Scaffold(body: Text('Denied project destination')),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+      await _pump(
+        tester,
+        fixture.container,
+        child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
+      );
       await tester.tap(_key('yorks-v1-project-create'));
       await tester.pumpAndSettle();
-      final completion = tester.widget<YorksV1ProjectSetupCompletion>(
-        find.byType(YorksV1ProjectSetupCompletion),
-      );
-      expect(completion.operation.coreSucceeded, isTrue);
-      expect(completion.permissions.canOpenProject, isFalse);
-      expect(completion.onOpenProject, isNull);
-      expect(find.text(_completionCopy.openProject), findsNothing);
+      expect(find.text('Authorized portfolio fallback'), findsOneWidget);
+      expect(find.text('Denied project destination'), findsNothing);
+      expect(find.byType(YorksV1ProjectSetupCompletion), findsNothing);
       expect(opened, isEmpty);
       expect(repository.creates, hasLength(1));
       expect(repository.activations, hasLength(1));
@@ -555,7 +563,7 @@ void main() {
   );
 
   testWidgets(
-    'uncertain activation keeps known completion and reselects only original file bytes',
+    'uncertain activation and original file recovery stay separate from the next creation proposal',
     (tester) async {
       final original = Uint8List.fromList([1, 2, 3]);
       final hash = sha256.convert(original).toString();
@@ -580,15 +588,21 @@ void main() {
         repositoryOverride: repository,
         picker: picker,
         documents: documents,
+        capabilities: {
+          ...yorksV1EnforcedFeatureActionCapabilities,
+          YorksV1CapabilityKeys.documentsView,
+          YorksV1CapabilityKeys.documentsUpload,
+        },
       );
+      final originalDraft = fixture.draft;
+      final draftId = originalDraft.draftId;
       final opened = <YorksV1Project>[];
       await _pump(tester, fixture.container, onProjectCreated: opened.add);
       await tester.tap(_key('yorks-v1-project-create'));
       await tester.pumpAndSettle();
-      final completion = tester.widget<YorksV1ProjectSetupCompletion>(
-        find.byType(YorksV1ProjectSetupCompletion),
-      );
-      final frozen = completion.operation;
+      final frozen = _operationForDraft(fixture, draftId);
+      expect(find.byType(YorksV1ProjectSetupCompletion), findsNothing);
+      expect(opened.single.id, frozen.project!.id);
       expect(frozen.coreSucceeded, isTrue);
       expect(frozen.project!.state, YorksV1ProjectLifecycle.draft);
       expect(
@@ -600,27 +614,55 @@ void main() {
         YorksV1ProjectSetupFileStatus.needsReselect,
       );
       expect(frozen.cleanupComplete, isFalse);
-      expect(completion.onOpenProject, isNotNull);
-      expect(opened, isEmpty);
       expect(documents.uploads, isEmpty);
-      final frozenAttachment = fixture.draft.attachments.single.toDraftJson();
+      final freshId = fixture.draft.draftId;
+      expect(freshId, isNot(draftId));
+      expect(fixture.draft.attachments, isEmpty);
 
-      await _tapVisible(
+      await _pump(
         tester,
-        find.text(YorksV1ProjectStrings.continueFileRecovery.primary),
+        fixture.container,
+        child: YorksV1ProjectCreateFlowScreen(
+          editItem: _recoveryEditItem(frozen, originalDraft),
+        ),
       );
-      expect(find.byType(YorksV1ProjectSetupCompletion), findsNothing);
-      expect(_key('yorks-v1-desktop-file-original-file'), findsOneWidget);
-      await _reselectFile(tester, 'original-file');
-      expect(fixture.draft.attachments.single.toDraftJson(), frozenAttachment);
+      final editProvider = yorksV1ProjectEditDraftProvider(
+        YorksV1ProjectEditDraftContext(
+          ownerAuthUserId: _owner,
+          projectId: frozen.project!.id,
+        ),
+      );
+      await tester.enterText(
+        _key('yorks-v1-project-name'),
+        'Independent unpublished project proposal',
+      );
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+      final independentProposal = _proposalContent(
+        fixture.container.read(editProvider),
+      );
+      expect(_key('project-setup-pending-recovery'), findsOneWidget);
+      final reselect = _key('project-setup-pending-reselect-original-file');
+      await _tapVisible(tester, reselect);
       expect(picker.selections, 1);
       expect(documents.uploads, isEmpty);
-
-      await _reselectFile(tester, 'original-file');
+      expect(
+        find.text(YorksV1ProjectStrings.fileContentMismatch.primary),
+        findsWidgets,
+      );
+      expect(
+        _proposalContent(fixture.container.read(editProvider)),
+        independentProposal,
+      );
+      await _tapVisible(tester, reselect);
       expect(picker.selections, 2);
-      expect(fixture.draft.attachments.single.localId, 'original-file');
-      expect(fixture.draft.attachments.single.contentHash, hash);
-      final operation = fixture.operation;
+      expect(documents.uploads, hasLength(1));
+      expect(
+        documents.uploads.single.idempotencyKey,
+        frozen.files.single.idempotencyKey,
+      );
+      expect(documents.uploads.single.bytes, original);
+      final operation = _operationForDraft(fixture, draftId);
       expect(operation.core.canonicalPayload, frozen.core.canonicalPayload);
       expect(operation.core.idempotencyKey, frozen.core.idempotencyKey);
       expect(
@@ -631,16 +673,21 @@ void main() {
         operation.files.single.idempotencyKey,
         frozen.files.single.idempotencyKey,
       );
-      expect(documents.uploads, isEmpty);
+      expect(fixture.draft.draftId, freshId);
+      expect(fixture.draft.name, isEmpty);
+      expect(
+        _proposalContent(fixture.container.read(editProvider)),
+        independentProposal,
+      );
       expect(repository.creates, hasLength(1));
       expect(repository.activations, hasLength(1));
-      expect(opened, isEmpty);
+      expect(opened, hasLength(1));
       expect(tester.takeException(), isNull);
     },
   );
 
   testWidgets(
-    'uncertain document upload survives remount and retries with the original manifest key',
+    'uncertain upload remains recoverable from the authorized project with its original manifest key',
     (tester) async {
       final bytes = Uint8List.fromList([1, 2, 3]);
       final repository = _RecordingProjectRepository();
@@ -656,7 +703,14 @@ void main() {
         repositoryOverride: repository,
         picker: picker,
         documents: documents,
+        capabilities: {
+          ...yorksV1EnforcedFeatureActionCapabilities,
+          YorksV1CapabilityKeys.documentsView,
+          YorksV1CapabilityKeys.documentsUpload,
+        },
       );
+      final originalDraft = fixture.draft;
+      final draftId = originalDraft.draftId;
       final opened = <YorksV1Project>[];
       await _pump(tester, fixture.container, onProjectCreated: opened.add);
       await tester.tap(find.text(YorksV1ProjectStrings.addAttachment.primary));
@@ -673,8 +727,8 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(_key('yorks-v1-project-create'));
       await tester.pumpAndSettle();
-      final frozen = fixture.operation;
-      expect(find.byType(YorksV1ProjectSetupCompletion), findsOneWidget);
+      final frozen = _operationForDraft(fixture, draftId);
+      expect(find.byType(YorksV1ProjectSetupCompletion), findsNothing);
       expect(frozen.project!.state, YorksV1ProjectLifecycle.active);
       expect(
         frozen.files.single.status,
@@ -684,72 +738,82 @@ void main() {
       expect(documents.uploads, hasLength(1));
       final uploadKey = documents.uploads.single.idempotencyKey;
       expect(uploadKey, frozen.files.single.idempotencyKey);
-      expect(opened, isEmpty);
-
-      // A new screen State loses all process-held file bytes. The immutable
-      // durable operation still exposes the committed project and original file.
+      expect(opened.single.id, frozen.project!.id);
+      final freshId = fixture.draft.draftId;
+      expect(freshId, isNot(draftId));
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pumpAndSettle();
       fixture.container.invalidate(
         yorksV1ProjectSetupCoordinatorProvider((
           ownerAuthUserId: _owner,
-          draftId: fixture.draft.draftId,
+          draftId: draftId,
           projectId: null,
         )),
       );
       await _pump(tester, fixture.container, onProjectCreated: opened.add);
-      expect(find.byType(YorksV1ProjectSetupCompletion), findsOneWidget);
-      await _tapVisible(
+      expect(fixture.draft.draftId, freshId);
+      expect(_inputText(tester, 'yorks-v1-project-name'), isEmpty);
+      expect(documents.uploads, hasLength(1));
+      expect(opened, hasLength(1));
+
+      await _pump(
         tester,
-        find.text(YorksV1ProjectStrings.continueFileRecovery.primary),
+        fixture.container,
+        child: YorksV1ProjectCreateFlowScreen(
+          editItem: _recoveryEditItem(frozen, originalDraft),
+        ),
       );
-      await _reselectFile(tester, localId);
+      final editProvider = yorksV1ProjectEditDraftProvider(
+        YorksV1ProjectEditDraftContext(
+          ownerAuthUserId: _owner,
+          projectId: frozen.project!.id,
+        ),
+      );
+      await tester.enterText(
+        _key('yorks-v1-project-name'),
+        'Independent unpublished project proposal',
+      );
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+      final independentProposal = _proposalContent(
+        fixture.container.read(editProvider),
+      );
+      final reselect = _key('project-setup-pending-reselect-$localId');
+      await _tapVisible(tester, reselect);
+      expect(documents.uploads, hasLength(1));
       expect(
-        fixture.operation.files.single.contentHash,
+        _proposalContent(fixture.container.read(editProvider)),
+        independentProposal,
+      );
+      expect(
+        _operationForDraft(fixture, draftId).files.single.contentHash,
         frozen.files.single.contentHash,
       );
-      expect(documents.uploads, hasLength(1));
-      await _reselectFile(tester, localId);
-      expect(documents.uploads, hasLength(1));
-      expect(fixture.operation.files.single.idempotencyKey, uploadKey);
-
-      await _tapVisible(tester, _key('yorks-v1-desktop-file-menu-$localId'));
-      await tester.tap(find.text(YorksV1ProjectStrings.retryFile.primary).last);
-      await tester.pumpAndSettle();
+      await _tapVisible(tester, reselect);
       expect(documents.uploads, hasLength(2));
       expect(documents.uploads.last.idempotencyKey, uploadKey);
       expect(documents.uploads.last.bytes, bytes);
       expect(
-        fixture.operation.core.canonicalPayload,
+        _operationForDraft(fixture, draftId).core.canonicalPayload,
         frozen.core.canonicalPayload,
       );
+      expect(
+        _proposalContent(fixture.container.read(editProvider)),
+        independentProposal,
+      );
+      expect(fixture.draft.draftId, freshId);
       expect(repository.creates, hasLength(1));
       expect(repository.activations, hasLength(1));
-      expect(opened, isEmpty);
+      expect(opened, hasLength(1));
       expect(tester.takeException(), isNull);
     },
   );
-}
-
-const _completionCopy = _CompletionLabels();
-
-class _CompletionLabels {
-  const _CompletionLabels();
-  String get openProject => YorksV1ProjectSetupCompletionCopy.localized(
-    AppLanguage.english,
-  )[YorksV1ProjectSetupCompletionText.openProject];
 }
 
 Future<void> _tapVisible(WidgetTester tester, Finder finder) async {
   await tester.ensureVisible(finder.first);
   await tester.pumpAndSettle();
   await tester.tap(finder.first);
-  await tester.pumpAndSettle();
-}
-
-Future<void> _reselectFile(WidgetTester tester, String localId) async {
-  await _tapVisible(tester, _key('yorks-v1-desktop-file-menu-$localId'));
-  await tester.tap(find.text(YorksV1ProjectStrings.fileReselect.primary).last);
   await tester.pumpAndSettle();
 }
 
@@ -918,6 +982,40 @@ class _Fixture {
       )
       .operation!;
 }
+
+Map<String, dynamic> _proposalContent(YorksV1ProjectCreationDraft draft) => {
+  'draftId': draft.draftId,
+  'baseVersion': draft.baseVersion,
+  'baseSnapshot': draft.baseSnapshot,
+  'payload': draft.toCreationInput().toRpcPayload(),
+};
+
+YorksV1ProjectSetupOperation _operationForDraft(
+  _Fixture fixture,
+  String draftId,
+) => fixture.container
+    .read(
+      yorksV1ProjectSetupCoordinatorProvider((
+        ownerAuthUserId: _owner,
+        draftId: draftId,
+        projectId: null,
+      )),
+    )
+    .operation!;
+
+YorksV1ProjectPortfolioItem _recoveryEditItem(
+  YorksV1ProjectSetupOperation operation,
+  YorksV1ProjectCreationDraft proposal,
+) => YorksV1ProjectPortfolioItem(
+  project: operation.project!,
+  activeBuildingCount: proposal.buildings.length,
+  activeProjectEngineerCount: 1,
+  activeSiteEngineerCount: 0,
+  activeMembers: YorksV1ProjectCreationResult.fromRpcJson(
+    operation.core.result!,
+  ).members,
+  buildings: proposal.buildings,
+);
 
 YorksV1SelectedDocument _document(Uint8List bytes) => YorksV1SelectedDocument(
   fileName: 'original.pdf',

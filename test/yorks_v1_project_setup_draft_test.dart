@@ -8,11 +8,190 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:material_ledger/shared/controllers/yorks_v1_project_creation_draft_controller.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_creation_draft.dart';
+import 'package:material_ledger/shared/models/yorks_v1_project_setup_operation.dart';
+import 'package:material_ledger/shared/models/yorks_v1_document.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_project_creation_draft_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_project_setup_coordinator_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_project_draft_store.dart';
+import 'package:material_ledger/shared/repositories/yorks_v1_project_setup_journal_store.dart';
+import 'package:material_ledger/shared/repositories/yorks_v1_project_repository.dart';
 
 void main() {
+  test(
+    'historical coordinator rebinds after rotation and cannot alter fresh draft or switched owner',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final preferences = await SharedPreferences.getInstance();
+      final storage = _AtomicMemoryStore();
+      final repository = _NoReviewedDispatch();
+      var auth = 'owner';
+      final container = ProviderContainer(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(preferences),
+          yorksV1AuthUserIdProvider.overrideWith((_) => auth),
+          yorksV1ProjectDraftBackendIdentityProvider.overrideWithValue(
+            'staging',
+          ),
+          yorksV1ProjectDraftAtomicStorageProvider.overrideWithValue(storage),
+          yorksV1ProjectReviewedCommandRepositoryProvider.overrideWithValue(
+            repository,
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      final draftProvider = yorksV1ProjectSetupCreationDraftProvider('owner');
+      final first = container.read(draftProvider.notifier);
+      await first.initialized;
+      await first.save(first.state.copyWith(name: 'Confirmed'));
+      final operation = _confirmedOperation(first.state.draftId);
+      final journalKey = '${first.storageKey}:journal:${operation.draftId}';
+      await first.atomicOwned((tx) {
+        tx.write(journalKey, jsonEncode(operation.toJson()));
+        tx.write(
+          '${first.storageKey}:latest_operation',
+          jsonEncode({'journal_key': journalKey}),
+        );
+      });
+      final scope = (
+        ownerAuthUserId: 'owner',
+        draftId: operation.draftId,
+        projectId: null as String?,
+      );
+      final old = container.read(
+        yorksV1ProjectSetupCoordinatorProvider(scope).notifier,
+      );
+      await first.retireConfirmedOperation(operation);
+      container.invalidate(draftProvider);
+      final fresh = container.read(draftProvider.notifier);
+      await fresh.initialized;
+      final historical = container.read(
+        yorksV1ProjectSetupCoordinatorProvider(scope).notifier,
+      );
+      expect(historical, isNot(same(old)));
+      expect(fresh.state.name, isEmpty);
+      final freshScope = (
+        ownerAuthUserId: 'owner',
+        draftId: fresh.state.draftId,
+        projectId: null as String?,
+      );
+      await container
+          .read(yorksV1ProjectSetupCoordinatorProvider(freshScope).notifier)
+          .prepareCreate(
+            YorksV1ProjectCreationInput(
+              idempotencyKey: 'next',
+              reference: 'R2',
+              name: 'Next',
+              buildings: [YorksV1ProjectBuildingInput(name: 'Next building')],
+            ),
+          );
+      final envelope = storage.values[fresh.storageKey];
+      final pointer = storage.values['${fresh.storageKey}:latest_operation'];
+      await historical.removePendingFile('file-1');
+      expect(storage.values[fresh.storageKey], envelope);
+      expect(storage.values['${fresh.storageKey}:latest_operation'], pointer);
+      expect(
+        historical.currentState.operation!.core.idempotencyKey,
+        'retained-core-key',
+      );
+      expect(
+        historical.currentState.operation!.files.single.idempotencyKey,
+        'retained-file-key',
+      );
+      auth = 'other';
+      container.invalidate(yorksV1AuthUserIdProvider);
+      await expectLater(historical.markCleanupComplete(), throwsA(anything));
+      expect(storage.values[fresh.storageKey], envelope);
+      expect(storage.values['${fresh.storageKey}:latest_operation'], pointer);
+      expect(repository.calls, 0);
+    },
+  );
+  test(
+    'pending project discovery is owner/backend scoped and reads installed history',
+    () {
+      final storage = _AtomicMemoryStore();
+      final scopeKey = yorksV1ProjectDraftStorageKey(
+        backendIdentity: 'staging',
+        ownerAuthUserId: 'owner',
+        mode: YorksV1ProjectDraftMode.create,
+      );
+      final operation = YorksV1ProjectSetupOperation(
+        backendIdentity: 'staging',
+        ownerAuthUserId: 'owner',
+        draftId: 'completed-draft',
+        mode: YorksV1ProjectSetupMode.create,
+        core: YorksV1ProjectSetupCommand(
+          kind: YorksV1ProjectSetupCommandKind.create,
+          idempotencyKey: 'retained-key',
+          payload: {'name': 'Known'},
+          status: YorksV1ProjectSetupCommandStatus.confirmedSuccess,
+          result: {
+            'project': {
+              'id': 'project-result',
+              'reference': 'R1',
+              'name': 'Known',
+              'state': 'draft',
+              'record_version': 1,
+              'created_at': '2026-10-03T00:00:00Z',
+              'updated_at': '2026-10-03T00:00:00Z',
+            },
+          },
+        ),
+      );
+      final journalKey = '$scopeKey:journal:${operation.draftId}';
+      storage.values[journalKey] = jsonEncode(operation.toJson());
+      storage.values['$scopeKey:latest_operation'] = jsonEncode({
+        'journal_key': journalKey,
+      });
+      final original = Map.of(storage.values);
+      ProviderContainer container({
+        String owner = 'owner',
+        String backend = 'staging',
+      }) => ProviderContainer(
+        overrides: [
+          yorksV1AuthUserIdProvider.overrideWithValue(owner),
+          yorksV1ProjectDraftBackendIdentityProvider.overrideWithValue(backend),
+          yorksV1ProjectDraftAtomicStorageProvider.overrideWithValue(storage),
+        ],
+      );
+      final sameOwner = container();
+      final otherOwner = container(owner: 'other');
+      final production = container(backend: 'production');
+      addTearDown(sameOwner.dispose);
+      addTearDown(otherOwner.dispose);
+      addTearDown(production.dispose);
+      final pending = yorksV1ProjectSetupPendingOperationsProvider((
+        ownerAuthUserId: 'owner',
+        projectId: 'project-result',
+      ));
+      final row = sameOwner.read(pending).single;
+      expect(row.scope, (
+        ownerAuthUserId: 'owner',
+        draftId: 'completed-draft',
+        projectId: null,
+      ));
+      expect(row.operation.toJson(), operation.toJson());
+      expect(otherOwner.read(pending), isEmpty);
+      expect(production.read(pending), isEmpty);
+      expect(storage.values, original);
+
+      storage.values[YorksV1ProjectSetupJournalStore.completedProjectKey(
+        scopeKey,
+        'project-result',
+      )] = jsonEncode({
+        'schema_version': 1,
+        'backend': 'staging',
+        'owner': 'owner',
+        'project_id': 'project-result',
+        'journal_keys': ['foreign-scope:journal:completed-draft'],
+      });
+      final corruptOriginal = Map.of(storage.values);
+      sameOwner.invalidate(pending);
+      expect(() => sameOwner.read(pending), throwsA(isA<FormatException>()));
+      expect(storage.values, corruptOriginal);
+    },
+  );
   test(
     'edit serialization retains scope identity, flags and explicit FRP no',
     () {
@@ -663,6 +842,231 @@ void main() {
     );
 
     test(
+      'confirmed core frees the slot while retaining exact pending follow-up',
+      () async {
+        final first = controller();
+        addTearDown(first.dispose);
+        await first.initialized;
+        await first.save(first.state.copyWith(name: 'Confirmed project'));
+        final operation = YorksV1ProjectSetupOperation(
+          backendIdentity: 'staging',
+          ownerAuthUserId: 'owner',
+          draftId: first.state.draftId,
+          mode: YorksV1ProjectSetupMode.create,
+          core: YorksV1ProjectSetupCommand(
+            kind: YorksV1ProjectSetupCommandKind.create,
+            idempotencyKey: 'original-core-key',
+            payload: {'name': 'Confirmed project'},
+            status: YorksV1ProjectSetupCommandStatus.confirmedSuccess,
+            result: {
+              'project': {
+                'id': 'project-result',
+                'reference': 'R1',
+                'name': 'Confirmed project',
+                'state': 'draft',
+                'record_version': 1,
+                'created_at': '2026-10-03T00:00:00Z',
+                'updated_at': '2026-10-03T00:00:00Z',
+              },
+            },
+          ),
+          activation: YorksV1ProjectSetupCommand(
+            kind: YorksV1ProjectSetupCommandKind.activate,
+            idempotencyKey: 'original-activation-key',
+            payload: {'project_id': 'project-result', 'expected_version': 1},
+            status: YorksV1ProjectSetupCommandStatus.outcomeUncertain,
+          ),
+          files: [
+            YorksV1ProjectSetupFile(
+              localId: 'file-1',
+              idempotencyKey: 'original-file-key',
+              fileName: 'plan.pdf',
+              mimeType: 'application/pdf',
+              sizeBytes: 3,
+              classification: YorksV1DocumentClassification.operational,
+              contentHash: 'retained-hash',
+              status: YorksV1ProjectSetupFileStatus.needsReselect,
+            ),
+          ],
+        );
+        final journalKey = 'draft:journal:${first.state.draftId}';
+        await first.atomicOwned(
+          (tx) => tx.write(journalKey, jsonEncode(operation.toJson())),
+        );
+        final original = store.values[journalKey];
+        await first.retireConfirmedOperation(operation);
+        await first.retireConfirmedOperation(operation); // acknowledged retry
+        final next = controller();
+        addTearDown(next.dispose);
+        await next.initialized;
+        expect(next.state.name, isEmpty);
+        expect(next.state.draftId, isNot(operation.draftId));
+        expect(store.values[journalKey], original);
+        final pending = YorksV1ProjectSetupJournalStore.completedForProject(
+          storage: store,
+          scopeKey: 'draft',
+          backendIdentity: 'staging',
+          ownerAuthUserId: 'owner',
+          projectId: 'project-result',
+          mode: YorksV1ProjectSetupMode.create,
+        );
+        expect(pending.single.toJson(), operation.toJson());
+        final tombstone =
+            jsonDecode(store.values['draft:retired:${operation.draftId}']!)
+                as Map;
+        expect(tombstone['resultProjectId'], 'project-result');
+        await expectLater(
+          first.save(first.state.copyWith(name: 'Resurrect')),
+          throwsA(isA<ProjectDraftStorageException>()),
+        );
+        expect(next.state.name, isEmpty);
+
+        // Historical follow-up mutates only its original journal under the new
+        // current owner's fence, without changing the fresh editable proposal.
+        final envelope = store.values['draft'];
+        final recoveryStore = YorksV1ProjectSetupJournalStore(
+          storage: store,
+          journalKey: journalKey,
+          backendIdentity: 'staging',
+          ownerAuthUserId: 'owner',
+          draftId: operation.draftId,
+          expectedMode: YorksV1ProjectSetupMode.create,
+          atomicOwned: next.atomicOwned,
+        );
+        await recoveryStore.change(
+          (current) => current!.copyWith(revision: current.revision + 1),
+        );
+        expect(store.values['draft'], envelope);
+        expect(recoveryStore.read()!.core.idempotencyKey, 'original-core-key');
+        expect(
+          recoveryStore.read()!.files.single.idempotencyKey,
+          'original-file-key',
+        );
+      },
+    );
+
+    test(
+      'unacknowledged or unresolved core cannot release the draft slot',
+      () async {
+        final writer = controller();
+        addTearDown(writer.dispose);
+        await writer.initialized;
+        await writer.save(
+          writer.state.copyWith(name: 'Keep unresolved proposal'),
+        );
+        final original = store.values['draft'];
+        final unresolved = YorksV1ProjectSetupOperation(
+          backendIdentity: 'staging',
+          ownerAuthUserId: 'owner',
+          draftId: writer.state.draftId,
+          mode: YorksV1ProjectSetupMode.create,
+          core: YorksV1ProjectSetupCommand(
+            kind: YorksV1ProjectSetupCommandKind.create,
+            idempotencyKey: 'unknown-core',
+            payload: {'name': 'Keep unresolved proposal'},
+            status: YorksV1ProjectSetupCommandStatus.outcomeUncertain,
+          ),
+        );
+        await writer.atomicOwned(
+          (tx) => tx.write(
+            'draft:journal:${writer.state.draftId}',
+            jsonEncode(unresolved.toJson()),
+          ),
+        );
+        await expectLater(
+          writer.retireConfirmedOperation(unresolved),
+          throwsA(isA<ProjectDraftStorageException>()),
+        );
+        final known = unresolved.copyWith(
+          core: unresolved.core.withOutcome(
+            status: YorksV1ProjectSetupCommandStatus.confirmedSuccess,
+            result: {
+              'project': {
+                'id': 'project-result',
+                'reference': 'R1',
+                'name': 'Keep unresolved proposal',
+                'state': 'draft',
+                'record_version': 1,
+                'created_at': '2026-10-03T00:00:00Z',
+                'updated_at': '2026-10-03T00:00:00Z',
+              },
+            },
+          ),
+        );
+        await expectLater(
+          writer.retireConfirmedOperation(known),
+          throwsA(isA<ProjectDraftStorageException>()),
+        );
+        expect(store.values['draft'], original);
+        expect(
+          store.values.keys.where((key) => key.contains(':completed_project:')),
+          isEmpty,
+        );
+        expect(writer.state.name, 'Keep unresolved proposal');
+      },
+    );
+
+    test(
+      'confirmed original recovery indexes without retiring a different active proposal',
+      () async {
+        final writer = controller();
+        addTearDown(writer.dispose);
+        await writer.initialized;
+        await writer.save(
+          writer.state.copyWith(
+            name: 'Different unpublished proposal',
+            notes: ' Keep exact current input ',
+            rawEditorState: {
+              'dateStartText': '2026-10-',
+              'buildingName': 'Unapplied building',
+            },
+          ),
+        );
+        final current = writer.state.toJson();
+        final original = _confirmedOperation('earlier-draft');
+        final originalKey = 'draft:journal:${original.draftId}';
+        await writer.atomicOwned((tx) {
+          tx.write(originalKey, jsonEncode(original.toJson()));
+          tx.write(
+            'draft:latest_operation',
+            jsonEncode({'journal_key': originalKey}),
+          );
+          tx.write(
+            'draft:retired:${original.draftId}',
+            'retained historical tombstone',
+          );
+        });
+        final envelope = store.values['draft'];
+        final journal = store.values[originalKey];
+        final pointer = store.values['draft:latest_operation'];
+        expect(await writer.retireConfirmedOperation(original), isFalse);
+        expect(writer.state.toJson(), current);
+        expect(store.values['draft'], envelope);
+        expect(store.values[originalKey], journal);
+        expect(store.values['draft:latest_operation'], pointer);
+        expect(
+          store.values['draft:retired:${original.draftId}'],
+          'retained historical tombstone',
+        );
+        final pending = YorksV1ProjectSetupJournalStore.completedForProject(
+          storage: store,
+          scopeKey: 'draft',
+          backendIdentity: 'staging',
+          ownerAuthUserId: 'owner',
+          projectId: 'project-result',
+          mode: YorksV1ProjectSetupMode.create,
+        );
+        expect(pending.single.toJson(), original.toJson());
+        await writer.save(
+          writer.state.copyWith(notes: 'Current proposal remains writable'),
+        );
+        expect(writer.state.isAcknowledged, isTrue);
+        expect(writer.state.draftId, current['draftId']);
+        expect(store.values[originalKey], journal);
+      },
+    );
+
+    test(
       'corrupt raw data is quarantined without overwriting its source',
       () async {
         store.values['draft'] = '{bad json';
@@ -778,6 +1182,54 @@ void main() {
       );
     },
   );
+}
+
+YorksV1ProjectSetupOperation _confirmedOperation(String draftId) =>
+    YorksV1ProjectSetupOperation(
+      backendIdentity: 'staging',
+      ownerAuthUserId: 'owner',
+      draftId: draftId,
+      mode: YorksV1ProjectSetupMode.create,
+      core: YorksV1ProjectSetupCommand(
+        kind: YorksV1ProjectSetupCommandKind.create,
+        idempotencyKey: 'retained-core-key',
+        payload: {'name': 'Confirmed'},
+        status: YorksV1ProjectSetupCommandStatus.confirmedSuccess,
+        result: {
+          'project': {
+            'id': 'project-result',
+            'reference': 'R1',
+            'name': 'Confirmed',
+            'state': 'draft',
+            'record_version': 1,
+            'created_at': '2026-10-03T00:00:00Z',
+            'updated_at': '2026-10-03T00:00:00Z',
+          },
+        },
+      ),
+      files: [
+        YorksV1ProjectSetupFile(
+          localId: 'file-1',
+          idempotencyKey: 'retained-file-key',
+          fileName: 'plan.pdf',
+          mimeType: 'application/pdf',
+          sizeBytes: 3,
+          classification: YorksV1DocumentClassification.operational,
+          contentHash: 'retained-hash',
+          status: YorksV1ProjectSetupFileStatus.needsReselect,
+        ),
+      ],
+    );
+
+class _NoReviewedDispatch implements YorksV1ProjectReviewedCommandRepository {
+  int calls = 0;
+  @override
+  Future<Map<String, dynamic>> executeReviewedCommand(
+    YorksV1ProjectSetupCommand command,
+  ) async {
+    calls++;
+    throw StateError('No command expected during local recovery rotation');
+  }
 }
 
 /// Unit race/failure fixture only. Browser tests exercise the real Web Locks

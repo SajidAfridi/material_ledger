@@ -1,6 +1,6 @@
 import 'app_strings.dart';
 
-/// Copy for the dedicated setup chrome. Business copy remains in the project
+/// Copy for setup content. Business copy remains in the project
 /// catalogue; the desktop mockups do not change required fields or authority.
 abstract final class YorksV1ProjectSetupShellStrings {
   static const setup = TranslatableString(
@@ -70,10 +70,10 @@ abstract final class YorksV1ProjectSetupShellStrings {
     hi: 'जारी रखने के लिए इमारत का संपादन लागू करें या रद्द करें।',
   );
   static const reviewHint = TranslatableString(
-    en: 'This will save the project and show your next actions.',
-    ar: 'سيحفظ هذا المشروع ويعرض الإجراءات التالية.',
-    ur: 'یہ پراجیکٹ محفوظ کرے گا اور اگلے اقدامات دکھائے گا۔',
-    hi: 'यह प्रोजेक्ट सहेजेगा और अगले कार्य दिखाएगा।',
+    en: 'This will save the project and open its workspace.',
+    ar: 'سيحفظ هذا المشروع ويفتح مساحة عمله.',
+    ur: 'یہ پراجیکٹ محفوظ کرے گا اور اس کی جگہ کھولے گا۔',
+    hi: 'यह प्रोजेक्ट सहेजेगा और उसका कार्यक्षेत्र खोलेगा।',
   );
   static const completed = TranslatableString(
     en: 'Complete',

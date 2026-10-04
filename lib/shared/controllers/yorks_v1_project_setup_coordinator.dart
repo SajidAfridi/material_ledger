@@ -563,6 +563,18 @@ class YorksV1ProjectSetupCoordinator
   }
 
   /// Housekeeping acknowledgement is independent from the server result.
+  Future<YorksV1ProjectSetupOperation> acknowledgeConfirmedCore() async {
+    _requireRecoverable();
+    if (state.operation?.coreSucceeded != true || state.busy) {
+      throw const YorksV1ProjectSetupRecoveryException(
+        YorksV1ProjectSetupRecoveryError.recoveryBlocked,
+      );
+    }
+    await _repairConfirmedReceipts();
+    return state.operation!;
+  }
+
+  /// Housekeeping acknowledgement is independent from the server result.
   Future<void> markCleanupComplete() async {
     await _repairConfirmedReceipts();
     final original = state.operation!;

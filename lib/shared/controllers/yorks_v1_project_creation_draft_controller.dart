@@ -6,7 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/analytics_event.dart';
 import '../models/yorks_v1_domain_error.dart';
 import '../models/yorks_v1_project_creation_draft.dart';
+import '../models/yorks_v1_project_setup_operation.dart';
 import '../repositories/yorks_v1_project_draft_store.dart';
+import '../repositories/yorks_v1_project_setup_journal_store.dart';
 import '../services/analytics_service.dart';
 
 /// Complete local proposals, serialized acknowledgments and fenced ownership.
@@ -62,6 +64,7 @@ class YorksV1ProjectCreationDraftController
   bool _ownershipClaimed = false;
 
   Future<void> get initialized => _initialization;
+  String get currentDraftId => state.draftId;
 
   bool get writable =>
       !state.isReadOnly &&
@@ -585,6 +588,93 @@ class YorksV1ProjectCreationDraftController
       // copies the retired envelope before reusing this slot.
       tx.write(storageKey, tombstone);
       tx.write('$storageKey:retired:${state.draftId}', tombstone);
+    });
+  }
+
+  /// A confirmed core releases its matching editable slot even when files or
+  /// activation need attention. A reconciled earlier core only retains its
+  /// project locator; the different active proposal remains untouched. Returns
+  /// whether this active slot was retired. Exact journals stay independent.
+  Future<bool> retireConfirmedOperation(
+    YorksV1ProjectSetupOperation operation,
+  ) async {
+    if (!operation.coreSucceeded ||
+        operation.project == null ||
+        operation.backendIdentity != _backendIdentity ||
+        operation.ownerAuthUserId != _ownerAuthUserId ||
+        operation.mode.name != state.mode.name ||
+        (state.mode == YorksV1ProjectDraftMode.edit &&
+            operation.project!.id != state.projectId)) {
+      throw const ProjectDraftStorageException('confirmed_core_scope_mismatch');
+    }
+    await flush();
+    return _storage.transaction(storageKey, (tx) {
+      if (_disposed) {
+        throw const ProjectDraftStorageException('controller_disposed');
+      }
+      final raw = tx.read(storageKey);
+      if (raw == null) {
+        throw const ProjectDraftStorageException('owner_missing');
+      }
+      final record = _record(raw);
+      if (record['ownerWriterId'] != _writerId ||
+          record['writerEpoch'] != state.writerEpoch ||
+          _draftFromRecord(record).draftId != state.draftId) {
+        throw const ProjectDraftStorageException('writer_fenced');
+      }
+      final journalRaw = tx.read('$storageKey:journal:${operation.draftId}');
+      if (journalRaw == null) {
+        throw const ProjectDraftStorageException(
+          'confirmed_core_not_acknowledged',
+        );
+      }
+      final persisted = YorksV1ProjectSetupOperation.fromJson(
+        Map<String, dynamic>.from(jsonDecode(journalRaw) as Map),
+      );
+      if (!persisted.coreSucceeded ||
+          persisted.backendIdentity != _backendIdentity ||
+          persisted.ownerAuthUserId != _ownerAuthUserId ||
+          persisted.draftId != operation.draftId ||
+          persisted.mode != operation.mode ||
+          persisted.core.idempotencyKey != operation.core.idempotencyKey ||
+          persisted.core.canonicalPayload != operation.core.canonicalPayload ||
+          persisted.core.canonicalResult != operation.core.canonicalResult) {
+        throw const ProjectDraftStorageException(
+          'confirmed_core_not_acknowledged',
+        );
+      }
+      final matchingProposal = operation.draftId == state.draftId;
+      if (record['retired'] == true && !matchingProposal) {
+        throw const ProjectDraftStorageException('writer_fenced');
+      }
+      if (record['retired'] == true &&
+          record['resultProjectId'] != persisted.project!.id) {
+        throw const ProjectDraftStorageException('retired_result_mismatch');
+      }
+      // Discovery is acknowledged first. A quota failure cannot free the slot
+      // before the pending manifest has a project-scoped recovery locator.
+      YorksV1ProjectSetupJournalStore.retainCompletedOperation(
+        tx,
+        scopeKey: storageKey,
+        operation: persisted,
+      );
+      if (!matchingProposal) {
+        return false;
+      }
+      final tombstone = record['retired'] == true
+          ? raw
+          : jsonEncode({
+              'recordVersion': 1,
+              'ownerWriterId': _writerId,
+              'writerEpoch': state.writerEpoch,
+              'retired': true,
+              'draft': state.toJson(),
+              'resultProjectId': persisted.project!.id,
+              'retiredAt': DateTime.now().toUtc().toIso8601String(),
+            });
+      tx.write(storageKey, tombstone);
+      tx.write('$storageKey:retired:${operation.draftId}', tombstone);
+      return true;
     });
   }
 

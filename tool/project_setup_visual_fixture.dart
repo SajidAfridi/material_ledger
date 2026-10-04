@@ -11,6 +11,7 @@ import 'package:material_ledger/shared/models/user_role.dart';
 import 'package:material_ledger/shared/models/yorks_v1_feature_flags.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_strings.dart';
+import 'package:material_ledger/shared/models/yorks_v1_project_setup_shell_strings.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_creation_draft.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_team_directory_member.dart';
 import 'package:material_ledger/shared/models/yorks_v1_role.dart';
@@ -27,10 +28,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_permission_provider.dart';
 import 'package:material_ledger/shared/models/yorks_v1_permission_management.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_permission_repository.dart';
-import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_project_setup_desktop_shell.dart';
-import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_project_setup_desktop_theme.dart';
-import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_project_setup_mobile_shell.dart';
-import 'project_setup_completion_fixture.dart';
 
 /// Actual setup presentation with synthetic read context and browser storage.
 /// No remote backend is configured and no live user/project write is possible.
@@ -226,7 +223,9 @@ Future<void> main() async {
         ),
   );
   final router = GoRouter(
-    initialLocation: RoutePaths.engineerCreateProject,
+    initialLocation: stageIndex == 5
+        ? '/yorks/projects/fixture-confirmed-project'
+        : RoutePaths.engineerCreateProject,
     routes: [
       GoRoute(
         path: RoutePaths.engineerCreateProject,
@@ -235,9 +234,15 @@ Future<void> main() async {
             .canLeave(),
         builder: (context, _) => YorksV1WorkspaceShell(
           featureOwnsBackNavigation: true,
-          child: stageIndex == 5
-              ? const _VisualCompletionScreen()
-              : const YorksV1ProjectCreateFlowScreen(),
+          child: const YorksV1ProjectCreateFlowScreen(),
+        ),
+      ),
+      GoRoute(
+        path: '/yorks/projects/:projectId',
+        builder: (context, state) => YorksV1WorkspaceShell(
+          child: _VisualProjectDestination(
+            projectId: state.pathParameters['projectId']!,
+          ),
         ),
       ),
       GoRoute(
@@ -292,64 +297,46 @@ Future<void> main() async {
   );
 }
 
-class _VisualCompletionScreen extends ConsumerStatefulWidget {
-  const _VisualCompletionScreen();
-  @override
-  ConsumerState<_VisualCompletionScreen> createState() =>
-      _VisualCompletionScreenState();
-}
-
-class _VisualCompletionScreenState
-    extends ConsumerState<_VisualCompletionScreen> {
-  final _scroll = ScrollController();
-  @override
-  void dispose() {
-    _scroll.dispose();
-    super.dispose();
-  }
+/// Read-only synthetic navigation target, not a second project-created screen.
+/// Actual authorized Create -> project navigation is covered by the flow tests;
+/// this backend-free browser fixture does not issue or confirm server commands.
+class _VisualProjectDestination extends ConsumerWidget {
+  const _VisualProjectDestination({required this.projectId});
+  final String projectId;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final language = ref.watch(languageProvider);
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final desktop = YorksProjectSetupDesktopTheme.isDesktopForWidth(
-          context,
-          constraints.maxWidth,
-        );
-        final buildShell = desktop
-            ? YorksV1ProjectSetupDesktopShell.new
-            : YorksV1ProjectSetupMobileShell.new;
-        return YorksProjectSetupLayoutScope(
-          availableWidth: constraints.maxWidth,
-          child: buildShell(
-            language: language,
-            stage: YorksV1ProjectCreationStage.reviewAndCreate,
-            visitedStages: YorksV1ProjectCreationStage.values.toSet(),
-            completeStages: YorksV1ProjectCreationStage.values.toSet(),
-            reference: 'YRA-322',
-            projectName: 'NEXUS — Four substations',
-            localStatus: '',
-            saving: false,
-            readOnly: true,
-            completed: true,
-            body: buildProjectSetupCompletionFixture(
-              language: language,
-              compact: !desktop,
-              onDismissBanner: () {},
+    return Scaffold(
+      body: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Local synthetic project destination — no server command ran',
             ),
-            scrollController: _scroll,
-            onSelectStage: (_) {},
-            onSaveDraft: null,
-            onBack: () {},
-            onReturnToProjects: () {},
-            onContinue: null,
-            onSkip: null,
-            onFinalAction: null,
-            primaryLabel: YorksV1ProjectStrings.createProject,
-          ),
-        );
-      },
+            const SizedBox(height: 24),
+            Text(
+              YorksV1ProjectStrings.projectDetails.active(language),
+              style: Theme.of(context).textTheme.headlineMedium,
+            ),
+            const SizedBox(height: 12),
+            const Text('YRA-322 · NEXUS — Four substations'),
+            const SizedBox(height: 12),
+            Text(projectId),
+            const SizedBox(height: 24),
+            OutlinedButton(
+              onPressed: () => context.go(RoutePaths.yorksV1Projects),
+              child: Text(
+                YorksV1ProjectSetupShellStrings.returnToProjects.active(
+                  language,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

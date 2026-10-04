@@ -45,13 +45,12 @@ import '../../../../shared/providers/yorks_v1_permission_provider.dart';
 import '../../../../shared/services/yorks_v1_document_file_service.dart';
 import '../../../materials/presentation/yorks_v1_feature_action_access.dart';
 import 'yorks_v1_project_setup_desktop_theme.dart';
-import '../widgets/yorks_v1_project_setup_completion.dart';
-import '../../../../shared/providers/yorks_v1_feature_flags_provider.dart';
 import 'yorks_v1_project_setup_desktop_shell.dart';
 import 'yorks_v1_project_setup_mobile_shell.dart';
 import 'yorks_v1_project_setup_mobile_theme.dart';
 import '../../../../shared/models/yorks_v1_project_setup_mobile_strings.dart';
 import '../../../../shared/models/yorks_v1_project_setup_shell_strings.dart';
+import '../widgets/yorks_v1_project_setup_pending_recovery.dart';
 
 part 'yorks_v1_project_setup_desktop_stages.dart';
 part 'yorks_v1_project_setup_mobile_stages.dart';
@@ -71,7 +70,7 @@ class YorksV1ProjectCreateFlowScreen extends ConsumerStatefulWidget {
 
   /// Lets route composition move to the authoritative project workspace after
   /// the server has committed the project. It is deliberately called only
-  /// after the local creation draft was discarded.
+  /// after its confirmed receipt and local draft retirement are durable.
   final ValueChanged<YorksV1Project>? onProjectCreated;
 
   /// Supplying an authorized portfolio item changes this five-stage surface
@@ -200,8 +199,8 @@ class _YorksV1ProjectCreateFlowScreenState
   final _buildingDeliveryAddressController = TextEditingController();
 
   YorksV1ProjectSetupOperation? _completedOperation;
-  bool _completedBannerVisible = true;
-  bool _localCleanupPending = false;
+  bool _releasingConfirmedHistory = false;
+  bool _confirmedHistoryReleaseFailed = false;
 
   bool _synchronizingEditor = false;
   bool _restoredEditor = false;
@@ -497,8 +496,8 @@ class _YorksV1ProjectCreateFlowScreenState
       _leaveDecision = null;
       _confirmedContextResult = false;
       _completedOperation = null;
-      _completedBannerVisible = true;
-      _localCleanupPending = false;
+      _releasingConfirmedHistory = false;
+      _confirmedHistoryReleaseFailed = false;
       _visitedStages.clear();
       _visitedStages.add(YorksV1ProjectCreationStage.projectDetails);
     }
@@ -532,6 +531,49 @@ class _YorksV1ProjectCreateFlowScreenState
       yorksV1ProjectSetupCoordinatorProvider(_setupScope(draft)),
     );
     final committed = setupState.operation?.coreSucceeded == true;
+    // A confirmed result belongs to its project, not the next creation form.
+    // Releasing the proposal preserves its exact journal and pending files.
+    if (committed && !_isCreating && !_confirmedContextResult) {
+      if (!_releasingConfirmedHistory && !_confirmedHistoryReleaseFailed) {
+        _releasingConfirmedHistory = true;
+        final generation = _contextGeneration;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!_isCurrentContext(generation)) return;
+          unawaited(_releaseConfirmedHistory(draft, generation));
+        });
+      }
+      return Scaffold(
+        backgroundColor: AppColors.surface,
+        body: Center(
+          child: _confirmedHistoryReleaseFailed
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      YorksV1ProjectStrings.localRecoveryUnavailable.active(
+                        language,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => setState(() {
+                        _confirmedHistoryReleaseFailed = false;
+                      }),
+                      child: Text(YorksV1ProjectStrings.retry.active(language)),
+                    ),
+                    TextButton(
+                      onPressed: () => context.go(RoutePaths.yorksV1Projects),
+                      child: Text(
+                        YorksV1ProjectSetupShellStrings.returnToProjects.active(
+                          language,
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              : const CircularProgressIndicator(),
+        ),
+      );
+    }
     final intentLocked = committed || setupState.outcomeUncertain;
 
     // The directory is needed only on the access and review stages. Keeping
@@ -654,12 +696,6 @@ class _YorksV1ProjectCreateFlowScreenState
                     );
                     if (YorksProjectSetupDesktopTheme.isDesktop(context) ||
                         YorksProjectSetupMobileTheme.isMobileLayout(context)) {
-                      final knownOperation =
-                          setupState.operation ?? _completedOperation;
-                      final showCompletion =
-                          knownOperation?.coreSucceeded == true &&
-                          draft.currentStage !=
-                              YorksV1ProjectCreationStage.attachments;
                       final editorPending =
                           (draft.currentStage ==
                                   YorksV1ProjectCreationStage.buildings &&
@@ -702,13 +738,9 @@ class _YorksV1ProjectCreateFlowScreenState
                               ? YorksV1ProjectCreationStage.values.toSet()
                               : _visitedStages,
                           completeStages: completeStages,
-                          completed: showCompletion,
-                          reference: showCompletion
-                              ? knownOperation!.project!.reference
-                              : draft.reference,
-                          projectName: showCompletion
-                              ? knownOperation!.project!.name
-                              : draft.name,
+                          completed: false,
+                          reference: draft.reference,
+                          projectName: draft.name,
                           localStatus: localStatus.active(language),
                           saving: saving,
                           readOnly: readOnly,
@@ -790,6 +822,11 @@ class _YorksV1ProjectCreateFlowScreenState
                               ),
                           ],
                           notices: [
+                            if (_isEditing)
+                              YorksV1ProjectSetupPendingRecovery(
+                                project: widget.editItem!.project,
+                                activeMembers: widget.editItem!.activeMembers,
+                              ),
                             YorksV1ActionAvailabilityNotice(
                               access: permission,
                               language: language,
@@ -827,9 +864,8 @@ class _YorksV1ProjectCreateFlowScreenState
                                   ],
                                 ),
                               ),
-                            if (!showCompletion &&
-                                (setupState.operation != null ||
-                                    setupState.recoveryError != null))
+                            if (setupState.operation != null ||
+                                setupState.recoveryError != null)
                               Padding(
                                 padding: const EdgeInsets.only(bottom: 16),
                                 child: _ProjectSetupOutcomePanel(
@@ -875,35 +911,24 @@ class _YorksV1ProjectCreateFlowScreenState
                                 ),
                               ),
                           ],
-                          body: showCompletion
-                              ? _buildCompletion(
-                                  knownOperation!,
-                                  setupState,
-                                  language,
-                                  role,
-                                  authUserId,
-                                  saving,
-                                  compact: !desktop,
-                                )
-                              : AbsorbPointer(
-                                  absorbing:
-                                      saving ||
-                                      readOnly ||
-                                      (intentLocked &&
-                                          draft.currentStage !=
-                                              YorksV1ProjectCreationStage
-                                                  .attachments),
-                                  child:
-                                      intentLocked &&
-                                          draft.currentStage !=
-                                              YorksV1ProjectCreationStage
-                                                  .attachments
-                                      ? _OriginalSetupIntentSummary(
-                                          operation: setupState.operation!,
-                                          language: language,
-                                        )
-                                      : content,
-                                ),
+                          body: AbsorbPointer(
+                            absorbing:
+                                saving ||
+                                readOnly ||
+                                (intentLocked &&
+                                    draft.currentStage !=
+                                        YorksV1ProjectCreationStage
+                                            .attachments),
+                            child:
+                                intentLocked &&
+                                    draft.currentStage !=
+                                        YorksV1ProjectCreationStage.attachments
+                                ? _OriginalSetupIntentSummary(
+                                    operation: setupState.operation!,
+                                    language: language,
+                                  )
+                                : content,
+                          ),
                         ),
                       );
                     }
@@ -1308,228 +1333,6 @@ class _YorksV1ProjectCreateFlowScreenState
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildCompletion(
-    YorksV1ProjectSetupOperation operation,
-    YorksV1ProjectSetupState setupState,
-    AppLanguage language,
-    YorksV1Role role,
-    String authUserId,
-    bool saving, {
-    required bool compact,
-  }) {
-    final project = operation.project!;
-    final confirmed = YorksV1ProjectCreationResult.fromRpcJson(
-      operation.core.result!,
-    );
-    final members = operation.mode == YorksV1ProjectSetupMode.edit
-        ? widget.editItem?.activeMembers ?? const <YorksV1ProjectMember>[]
-        : confirmed.members;
-    final activeMembers = members
-        .where((member) => member.isActiveAt(DateTime.now()))
-        .toList();
-    final ownMember = activeMembers.any(
-      (member) => member.memberAuthUserId == authUserId,
-    );
-    final engineeringAccess =
-        role == YorksV1Role.admin ||
-        role.isGlobalProjectEngineer ||
-        (role.isEngineering && ownMember);
-    final canManage =
-        role == YorksV1Role.admin ||
-        role.isGlobalProjectEngineer ||
-        (role.isEngineering &&
-            activeMembers.any(
-              (member) =>
-                  member.memberAuthUserId == authUserId &&
-                  member.projectRole ==
-                      YorksV1ProjectMembershipRole.projectEngineer,
-            ));
-    final flags = ref.watch(yorksV1FeatureFlagsProvider);
-    final permissionState = ref.watch(yorksV1CurrentPermissionSnapshotProvider);
-    bool allows(
-      String key, {
-      bool mutation = true,
-      required bool legacyAllowed,
-    }) {
-      final access = yorksV1FeatureActionAccess(
-        permissionState,
-        key,
-        legacyAllowed: legacyAllowed,
-        projectId: project.id,
-      );
-      return mutation ? access.canWrite : access.isVisible;
-    }
-
-    final open = allows(
-      YorksV1CapabilityKeys.projectsView,
-      mutation: false,
-      legacyAllowed:
-          engineeringAccess ||
-          (role == YorksV1Role.procurement &&
-              project.state == YorksV1ProjectLifecycle.active),
-    );
-    final edit = allows(
-      YorksV1CapabilityKeys.projectsEdit,
-      legacyAllowed: engineeringAccess,
-    );
-    final boq =
-        flags.boq &&
-        allows(YorksV1CapabilityKeys.boqEdit, legacyAllowed: engineeringAccess);
-    final team =
-        allows(
-          YorksV1CapabilityKeys.projectsManageTeam,
-          legacyAllowed: canManage,
-        ) &&
-        canManage;
-    final documents =
-        flags.documents &&
-        allows(
-          YorksV1CapabilityKeys.documentsUpload,
-          legacyAllowed: engineeringAccess,
-        );
-    final requests =
-        flags.requests &&
-        allows(
-          YorksV1CapabilityKeys.materialRequestsCreate,
-          legacyAllowed: engineeringAccess,
-        );
-    final physical = confirmed.scopes
-        .where((scope) => !scope.isCommon && scope.active)
-        .toList();
-    // The confirmed update acknowledges this exact reviewed payload. The
-    // original edit seed can differ after an added or renamed building.
-    final reviewedBuildings =
-        (operation.core.payload['buildings'] as List?)
-            ?.whereType<Map>()
-            .map(
-              (row) => YorksV1ProjectBuildingInput.fromDraftJson(
-                Map<String, dynamic>.from(row),
-              ),
-            )
-            .toList() ??
-        const <YorksV1ProjectBuildingInput>[];
-    final buildingLabels = operation.mode == YorksV1ProjectSetupMode.edit
-        ? reviewedBuildings
-              .map(
-                (building) =>
-                    building.code.isEmpty ? building.name : building.code,
-              )
-              .toList()
-        : physical.map((scope) => scope.code).toList();
-    String memberNames(YorksV1ProjectMembershipRole membershipRole) {
-      final scoped = activeMembers
-          .where((member) => member.projectRole == membershipRole)
-          .toList();
-      final names = scoped
-          .map((member) => member.displayName)
-          .whereType<String>()
-          .where((name) => name.trim().isNotEmpty && !name.contains('@'))
-          .toList();
-      return names.length == scoped.length && names.isNotEmpty
-          ? names.join(', ')
-          : '${scoped.length}';
-    }
-
-    void openProject() {
-      if (operation.mode == YorksV1ProjectSetupMode.edit &&
-          widget.onProjectUpdated != null) {
-        widget.onProjectUpdated!(project);
-      } else if (operation.mode == YorksV1ProjectSetupMode.create &&
-          widget.onProjectCreated != null) {
-        widget.onProjectCreated!(project);
-      } else {
-        context.go(RoutePaths.yorksV1ProjectPath(project.id));
-      }
-    }
-
-    return YorksV1ProjectSetupCompletion(
-      compact: compact,
-      operation: operation,
-      copy: YorksV1ProjectSetupCompletionCopy.localized(language),
-      busy: saving,
-      showBanner: _completedBannerVisible,
-      onDismissBanner: () => setState(() => _completedBannerVisible = false),
-      localRecoveryPending:
-          setupState.recoveryError != null || _localCleanupPending,
-      permissions: YorksV1ProjectSetupCompletionPermissions(
-        canOpenProject: open,
-        canEditProject: edit,
-        canAddBoq: boq,
-        canInviteTeam: team,
-        canUploadDocuments: documents,
-        canCreateMaterialRequests: requests,
-        canReturnToProjects: allows(
-          YorksV1CapabilityKeys.projectsView,
-          mutation: false,
-          legacyAllowed: role != YorksV1Role.accountant,
-        ),
-      ),
-      summaryRows: [
-        YorksV1ProjectSetupSummaryRow(
-          label: YorksV1ProjectStrings.siteLocation.active(language),
-          value: project.siteLocation ?? '—',
-        ),
-        YorksV1ProjectSetupSummaryRow(
-          label: YorksV1ProjectStrings.projectEngineers.active(language),
-          value: memberNames(YorksV1ProjectMembershipRole.projectEngineer),
-        ),
-        YorksV1ProjectSetupSummaryRow(
-          label: YorksV1ProjectStrings.siteEngineers.active(language),
-          value: memberNames(YorksV1ProjectMembershipRole.siteEngineer),
-        ),
-        YorksV1ProjectSetupSummaryRow(
-          label: YorksV1ProjectStrings.buildings.active(language),
-          value:
-              '${buildingLabels.length}${buildingLabels.isEmpty ? '' : ' (${buildingLabels.join(', ')})'}',
-        ),
-        YorksV1ProjectSetupSummaryRow(
-          label: YorksV1ProjectStrings.attachments.active(language),
-          value:
-              '${operation.files.where((file) => file.status == YorksV1ProjectSetupFileStatus.ready).length} / ${operation.files.where((file) => file.status != YorksV1ProjectSetupFileStatus.removed).length}',
-        ),
-      ],
-      recoveryPanel:
-          operation.filesPending ||
-              operation.hasUnresolvedCommand ||
-              _localCleanupPending ||
-              setupState.recoveryError != null
-          ? _ProjectSetupOutcomePanel(
-              state: setupState,
-              language: language,
-              onRecover: _createProject,
-              onOpen: open ? openProject : null,
-              onReselect: () =>
-                  _setStage(YorksV1ProjectCreationStage.attachments),
-              onRetryFile: _retrySetupFile,
-              onRemovePendingFile: _removePendingSetupFile,
-            )
-          : null,
-      onOpenProject: open ? openProject : null,
-      onEditProject: edit
-          ? () {
-              final path = RoutePaths.yorksV1ProjectEditPath(project.id);
-              if (_isEditing) {
-                // Editing the confirmed result starts a new intent. A go to
-                // this same route can retain the completed form's old seed.
-                unawaited(context.push<void>(path));
-              } else {
-                context.go(path);
-              }
-            }
-          : null,
-      onAddBoq: boq
-          ? () => context.go(RoutePaths.yorksV1BoqGroupsPath(project.id))
-          : null,
-      onInviteTeam: team
-          ? () => context.go(RoutePaths.yorksV1ProjectPath(project.id))
-          : null,
-      onUploadDocuments: documents
-          ? () => context.go(RoutePaths.yorksV1ProjectDocumentsPath(project.id))
-          : null,
-      onReturnToProjects: () => context.go(RoutePaths.yorksV1Projects),
     );
   }
 
@@ -2125,16 +1928,15 @@ class _YorksV1ProjectCreateFlowScreenState
     try {
       await coordinator.markCleanupComplete();
       if (!_isCurrentContext(generation)) return;
-      // Keep the confirmed result visible after retiring its active pointer.
       setState(() => _completedOperation = coordinator.currentState.operation);
-      await _draftController(
+      final retired = await _draftController(
         owner,
-      ).retire(resultProjectId: operation.project!.id);
+      ).retireConfirmedOperation(_completedOperation!);
       if (!_isCurrentContext(generation)) return;
-      _resetRetiredDraftProvider(owner);
+      if (retired) _resetRetiredDraftProvider(owner);
+      _openConfirmedProject(operation.project!, operation: _completedOperation);
     } catch (_) {
       if (_isCurrentContext(generation)) {
-        setState(() => _localCleanupPending = true);
         _showMessage(YorksV1ProjectStrings.projectSavedHousekeeping);
       }
     }
@@ -2143,7 +1945,6 @@ class _YorksV1ProjectCreateFlowScreenState
   void _resetRetiredDraftProvider(String owner) {
     _draftSaveTimer?.cancel();
     _pendingDraft = null;
-    _localCleanupPending = false;
     if (_isEditing) {
       ref.invalidate(yorksV1ProjectEditDraftProvider(_editContext(owner)));
     } else {
@@ -3339,6 +3140,74 @@ class _YorksV1ProjectCreateFlowScreenState
     projectId: _isEditing ? widget.editItem!.project.id : null,
   );
 
+  Future<void> _releaseConfirmedHistory(
+    YorksV1ProjectCreationDraft draft,
+    int generation,
+  ) async {
+    try {
+      final controller = _draftController(draft.ownerAuthUserId);
+      await controller.initialized;
+      if (!_isCurrentContext(generation)) return;
+      final coordinator = ref.read(
+        yorksV1ProjectSetupCoordinatorProvider(_setupScope(draft)).notifier,
+      );
+      final operation = await coordinator.acknowledgeConfirmedCore();
+      if (!_isCurrentContext(generation)) return;
+      final retired = await controller.retireConfirmedOperation(operation);
+      if (!_isCurrentContext(generation)) return;
+      _draftSaveTimer?.cancel();
+      _pendingDraft = null;
+      if (retired) _resetRetiredDraftProvider(draft.ownerAuthUserId);
+      ref.invalidate(
+        yorksV1ProjectSetupCoordinatorProvider(_setupScope(draft)),
+      );
+      // Rehydrate the next proposal from its own ID and clean editor state.
+      setState(() => _activeAuthUserId = null);
+    } catch (_) {
+      if (!_isCurrentContext(generation)) return;
+      setState(() {
+        _releasingConfirmedHistory = false;
+        _confirmedHistoryReleaseFailed = true;
+      });
+    }
+  }
+
+  void _openConfirmedProject(
+    YorksV1Project project, {
+    YorksV1ProjectSetupOperation? operation,
+  }) {
+    final role = ref.read(yorksV1CurrentRoleProvider);
+    final owner = _activeAuthUserId;
+    final members = operation?.mode == YorksV1ProjectSetupMode.create
+        ? YorksV1ProjectCreationResult.fromRpcJson(
+            operation!.core.result!,
+          ).members
+        : widget.editItem?.activeMembers ?? const <YorksV1ProjectMember>[];
+    final ownMembership = members.any(
+      (member) =>
+          member.memberAuthUserId == owner && member.isActiveAt(DateTime.now()),
+    );
+    final legacyReadable =
+        role == YorksV1Role.admin ||
+        role?.isGlobalProjectEngineer == true ||
+        (role?.isEngineering == true && ownMembership);
+    final access = yorksV1FeatureActionAccess(
+      ref.read(yorksV1CurrentPermissionSnapshotProvider),
+      YorksV1CapabilityKeys.projectsView,
+      legacyAllowed: legacyReadable,
+      projectId: project.id,
+    );
+    if (!access.isVisible) {
+      context.go(RoutePaths.yorksV1Projects);
+    } else if (_isEditing && widget.onProjectUpdated != null) {
+      widget.onProjectUpdated!(project);
+    } else if (!_isEditing && widget.onProjectCreated != null) {
+      widget.onProjectCreated!(project);
+    } else {
+      context.go(RoutePaths.yorksV1ProjectPath(project.id));
+    }
+  }
+
   Future<void> _createProject() async {
     final generation = _contextGeneration;
     if (_isCreating || _activeAuthUserId == null) return;
@@ -3390,7 +3259,8 @@ class _YorksV1ProjectCreateFlowScreenState
           }
           if (!_isCurrentContext(generation)) return;
           _confirmedContextResult = true;
-          widget.onProjectUpdated?.call(widget.editItem!.project);
+          _resetRetiredDraftProvider(owner);
+          _openConfirmedProject(widget.editItem!.project);
           return;
         }
       }
@@ -3438,6 +3308,15 @@ class _YorksV1ProjectCreateFlowScreenState
         _presentValidationErrors(errors);
         return;
       }
+    }
+
+    // Retirement can dispose the provider's original notifier. The durable
+    // snapshot remains the known result if navigation/callbacks later fail.
+    YorksV1ProjectSetupState outcome() {
+      if (_completedOperation?.coreSucceeded == true) {
+        return YorksV1ProjectSetupState(operation: _completedOperation);
+      }
+      return coordinator.currentState;
     }
 
     setState(() => _isCreating = true);
@@ -3496,26 +3375,25 @@ class _YorksV1ProjectCreateFlowScreenState
       var draftRetired = false;
       await coordinator.captureKnownOutcome();
       if (!_isCurrentContext(generation)) return;
+      final confirmed = await coordinator.acknowledgeConfirmedCore();
+      if (!_isCurrentContext(generation)) return;
       if (!latest.filesPending &&
           !latest.hasUnresolvedCommand &&
           coordinator.currentState.recoveryError == null) {
         try {
           await coordinator.markCleanupComplete();
-          await draftController.retire(resultProjectId: project.id);
-          draftRetired = true;
         } catch (_) {
           if (_isCurrentContext(generation)) {
-            _localCleanupPending = true;
             _showMessage(YorksV1ProjectStrings.projectSavedHousekeeping);
           }
         }
       }
-      ref.invalidate(yorksV1ProjectPortfolioProvider);
-      unawaited(
-        ref
-            .read(yorksV1CurrentPermissionSnapshotProvider.notifier)
-            .refresh(authorityMayHaveChanged: true),
+      // Pending activation/uploads retain their original keys in the project
+      // recovery catalogue. They must not occupy the next creation proposal.
+      draftRetired = await draftController.retireConfirmedOperation(
+        coordinator.currentState.operation ?? confirmed,
       );
+      ref.invalidate(yorksV1ProjectPortfolioProvider);
       if (!_isCurrentContext(generation)) return;
       setState(() {
         _completedOperation = coordinator.currentState.operation;
@@ -3527,15 +3405,17 @@ class _YorksV1ProjectCreateFlowScreenState
           !_isEditing) {
         _showMessage(YorksV1ProjectStrings.projectCreatedDraft);
       }
-      if (latest.filesPending ||
-          latest.hasUnresolvedCommand ||
-          coordinator.currentState.recoveryError != null ||
-          _localCleanupPending) {
-        return;
-      }
+      final completedOperation = coordinator.currentState.operation;
       if (draftRetired) _resetRetiredDraftProvider(draft.ownerAuthUserId);
-      // Every viewport retains the server-confirmed result. Navigation and
-      // subsequent mutations require an explicit completion action.
+      ref.invalidate(
+        yorksV1ProjectSetupCoordinatorProvider(_setupScope(draft)),
+      );
+      _openConfirmedProject(project, operation: completedOperation);
+      unawaited(
+        ref
+            .read(yorksV1CurrentPermissionSnapshotProvider.notifier)
+            .refresh(authorityMayHaveChanged: true),
+      );
     } on YorksV1ProjectSetupRecoveryException catch (error) {
       if (!_isCurrentContext(generation)) return;
       setState(() => _isCreating = false);
@@ -3543,9 +3423,9 @@ class _YorksV1ProjectCreateFlowScreenState
     } on YorksV1DomainException catch (error) {
       if (!_isCurrentContext(generation)) return;
       setState(() => _isCreating = false);
-      if (coordinator.currentState.operation?.coreSucceeded == true) {
+      if (outcome().operation?.coreSucceeded == true) {
         _showMessage(YorksV1ProjectStrings.projectSavedHousekeeping);
-      } else if (coordinator.currentState.outcomeUncertain) {
+      } else if (outcome().outcomeUncertain) {
         _showMessage(
           YorksV1ProjectStrings.commandOutcomeUncertain,
           error: true,
@@ -3557,12 +3437,12 @@ class _YorksV1ProjectCreateFlowScreenState
       if (!_isCurrentContext(generation)) return;
       setState(() => _isCreating = false);
       _showMessage(
-        coordinator.currentState.operation?.coreSucceeded == true
+        outcome().operation?.coreSucceeded == true
             ? YorksV1ProjectStrings.projectSavedHousekeeping
-            : coordinator.currentState.outcomeUncertain
+            : outcome().outcomeUncertain
             ? YorksV1ProjectStrings.commandOutcomeUncertain
             : YorksV1ProjectStrings.journalUnavailable,
-        error: coordinator.currentState.operation?.coreSucceeded != true,
+        error: outcome().operation?.coreSucceeded != true,
       );
     }
   }

@@ -14,7 +14,10 @@ import 'package:material_ledger/core/theme/app_theme.dart';
 import 'package:material_ledger/core/widgets/yorks_mobile_ui.dart';
 import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_project_create_flow_screen.dart';
 import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_projects_screen.dart';
+import 'package:material_ledger/shared/models/yorks_v1_document.dart';
 import 'package:material_ledger/shared/models/yorks_v1_feature_flags.dart';
+import 'package:material_ledger/shared/models/yorks_v1_project.dart';
+import 'package:material_ledger/shared/models/yorks_v1_project_setup_operation.dart';
 import 'package:material_ledger/shared/models/yorks_v1_permission_management.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_creation_draft.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_strings.dart';
@@ -554,6 +557,254 @@ void main() {
     },
   );
 
+  for (final size in [const Size(1536, 1024), const Size(360, 800)]) {
+    for (final historical in ['files', 'activation', 'pointer', 'uncertain']) {
+      testWidgets(
+        historical == 'uncertain'
+            ? '${size.width} Projects Create retains uncertain core intent without replay'
+            : '${size.width} Projects Create starts fresh after historical confirmed $historical recovery',
+        (tester) async {
+          late YorksV1ProjectCreationDraft oldDraft;
+          late String storageKey;
+          late String originalJournal;
+          late String retiredJson;
+          final fixture = await _pumpWorkspace(
+            tester,
+            size: size,
+            initialLocation: RoutePaths.yorksV1Projects,
+            seed: (container, preferences) async {
+              final provider = yorksV1ProjectSetupCreationDraftProvider(_owner);
+              final notifier = container.read(provider.notifier);
+              await notifier.initialized;
+              await notifier.save(
+                container
+                    .read(provider)
+                    .copyWith(
+                      reference: 'OLD-CONFIRMED',
+                      name: 'Old created project',
+                      currentStage: YorksV1ProjectCreationStage.reviewAndCreate,
+                      buildings: const [
+                        YorksV1ProjectBuildingInput(
+                          name: 'Old physical building',
+                        ),
+                      ],
+                      attachments: const [
+                        YorksV1ProjectAttachmentInput(
+                          localId: 'old-file',
+                          fileName: 'private-old-plan.pdf',
+                          mimeType: 'application/pdf',
+                          sizeBytes: 4,
+                        ),
+                      ],
+                      rawEditorState: const {
+                        'private_unfinished_text':
+                            'Retain original private recovery',
+                      },
+                    ),
+              );
+              oldDraft = container.read(provider);
+              storageKey = notifier.storageKey;
+              final core = YorksV1ProjectSetupCommand(
+                kind: YorksV1ProjectSetupCommandKind.create,
+                idempotencyKey: oldDraft.creationIdempotencyKey,
+                payload: oldDraft.toCreationInput().toRpcPayload(),
+                status: historical == 'uncertain'
+                    ? YorksV1ProjectSetupCommandStatus.outcomeUncertain
+                    : YorksV1ProjectSetupCommandStatus.confirmedSuccess,
+                attempts: 1,
+                result: historical == 'uncertain'
+                    ? null
+                    : {
+                        'project': {
+                          'id': 'old-confirmed-project',
+                          'reference': oldDraft.reference,
+                          'name': oldDraft.name,
+                          'state': 'draft',
+                          'record_version': 0,
+                          'created_at': '2026-10-04T00:00:00Z',
+                        },
+                        'idempotency_key': oldDraft.creationIdempotencyKey,
+                      },
+              );
+              final operation = YorksV1ProjectSetupOperation(
+                backendIdentity: oldDraft.backendIdentity,
+                ownerAuthUserId: _owner,
+                draftId: oldDraft.draftId,
+                mode: YorksV1ProjectSetupMode.create,
+                core: core,
+                activation: historical == 'activation'
+                    ? YorksV1ProjectSetupCommand(
+                        kind: YorksV1ProjectSetupCommandKind.activate,
+                        idempotencyKey: 'old-activation-intent',
+                        payload: {
+                          'project_id': 'old-confirmed-project',
+                          'expected_version': 0,
+                          'target_state': 'active',
+                        },
+                        status:
+                            YorksV1ProjectSetupCommandStatus.outcomeUncertain,
+                        attempts: 1,
+                      )
+                    : null,
+                files: const [
+                  YorksV1ProjectSetupFile(
+                    localId: 'old-file',
+                    idempotencyKey: 'old-file-intent',
+                    fileName: 'private-old-plan.pdf',
+                    mimeType: 'application/pdf',
+                    sizeBytes: 4,
+                    classification: YorksV1DocumentClassification.operational,
+                  ),
+                ],
+              );
+              originalJournal = jsonEncode(operation.toJson());
+              await preferences.setString(
+                '$storageKey:journal:${oldDraft.draftId}',
+                originalJournal,
+              );
+              await preferences.setString(
+                '$storageKey:latest_operation',
+                jsonEncode({
+                  'journal_key': '$storageKey:journal:${oldDraft.draftId}',
+                }),
+              );
+              if (historical == 'pointer') {
+                await notifier.retire(resultProjectId: 'old-confirmed-project');
+                container.invalidate(provider);
+                await container.read(provider.notifier).initialized;
+                retiredJson = preferences.getString(
+                  '$storageKey:retired:${oldDraft.draftId}',
+                )!;
+              }
+            },
+          );
+          await _openCreateProject(tester);
+          final provider = yorksV1ProjectSetupCreationDraftProvider(_owner);
+          final fresh = fixture.container.read(provider);
+          if (historical == 'uncertain') {
+            expect(fresh.draftId, oldDraft.draftId);
+            expect(
+              fresh.creationIdempotencyKey,
+              oldDraft.creationIdempotencyKey,
+            );
+            expect(fresh.reference, oldDraft.reference);
+            expect(
+              find.byKey(const ValueKey('yorks-v1-project-operation-outcome')),
+              findsOneWidget,
+            );
+            expect(
+              find.text(YorksV1ProjectStrings.checkSavedStatus.primary),
+              findsWidgets,
+            );
+            expect(
+              find.descendant(
+                of: find.byKey(const ValueKey('yorks-v1-project-create')),
+                matching: find.text(
+                  YorksV1ProjectStrings.createProject.primary,
+                ),
+              ),
+              findsNothing,
+            );
+            expect(
+              fixture.preferences.getString(
+                '$storageKey:journal:${oldDraft.draftId}',
+              ),
+              originalJournal,
+            );
+            expect(
+              fixture.preferences.getString(
+                '$storageKey:retired:${oldDraft.draftId}',
+              ),
+              isNull,
+            );
+            expect(fixture.commands.calls, 0);
+            expect(tester.takeException(), isNull);
+            return;
+          }
+          expect(fresh.draftId, isNot(oldDraft.draftId));
+          expect(
+            fresh.creationIdempotencyKey,
+            isNot(oldDraft.creationIdempotencyKey),
+          );
+          expect(
+            fresh.currentStage,
+            YorksV1ProjectCreationStage.projectDetails,
+          );
+          expect(fresh.reference, isEmpty);
+          expect(fresh.name, isEmpty);
+          expect(fresh.buildings, isEmpty);
+          expect(fresh.attachments, isEmpty);
+          expect(fresh.rawEditorState, isEmpty);
+          expect(
+            fixture
+                .router
+                .routerDelegate
+                .currentConfiguration
+                .last
+                .matchedLocation,
+            RoutePaths.engineerCreateProject,
+          );
+          final name = tester.widget<EditableText>(
+            find.descendant(
+              of: find.byKey(const ValueKey('yorks-v1-project-name')),
+              matching: find.byType(EditableText),
+            ),
+          );
+          expect(name.controller.text, isEmpty);
+          expect(find.textContaining('Old created project'), findsNothing);
+          expect(
+            find.byKey(const ValueKey('yorks-v1-project-operation-outcome')),
+            findsNothing,
+          );
+          expect(
+            find.text(YorksV1ProjectStrings.projectCreated.primary),
+            findsNothing,
+          );
+          expect(
+            fixture.preferences.getString(
+              '$storageKey:journal:${oldDraft.draftId}',
+            ),
+            originalJournal,
+          );
+          final retired = fixture.preferences.getString(
+            '$storageKey:retired:${oldDraft.draftId}',
+          )!;
+          if (historical == 'pointer') expect(retired, retiredJson);
+          final retainedDraft = YorksV1ProjectCreationDraft.fromJson(
+            Map<String, dynamic>.from(
+              (jsonDecode(retired) as Map)['draft'] as Map,
+            ),
+          );
+          expect(retainedDraft.draftId, oldDraft.draftId);
+          expect(retainedDraft.attachments.single.localId, 'old-file');
+          expect(
+            retainedDraft.rawEditorState['private_unfinished_text'],
+            'Retain original private recovery',
+          );
+          expect(fixture.commands.calls, 0);
+          await tester.tap(
+            find
+                .text(YorksV1ProjectSetupShellStrings.returnToProjects.primary)
+                .first,
+          );
+          await tester.pumpAndSettle();
+          _expectPortfolio(fixture);
+          await _openCreateProject(tester);
+          expect(fixture.container.read(provider).draftId, fresh.draftId);
+          expect(fixture.container.read(provider).name, isEmpty);
+          expect(
+            fixture.preferences.getString(
+              '$storageKey:journal:${oldDraft.draftId}',
+            ),
+            originalJournal,
+          );
+          expect(fixture.commands.calls, 0);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
+
   testWidgets(
     'confirmed create denial cannot expose an editor inside the universal workspace',
     (tester) async {
@@ -682,6 +933,7 @@ Future<_WorkspaceFixture> _pumpWorkspace(
   YorksV1CurrentPermissionSnapshotState? permission,
   bool settle = true,
   String initialLocation = RoutePaths.engineerCreateProject,
+  Future<void> Function(ProviderContainer, SharedPreferences)? seed,
 }) async {
   tester.view.devicePixelRatio = 1;
   tester.view.physicalSize = size;
@@ -744,6 +996,7 @@ Future<_WorkspaceFixture> _pumpWorkspace(
     ],
   );
   addTearDown(container.dispose);
+  if (seed != null) await seed(container, preferences);
 
   // The browser-only rollout choice is tested separately. This VM integration
   // uses the same route components, canonical paths and mounted onExit guard

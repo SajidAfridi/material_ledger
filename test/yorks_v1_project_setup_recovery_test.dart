@@ -392,6 +392,174 @@ void main() {
   );
 
   test(
+    'core acknowledgement repairs the receipt without replay or cleanup',
+    () async {
+      final fixture = _Fixture();
+      await fixture.coordinator.prepareCreate(_input(), files: [_file()]);
+      fixture.repository.afterResponse = () =>
+          fixture.storage.failNextWrite = true;
+      await fixture.coordinator.submitCore();
+      fixture.repository.afterResponse = null;
+      final known = fixture.coordinator.currentState.operation!;
+      final acknowledged = await fixture.coordinator.acknowledgeConfirmedCore();
+      expect(acknowledged.core.canonicalResult, known.core.canonicalResult);
+      expect(acknowledged.core.idempotencyKey, known.core.idempotencyKey);
+      expect(acknowledged.filesPending, isTrue);
+      expect(acknowledged.cleanupComplete, isFalse);
+      expect(fixture.restore().currentState.operation!.coreSucceeded, isTrue);
+      expect(fixture.repository.calls, hasLength(1));
+      expect(fixture.repository.effects, 1);
+    },
+  );
+
+  test(
+    'fresh creation skips confirmed follow-up but preserves its project locator',
+    () async {
+      final fixture = _Fixture();
+      await fixture.coordinator.prepareCreate(_input(), files: [_file()]);
+      await fixture.coordinator.submitCore();
+      final completed = await fixture.coordinator.acknowledgeConfirmedCore();
+      final original = fixture.storage.values['scope:journal:draft-1'];
+      await fixture.storage.transaction('scope', (tx) {
+        YorksV1ProjectSetupJournalStore.retainCompletedOperation(
+          tx,
+          scopeKey: 'scope',
+          operation: completed,
+        );
+      });
+      // Match the installed latest-pointer namespace for project discovery.
+      fixture.storage.values['scope:latest_operation'] =
+          fixture.storage.values['scope:latest']!;
+      final fresh = fixture.restore(
+        draftId: 'draft-2',
+        restoreConfirmedFollowUps: false,
+      );
+      expect(fresh.currentState.operation, isNull);
+      final next = await fresh.prepareCreate(_input(name: 'Next project'));
+      expect(next.draftId, 'draft-2');
+      expect(next.core.idempotencyKey, isNot(completed.core.idempotencyKey));
+      fixture.storage.values['scope:latest_operation'] =
+          fixture.storage.values['scope:latest']!;
+      final pending = YorksV1ProjectSetupJournalStore.completedForProject(
+        storage: fixture.storage,
+        scopeKey: 'scope',
+        backendIdentity: 'backend',
+        ownerAuthUserId: 'owner',
+        projectId: 'project-1',
+        mode: YorksV1ProjectSetupMode.create,
+      );
+      expect(pending.single.draftId, 'draft-1');
+      expect(
+        pending.single.files.single.toJson(),
+        completed.files.single.toJson(),
+      );
+      expect(
+        pending.single.core.canonicalPayload,
+        completed.core.canonicalPayload,
+      );
+      expect(fixture.storage.values['scope:journal:draft-1'], original);
+      expect(fixture.repository.calls, hasLength(1));
+    },
+  );
+
+  test(
+    'fresh creation still guards the original unresolved core intent',
+    () async {
+      final fixture = _Fixture();
+      await fixture.coordinator.prepareCreate(_input());
+      fixture.repository.loseNextResponse = true;
+      await expectLater(
+        fixture.coordinator.submitCore(),
+        throwsA(isA<YorksV1DomainException>()),
+      );
+      final original = fixture.coordinator.currentState.operation!;
+      final fresh = fixture.restore(
+        draftId: 'draft-2',
+        restoreConfirmedFollowUps: false,
+      );
+      expect(fresh.currentState.operation!.draftId, 'draft-1');
+      await expectLater(
+        fresh.prepareCreate(_input(name: 'Changed intent')),
+        throwsA(isA<YorksV1ProjectSetupRecoveryException>()),
+      );
+      expect(
+        fresh.currentState.operation!.core.idempotencyKey,
+        original.core.idempotencyKey,
+      );
+      expect(
+        fresh.currentState.operation!.core.canonicalPayload,
+        original.core.canonicalPayload,
+      );
+      expect(fixture.repository.calls, hasLength(1));
+    },
+  );
+
+  test(
+    'historical latest-pointer recovery stays discoverable before rotation',
+    () async {
+      final fixture = _Fixture();
+      await fixture.coordinator.prepareCreate(_input(), files: [_file()]);
+      await fixture.coordinator.submitCore();
+      fixture.storage.values['scope:latest_operation'] =
+          fixture.storage.values['scope:latest']!;
+      final original = Map.of(fixture.storage.values);
+      final pending = YorksV1ProjectSetupJournalStore.completedForProject(
+        storage: fixture.storage,
+        scopeKey: 'scope',
+        backendIdentity: 'backend',
+        ownerAuthUserId: 'owner',
+        projectId: 'project-1',
+        mode: YorksV1ProjectSetupMode.create,
+      );
+      expect(pending.single.files.single.idempotencyKey, 'upload-key');
+      expect(fixture.storage.values, original);
+    },
+  );
+
+  test(
+    'historical follow-up cannot replace a newer unresolved active pointer',
+    () async {
+      final fixture = _Fixture();
+      await fixture.coordinator.prepareCreate(_input(), files: [_file()]);
+      await fixture.coordinator.submitCore();
+      final old = fixture.coordinator.currentState.operation!;
+      final fresh = fixture.restore(
+        draftId: 'draft-2',
+        restoreConfirmedFollowUps: false,
+      );
+      await fresh.prepareCreate(_input(name: 'New active project'));
+      fixture.repository.loseNextResponse = true;
+      await expectLater(
+        fresh.submitCore(),
+        throwsA(isA<YorksV1DomainException>()),
+      );
+      final activeRaw = fixture.storage.values['scope:journal:draft-2'];
+      final pointer = fixture.storage.values['scope:latest'];
+      final historical = fixture.restore(
+        draftId: old.draftId,
+        updateLatestOperation: false,
+      );
+      await historical.removePendingFile('file-1');
+      expect(fixture.storage.values['scope:latest'], pointer);
+      expect(fixture.storage.values['scope:journal:draft-2'], activeRaw);
+      expect(
+        historical.currentState.operation!.files.single.idempotencyKey,
+        old.files.single.idempotencyKey,
+      );
+      final next = fixture.restore(
+        draftId: 'draft-3',
+        restoreConfirmedFollowUps: false,
+      );
+      expect(next.currentState.operation!.draftId, 'draft-2');
+      expect(
+        next.currentState.operation!.core.status,
+        YorksV1ProjectSetupCommandStatus.outcomeUncertain,
+      );
+      expect(fixture.repository.calls, hasLength(2));
+    },
+  );
+
+  test(
     'corrupt/future journal blocks writes and preserves original raw data',
     () async {
       final fixture = _Fixture();
@@ -732,6 +900,8 @@ class _Fixture {
     String draftId = 'draft-1',
     String? projectId,
     AnalyticsService? analyticsService,
+    bool restoreConfirmedFollowUps = true,
+    bool updateLatestOperation = true,
   }) => YorksV1ProjectSetupCoordinator(
     store: YorksV1ProjectSetupJournalStore(
       storage: storage,
@@ -742,6 +912,8 @@ class _Fixture {
       draftId: draftId,
       expectedMode: mode,
       projectId: projectId ?? this.projectId,
+      restoreConfirmedFollowUps: restoreConfirmedFollowUps,
+      updateLatestOperation: updateLatestOperation,
       atomicOwned: <T>(work) => storage.transaction('scope', work),
     ),
     repository: repository,
