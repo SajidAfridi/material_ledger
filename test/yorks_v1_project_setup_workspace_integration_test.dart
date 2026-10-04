@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -14,6 +15,7 @@ import 'package:material_ledger/core/theme/app_theme.dart';
 import 'package:material_ledger/core/widgets/yorks_mobile_ui.dart';
 import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_project_create_flow_screen.dart';
 import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_projects_screen.dart';
+import 'package:material_ledger/shared/controllers/yorks_v1_project_creation_draft_controller.dart';
 import 'package:material_ledger/shared/models/yorks_v1_document.dart';
 import 'package:material_ledger/shared/models/yorks_v1_feature_flags.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project.dart';
@@ -41,6 +43,7 @@ import 'package:material_ledger/shared/providers/yorks_v1_project_team_directory
 import 'package:material_ledger/shared/providers/yorks_v1_workspace_search_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_workspace_status_provider.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_project_draft_storage_native.dart';
+import 'package:material_ledger/shared/repositories/yorks_v1_project_draft_store.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_project_repository.dart';
 import 'package:material_ledger/shared/widgets/notification_bell.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -557,7 +560,392 @@ void main() {
     },
   );
 
+  testWidgets(
+    'confirmed history storage failure stays recoverable and Retry respects a later foreign writer',
+    (tester) async {
+      late _ClaimGateDraftStorage storage;
+      late YorksV1ProjectCreationDraft oldDraft;
+      late String storageKey;
+      late String originalJournal;
+      var callbacks = 0;
+      final fixture = await _pumpWorkspace(
+        tester,
+        initialLocation: RoutePaths.yorksV1Projects,
+        onProjectCreated: (_) => callbacks++,
+        draftStorageFactory: (preferences) =>
+            storage = _ClaimGateDraftStorage(preferences),
+        seed: (container, preferences) async {
+          final provider = yorksV1ProjectSetupCreationDraftProvider(_owner);
+          final writer = container.read(provider.notifier);
+          await writer.initialized;
+          await writer.save(
+            container
+                .read(provider)
+                .copyWith(
+                  reference: 'RETAIN-ON-LOCAL-FAILURE',
+                  name: 'Confirmed project whose local retirement failed',
+                  currentStage: YorksV1ProjectCreationStage.reviewAndCreate,
+                ),
+          );
+          oldDraft = container.read(provider);
+          storageKey = writer.storageKey;
+          final operation = YorksV1ProjectSetupOperation(
+            backendIdentity: oldDraft.backendIdentity,
+            ownerAuthUserId: _owner,
+            draftId: oldDraft.draftId,
+            mode: YorksV1ProjectSetupMode.create,
+            core: YorksV1ProjectSetupCommand(
+              kind: YorksV1ProjectSetupCommandKind.create,
+              idempotencyKey: oldDraft.creationIdempotencyKey,
+              payload: oldDraft.toCreationInput().toRpcPayload(),
+              status: YorksV1ProjectSetupCommandStatus.confirmedSuccess,
+              attempts: 1,
+              result: {
+                'project': {
+                  'id': 'local-retirement-failure-project',
+                  'reference': oldDraft.reference,
+                  'name': oldDraft.name,
+                  'state': 'draft',
+                  'record_version': 0,
+                  'created_at': '2026-10-04T00:00:00Z',
+                },
+                'idempotency_key': oldDraft.creationIdempotencyKey,
+              },
+            ),
+            files: const [
+              YorksV1ProjectSetupFile(
+                localId: 'failure-retained-file',
+                idempotencyKey: 'failure-retained-file-intent',
+                fileName: 'retained-on-failure.pdf',
+                mimeType: 'application/pdf',
+                sizeBytes: 4,
+                classification: YorksV1DocumentClassification.operational,
+              ),
+            ],
+          );
+          originalJournal = jsonEncode(operation.toJson());
+          await preferences.setString(
+            '$storageKey:journal:${oldDraft.draftId}',
+            originalJournal,
+          );
+          storage.failRetirementKey = storageKey;
+        },
+      );
+      await _openCreateProject(tester);
+      expect(storage.failedRetirements, 1);
+      expect(
+        find.text(YorksV1ProjectStrings.localSaveFailed.primary),
+        findsOneWidget,
+      );
+      expect(
+        find.text(YorksV1ProjectStrings.localRecoveryUnavailable.primary),
+        findsNothing,
+      );
+      expect(find.text(YorksV1ProjectStrings.retry.primary), findsOneWidget);
+      expect(fixture.commands.calls, 0);
+      expect(callbacks, 0);
+      expect(
+        fixture.preferences.getString(
+          '$storageKey:journal:${oldDraft.draftId}',
+        ),
+        originalJournal,
+      );
+      expect(
+        fixture.preferences.getString(
+          '$storageKey:retired:${oldDraft.draftId}',
+        ),
+        isNull,
+      );
+
+      var keys = 0;
+      final foreignWriter = YorksV1ProjectCreationDraftController(
+        ownerAuthUserId: _owner,
+        backendIdentity: oldDraft.backendIdentity,
+        storageKey: storageKey,
+        storage: storage,
+        idempotencyKeyFactory: () => 'retry-other-writer-${keys++}',
+      );
+      addTearDown(foreignWriter.dispose);
+      await foreignWriter.initialized;
+      await foreignWriter.takeOver();
+      final foreignEnvelope = fixture.preferences.getString(storageKey);
+      expect(
+        foreignWriter.state.writerEpoch,
+        greaterThan(oldDraft.writerEpoch),
+      );
+      await tester.tap(find.text(YorksV1ProjectStrings.retry.primary));
+      await tester.pumpAndSettle();
+      expect(
+        find.text(YorksV1ProjectStrings.draftOwnedElsewhere.primary),
+        findsOneWidget,
+      );
+      expect(
+        find.text(YorksV1ProjectStrings.takeOverDraft.primary),
+        findsOneWidget,
+      );
+      expect(
+        find.text(YorksV1ProjectStrings.localRecoveryUnavailable.primary),
+        findsNothing,
+      );
+      expect(
+        find.text(YorksV1ProjectStrings.localSaveFailed.primary),
+        findsNothing,
+      );
+      expect(
+        fixture.container
+            .read(yorksV1ProjectSetupCreationDraftProvider(_owner))
+            .storageState,
+        YorksV1ProjectDraftStorageState.ownedElsewhere,
+      );
+      expect(fixture.preferences.getString(storageKey), foreignEnvelope);
+      expect(
+        fixture.preferences.getString(
+          '$storageKey:journal:${oldDraft.draftId}',
+        ),
+        originalJournal,
+      );
+      expect(
+        fixture.preferences.getString(
+          '$storageKey:retired:${oldDraft.draftId}',
+        ),
+        isNull,
+      );
+      expect(storage.failedRetirements, 1);
+      expect(fixture.commands.calls, 0);
+      expect(callbacks, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   for (final size in [const Size(1536, 1024), const Size(360, 800)]) {
+    testWidgets(
+      '${size.width} confirmed prior writer waits for initialization and explicit takeover before fresh Create',
+      (tester) async {
+        late _ClaimGateDraftStorage storage;
+        late YorksV1ProjectCreationDraftController oldWriter;
+        late YorksV1ProjectCreationDraft oldDraft;
+        late String oldEnvelope;
+        late String originalJournal;
+        final claim = Completer<void>();
+        var callbacks = 0;
+        final fixture = await _pumpWorkspace(
+          tester,
+          size: size,
+          initialLocation: RoutePaths.yorksV1Projects,
+          onProjectCreated: (_) => callbacks++,
+          draftStorageFactory: (preferences) =>
+              storage = _ClaimGateDraftStorage(preferences),
+          seed: (container, preferences) async {
+            final backend = container.read(
+              yorksV1ProjectDraftBackendIdentityProvider,
+            );
+            var keys = 0;
+            oldWriter = YorksV1ProjectCreationDraftController(
+              ownerAuthUserId: _owner,
+              backendIdentity: backend,
+              storageKey: yorksV1ProjectDraftStorageKey(
+                backendIdentity: backend,
+                ownerAuthUserId: _owner,
+                mode: YorksV1ProjectDraftMode.create,
+              ),
+              storage: storage,
+              idempotencyKeyFactory: () => 'prior-live-writer-${keys++}',
+            );
+            addTearDown(oldWriter.dispose);
+            await oldWriter.initialized;
+            await oldWriter.save(
+              oldWriter.state.copyWith(
+                reference: 'OLD-CONFIRMED-LEASE',
+                name: 'Confirmed project with retained writer lease',
+                currentStage: YorksV1ProjectCreationStage.reviewAndCreate,
+                attachments: const [
+                  YorksV1ProjectAttachmentInput(
+                    localId: 'leased-old-file',
+                    fileName: 'retained-private-plan.pdf',
+                    mimeType: 'application/pdf',
+                    sizeBytes: 4,
+                    contentHash:
+                        '0000000000000000000000000000000000000000000000000000000000000000',
+                  ),
+                ],
+                rawEditorState: const {
+                  'private_unfinished_text': 'Preserve the original recovery',
+                },
+              ),
+            );
+            oldDraft = oldWriter.state;
+            final operation = YorksV1ProjectSetupOperation(
+              backendIdentity: backend,
+              ownerAuthUserId: _owner,
+              draftId: oldDraft.draftId,
+              mode: YorksV1ProjectSetupMode.create,
+              core: YorksV1ProjectSetupCommand(
+                kind: YorksV1ProjectSetupCommandKind.create,
+                idempotencyKey: oldDraft.creationIdempotencyKey,
+                payload: oldDraft.toCreationInput().toRpcPayload(),
+                status: YorksV1ProjectSetupCommandStatus.confirmedSuccess,
+                attempts: 1,
+                result: {
+                  'project': {
+                    'id': 'old-confirmed-lease-project',
+                    'reference': oldDraft.reference,
+                    'name': oldDraft.name,
+                    'state': 'draft',
+                    'record_version': 0,
+                    'created_at': '2026-10-04T00:00:00Z',
+                  },
+                  'idempotency_key': oldDraft.creationIdempotencyKey,
+                },
+              ),
+              files: const [
+                YorksV1ProjectSetupFile(
+                  localId: 'leased-old-file',
+                  idempotencyKey: 'leased-old-file-intent',
+                  fileName: 'retained-private-plan.pdf',
+                  mimeType: 'application/pdf',
+                  sizeBytes: 4,
+                  contentHash:
+                      '0000000000000000000000000000000000000000000000000000000000000000',
+                  classification: YorksV1DocumentClassification.operational,
+                ),
+              ],
+            );
+            originalJournal = jsonEncode(operation.toJson());
+            await preferences.setString(
+              '${oldWriter.storageKey}:journal:${oldDraft.draftId}',
+              originalJournal,
+            );
+            await preferences.setString(
+              '${oldWriter.storageKey}:latest_operation',
+              jsonEncode({
+                'journal_key':
+                    '${oldWriter.storageKey}:journal:${oldDraft.draftId}',
+              }),
+            );
+            oldEnvelope = preferences.getString(oldWriter.storageKey)!;
+            expect(oldDraft.writerEpoch, 1);
+            expect((jsonDecode(oldEnvelope) as Map)['retired'], false);
+            storage.nextTransaction = claim;
+          },
+        );
+        fixture.router.go(RoutePaths.engineerCreateProject);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+        final provider = yorksV1ProjectSetupCreationDraftProvider(_owner);
+        expect(
+          fixture.container.read(provider).storageState,
+          YorksV1ProjectDraftStorageState.initializing,
+        );
+        expect(
+          find.text(YorksV1ProjectStrings.localRecoveryUnavailable.primary),
+          findsNothing,
+        );
+        expect(
+          find.text(YorksV1ProjectStrings.localSaveFailed.primary),
+          findsNothing,
+        );
+        expect(
+          fixture.preferences.getString(oldWriter.storageKey),
+          oldEnvelope,
+        );
+        expect(fixture.commands.calls, 0);
+        expect(callbacks, 0);
+        expect(tester.takeException(), isNull);
+
+        claim.complete();
+        await fixture.container.read(provider.notifier).initialized;
+        await tester.pumpAndSettle();
+        expect(
+          fixture.container.read(provider).storageState,
+          YorksV1ProjectDraftStorageState.ownedElsewhere,
+        );
+        expect(
+          find.text(YorksV1ProjectStrings.draftOwnedElsewhere.primary),
+          findsOneWidget,
+        );
+        final takeover = find.text(YorksV1ProjectStrings.takeOverDraft.primary);
+        expect(takeover, findsOneWidget);
+        expect(
+          find.text(YorksV1ProjectStrings.localRecoveryUnavailable.primary),
+          findsNothing,
+        );
+        expect(
+          fixture.preferences.getString(oldWriter.storageKey),
+          oldEnvelope,
+        );
+        expect(
+          fixture.preferences.getString(
+            '${oldWriter.storageKey}:retired:${oldDraft.draftId}',
+          ),
+          isNull,
+        );
+        expect(fixture.commands.calls, 0);
+        expect(callbacks, 0);
+
+        await tester.tap(takeover);
+        await tester.pumpAndSettle();
+        final fresh = fixture.container.read(provider);
+        expect(fresh.draftId, isNot(oldDraft.draftId));
+        expect(
+          fresh.creationIdempotencyKey,
+          isNot(oldDraft.creationIdempotencyKey),
+        );
+        expect(fresh.currentStage, YorksV1ProjectCreationStage.projectDetails);
+        expect(fresh.reference, isEmpty);
+        expect(fresh.name, isEmpty);
+        expect(fresh.attachments, isEmpty);
+        expect(fresh.rawEditorState, isEmpty);
+        expect(
+          find.byKey(const ValueKey('yorks-v1-project-name')),
+          findsOneWidget,
+        );
+        expect(
+          find.text(YorksV1ProjectStrings.takeOverDraft.primary),
+          findsNothing,
+        );
+        expect(
+          fixture.router.routerDelegate.currentConfiguration.uri.path,
+          RoutePaths.engineerCreateProject,
+        );
+        final journalKey =
+            '${oldWriter.storageKey}:journal:${oldDraft.draftId}';
+        expect(fixture.preferences.getString(journalKey), originalJournal);
+        final tombstone =
+            jsonDecode(
+                  fixture.preferences.getString(
+                    '${oldWriter.storageKey}:retired:${oldDraft.draftId}',
+                  )!,
+                )
+                as Map;
+        final retained = YorksV1ProjectCreationDraft.fromJson(
+          Map<String, dynamic>.from(tombstone['draft'] as Map),
+        );
+        expect(tombstone['retired'], true);
+        expect(tombstone['resultProjectId'], 'old-confirmed-lease-project');
+        expect(retained.draftId, oldDraft.draftId);
+        expect(
+          retained.attachments.single.toDraftJson(),
+          oldDraft.attachments.single.toDraftJson(),
+        );
+        expect(retained.rawEditorState, oldDraft.rawEditorState);
+        final freshEnvelope = fixture.preferences.getString(
+          oldWriter.storageKey,
+        );
+        await expectLater(
+          oldWriter.save(oldDraft.copyWith(name: 'Stale writer overwrite')),
+          throwsA(isA<ProjectDraftStorageException>()),
+        );
+        expect(
+          fixture.preferences.getString(oldWriter.storageKey),
+          freshEnvelope,
+        );
+        expect(fixture.preferences.getString(journalKey), originalJournal);
+        expect(fixture.commands.calls, 0);
+        expect(callbacks, 0);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
     for (final historical in ['files', 'activation', 'pointer', 'uncertain']) {
       testWidgets(
         historical == 'uncertain'
@@ -934,6 +1322,8 @@ Future<_WorkspaceFixture> _pumpWorkspace(
   bool settle = true,
   String initialLocation = RoutePaths.engineerCreateProject,
   Future<void> Function(ProviderContainer, SharedPreferences)? seed,
+  ProjectDraftAtomicStorage Function(SharedPreferences)? draftStorageFactory,
+  ValueChanged<YorksV1Project>? onProjectCreated,
 }) async {
   tester.view.devicePixelRatio = 1;
   tester.view.physicalSize = size;
@@ -983,7 +1373,8 @@ Future<_WorkspaceFixture> _pumpWorkspace(
       ),
       yorksV1ProjectRepositoryProvider.overrideWithValue(commands),
       yorksV1ProjectDraftAtomicStorageProvider.overrideWithValue(
-        _SupportedDraftStorage(preferences),
+        draftStorageFactory?.call(preferences) ??
+            _SupportedDraftStorage(preferences),
       ),
       yorksV1ProjectReferenceAdvisoryProvider.overrideWith(
         (ref, query) async => YorksV1ProjectReferenceAdvisory.unavailable,
@@ -1009,9 +1400,11 @@ Future<_WorkspaceFixture> _pumpWorkspace(
         onExit: (_, _) => container
             .read(yorksV1ProjectSetupNavigationGuardProvider)
             .canLeave(),
-        builder: (_, _) => const YorksV1WorkspaceShell(
+        builder: (_, _) => YorksV1WorkspaceShell(
           featureOwnsBackNavigation: true,
-          child: YorksV1ProjectCreateFlowScreen(),
+          child: YorksV1ProjectCreateFlowScreen(
+            onProjectCreated: onProjectCreated,
+          ),
         ),
       ),
       GoRoute(
@@ -1086,4 +1479,57 @@ class _SupportedDraftStorage extends SharedPreferencesProjectDraftStorage {
   _SupportedDraftStorage(super.preferences);
   @override
   bool get supportsAtomicOwnership => true;
+}
+
+class _ClaimGateDraftStorage extends _SupportedDraftStorage {
+  _ClaimGateDraftStorage(super.preferences);
+  Completer<void>? nextTransaction;
+  String? failRetirementKey;
+  int failedRetirements = 0;
+
+  @override
+  Future<T> transaction<T>(
+    String lockKey,
+    T Function(ProjectDraftAtomicTransaction) work,
+  ) async {
+    final gate = nextTransaction;
+    nextTransaction = null;
+    if (gate != null) await gate.future;
+    return super.transaction(
+      lockKey,
+      (tx) => work(
+        _InterceptDraftTransaction(
+          tx,
+          beforeWrite: (key, value) {
+            if (key == failRetirementKey &&
+                (jsonDecode(value) as Map)['retired'] == true) {
+              failRetirementKey = null;
+              failedRetirements++;
+              throw const ProjectDraftStorageException(
+                'write_not_acknowledged',
+              );
+            }
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _InterceptDraftTransaction implements ProjectDraftAtomicTransaction {
+  const _InterceptDraftTransaction(this.inner, {required this.beforeWrite});
+  final ProjectDraftAtomicTransaction inner;
+  final void Function(String, String) beforeWrite;
+
+  @override
+  String? read(String key) => inner.read(key);
+
+  @override
+  void write(String key, String value) {
+    beforeWrite(key, value);
+    inner.write(key, value);
+  }
+
+  @override
+  void remove(String key) => inner.remove(key);
 }

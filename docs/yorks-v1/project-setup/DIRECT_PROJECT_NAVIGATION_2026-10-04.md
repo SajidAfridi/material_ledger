@@ -47,15 +47,19 @@ unregistration, automatic reload or global update framework was added.
 - Dependency resolution passed; lockfile unchanged.
 - Formatting gate: 14 changed Dart files, zero remaining changes.
 - Full analyzer: no issues.
-- Full Flutter suite: **2,327 passed, four retained skips**.
-- Flow/workspace/desktop/mobile regression and interaction suite: **125 passed**.
+- Full Flutter suite after the live ownership correction: **2,330 passed,
+  four retained skips**.
+- Flow/workspace/desktop/mobile regression and interaction coverage: **128
+  cases** in the complete passing gate; the focused flow/workspace rerun passed
+  86 before the final Retry race case was added.
 - Draft/recovery suite now includes **56 cases** in the complete passing gate.
 - Project-linked recovery widget: **12 passed**, including original keys/hash,
   denied/stale permissions, owner switch, classification redaction, independent
   edit input and 360px RTL at 200% text with 44px actions.
 - Exactly three Review hint goldens were deliberately updated and visually
   checked: desktop and mobile top/bottom. No other baseline changed.
-- Candidate CI web passed: main 10,009,606 bytes, verifier gzip 2,882,268.
+- Candidate CI web passed after the live ownership correction: main 10,011,592
+  bytes, verifier gzip 2,882,734.
 - CI release APK passed; Android v2 signature verified with the ephemeral
   `Yorks CI Ephemeral` certificate. This is a CI artifact, not a production
   signing lane or an Android release.
@@ -66,6 +70,20 @@ inferred from the local gates. The prior accessibility-enabled breakpoint resize
 semantics issue remains an open gate; this change does not alter Flutter/semantics.
 
 ## Staging delivery
+
+The first preview from `45367b48` exposed an additional installed-browser edge
+during the live check. Its confirmed create envelope was schema 2 with an exact
+journal, retained writer and epoch 1; the fresh page was another writer. The
+automatic history-release branch hid the normal ownership takeover control,
+then its fenced retirement failed. The generic catch incorrectly described that
+failure as an undecodable record. The ownership guard is corrected before final
+acceptance: loading waits for the claim, another owner keeps the explicit
+localized Take over draft action, and only a writable owner releases history.
+No automatic ownership theft or command replay is introduced.
+The added desktop and 360px regressions cover delayed ownership initialization,
+explicit takeover, a still-live former writer, exact private manifest/journal
+retention and zero remote commands. A local retirement write failure followed
+by another writer before Retry exposes takeover instead of acquiring ownership.
 
 Final source, artifact/deployment identity, unchanged production proof, desktop
 and 360px browser evidence will be recorded after verification. Staging only

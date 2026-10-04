@@ -534,7 +534,17 @@ class _YorksV1ProjectCreateFlowScreenState
     // A confirmed result belongs to its project, not the next creation form.
     // Releasing the proposal preserves its exact journal and pending files.
     if (committed && !_isCreating && !_confirmedContextResult) {
-      if (!_releasingConfirmedHistory && !_confirmedHistoryReleaseFailed) {
+      final historyOwnedElsewhere =
+          draft.storageState == YorksV1ProjectDraftStorageState.ownedElsewhere;
+      final waitingForOwnership =
+          draft.storageState == YorksV1ProjectDraftStorageState.initializing ||
+          _checkingOwnership;
+      final historyReleaseFailed =
+          _confirmedHistoryReleaseFailed || _ownershipCheckFailed;
+      if (!waitingForOwnership &&
+          !draft.isReadOnly &&
+          !historyReleaseFailed &&
+          !_releasingConfirmedHistory) {
         _releasingConfirmedHistory = true;
         final generation = _contextGeneration;
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -545,32 +555,49 @@ class _YorksV1ProjectCreateFlowScreenState
       return Scaffold(
         backgroundColor: AppColors.surface,
         body: Center(
-          child: _confirmedHistoryReleaseFailed
-              ? Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      YorksV1ProjectStrings.localRecoveryUnavailable.active(
-                        language,
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: () => setState(() {
-                        _confirmedHistoryReleaseFailed = false;
-                      }),
-                      child: Text(YorksV1ProjectStrings.retry.active(language)),
-                    ),
-                    TextButton(
-                      onPressed: () => context.go(RoutePaths.yorksV1Projects),
-                      child: Text(
-                        YorksV1ProjectSetupShellStrings.returnToProjects.active(
-                          language,
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 560),
+              child:
+                  waitingForOwnership ||
+                      (!historyOwnedElsewhere &&
+                          !historyReleaseFailed &&
+                          !draft.isReadOnly)
+                  ? const CircularProgressIndicator()
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          (historyOwnedElsewhere
+                                  ? YorksV1ProjectStrings.draftOwnedElsewhere
+                                  : YorksV1ProjectStrings.localSaveFailed)
+                              .active(language),
+                          textAlign: TextAlign.center,
                         ),
-                      ),
+                        TextButton(
+                          onPressed: historyOwnedElsewhere
+                              ? _takeOverConfirmedHistory
+                              : _retryConfirmedHistory,
+                          child: Text(
+                            (historyOwnedElsewhere
+                                    ? YorksV1ProjectStrings.takeOverDraft
+                                    : YorksV1ProjectStrings.retry)
+                                .active(language),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () =>
+                              context.go(RoutePaths.yorksV1Projects),
+                          child: Text(
+                            YorksV1ProjectSetupShellStrings.returnToProjects
+                                .active(language),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                )
-              : const CircularProgressIndicator(),
+            ),
+          ),
         ),
       );
     }
@@ -3148,6 +3175,15 @@ class _YorksV1ProjectCreateFlowScreenState
       final controller = _draftController(draft.ownerAuthUserId);
       await controller.initialized;
       if (!_isCurrentContext(generation)) return;
+      if (!controller.writable ||
+          controller.currentDraftId != draft.draftId ||
+          _checkingOwnership ||
+          _ownershipCheckFailed) {
+        setState(() => _releasingConfirmedHistory = false);
+        return;
+      }
+      await controller.verifyOwnership();
+      if (!_isCurrentContext(generation)) return;
       final coordinator = ref.read(
         yorksV1ProjectSetupCoordinatorProvider(_setupScope(draft)).notifier,
       );
@@ -3170,6 +3206,50 @@ class _YorksV1ProjectCreateFlowScreenState
         _confirmedHistoryReleaseFailed = true;
       });
     }
+  }
+
+  Future<void> _takeOverConfirmedHistory() async {
+    final owner = _activeAuthUserId;
+    if (owner == null || _checkingOwnership) return;
+    final generation = _contextGeneration;
+    final controller = _draftController(owner);
+    setState(() {
+      _checkingOwnership = true;
+      _confirmedHistoryReleaseFailed = false;
+    });
+    try {
+      await controller.initialized;
+      if (!_isCurrentContext(generation)) return;
+      await controller.takeOver();
+      if (!_isCurrentContext(generation)) return;
+      _draftSaveTimer?.cancel();
+      _pendingDraft = null;
+      setState(() {
+        _restoredEditor = false;
+        _restoredNavigationStage = null;
+        _ownershipCheckFailed = false;
+        _confirmedHistoryReleaseFailed =
+            _currentDraft().storageState ==
+            YorksV1ProjectDraftStorageState.failed;
+      });
+    } catch (_) {
+      if (!_isCurrentContext(generation)) return;
+      setState(() => _confirmedHistoryReleaseFailed = true);
+    } finally {
+      if (_isCurrentContext(generation)) {
+        setState(() => _checkingOwnership = false);
+      }
+    }
+  }
+
+  Future<void> _retryConfirmedHistory() async {
+    final generation = _contextGeneration;
+    await _verifyResumedOwnership();
+    if (!_isCurrentContext(generation)) return;
+    setState(() {
+      _releasingConfirmedHistory = false;
+      _confirmedHistoryReleaseFailed = _ownershipCheckFailed;
+    });
   }
 
   void _openConfirmedProject(
