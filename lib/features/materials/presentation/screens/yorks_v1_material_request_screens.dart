@@ -2506,9 +2506,8 @@ class _YorksV1MaterialRequestDraftScreenState
           backgroundColor: AppColors.surface,
           body: _RequestError(
             language: language,
-            onRetry: () => ref.invalidate(
-              yorksV1MaterialRequestDetailProvider(widget.draftId),
-            ),
+            onRetry: () =>
+                yorksV1InvalidateMaterialRequestDetail(ref, widget.draftId),
           ),
         );
       }
@@ -2868,9 +2867,8 @@ class YorksV1MaterialRequestDetailScreen extends ConsumerWidget {
               actions: [
                 IconButton(
                   tooltip: YorksV1MaterialRequestStrings.refresh.primary,
-                  onPressed: () => ref.invalidate(
-                    yorksV1MaterialRequestDetailProvider(requestId),
-                  ),
+                  onPressed: () =>
+                      yorksV1InvalidateMaterialRequestDetail(ref, requestId),
                   icon: const Icon(Icons.refresh_rounded),
                 ),
               ],
@@ -2880,8 +2878,7 @@ class YorksV1MaterialRequestDetailScreen extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) => _RequestError(
           language: language,
-          onRetry: () =>
-              ref.invalidate(yorksV1MaterialRequestDetailProvider(requestId)),
+          onRetry: () => yorksV1InvalidateMaterialRequestDetail(ref, requestId),
         ),
         data: (value) => YorksV1ProjectReadBoundary(
           allowed: yorksV1CanReadProjectRecord(
@@ -2897,7 +2894,7 @@ class YorksV1MaterialRequestDetailScreen extends ConsumerWidget {
             showPageHeader: !compactRoute,
             commentId: commentId,
             onRefresh: () =>
-                ref.invalidate(yorksV1MaterialRequestDetailProvider(requestId)),
+                yorksV1InvalidateMaterialRequestDetail(ref, requestId),
           ),
         ),
       ),
@@ -3718,7 +3715,7 @@ class _DraftForm extends ConsumerWidget {
       } catch (_) {
         // The server confirmed the edit. A failed local cleanup cannot undo it.
       }
-      ref.invalidate(yorksV1MaterialRequestDetailProvider(draft.id));
+      yorksV1InvalidateMaterialRequestDetail(ref, draft.id);
       if (context.mounted) {
         context.go(RoutePaths.yorksV1MaterialRequestPath(draft.id));
       }
@@ -3993,10 +3990,9 @@ class _MaterialRequestDraftExitGuardState
         } catch (_) {
           // The server-confirmed edit remains valid if local cleanup fails.
         }
-        ref.invalidate(
-          yorksV1MaterialRequestDetailProvider(
-            widget.controller.currentDraft.id,
-          ),
+        yorksV1InvalidateMaterialRequestDetail(
+          ref,
+          widget.controller.currentDraft.id,
         );
       }
       return true;
@@ -10905,10 +10901,22 @@ class _RequestDetailBody extends ConsumerWidget {
     final arrangementEnabled = featureFlags.arrangement;
     final logisticsEnabled = featureFlags.logistics;
     final returnsDocumentsEnabled = featureFlags.returnsDocuments;
+    final isProcurement =
+        role == YorksV1Role.procurement || role == YorksV1Role.admin;
     final fileService = ref.watch(yorksV1BoqWorkbookFileServiceProvider);
     final documentService = YorksV1MaterialRequestDocumentService();
+    // The role-safe controlled-document projection already contains the
+    // arrangement facts needed by ordinary readers. Only actors who can open
+    // the transactional Procurement editor (or the retained legacy decision
+    // surface) need the heavier arrangement workspace RPC on page load.
+    final loadArrangementWorkspace =
+        arrangementEnabled &&
+        yorksV1ShouldLoadArrangementWorkspaceForDetail(
+          role: role,
+          legacyArrangementReview: featureFlags.legacyArrangementReview,
+        );
     final AsyncValue<YorksV1ArrangementWorkspace?> arrangement =
-        arrangementEnabled
+        loadArrangementWorkspace
         ? ref.watch(yorksV1ArrangementWorkspaceProvider(request.id))
         : const AsyncData(null);
     // These are role-safe server projections.  The client uses their action
@@ -10940,8 +10948,6 @@ class _RequestDetailBody extends ConsumerWidget {
         : null;
     final desktop =
         MediaQuery.sizeOf(context).width >= AppSpacing.yorksV1DesktopBreakpoint;
-    final isProcurement =
-        role == YorksV1Role.procurement || role == YorksV1Role.admin;
     final legacyCanArrange =
         arrangementEnabled &&
         isProcurement &&
@@ -11364,6 +11370,8 @@ class _RequestDetailBody extends ConsumerWidget {
                               language: language,
                               arrangement: arrangement,
                               documentModel: documentModel,
+                              useDocumentArrangementProjection:
+                                  !loadArrangementWorkspace,
                               canOpenLogistics: canOpenLogistics,
                               canOpenReturnsDocuments: canOpenReturnsDocuments,
                               logisticsWorkspace: logisticsWorkspace,
@@ -11441,6 +11449,8 @@ class _RequestDetailBody extends ConsumerWidget {
                             language: language,
                             arrangement: arrangement,
                             documentModel: documentModel,
+                            useDocumentArrangementProjection:
+                                !loadArrangementWorkspace,
                             canOpenLogistics: canOpenLogistics,
                             canOpenReturnsDocuments: canOpenReturnsDocuments,
                             logisticsWorkspace: logisticsWorkspace,
@@ -11526,8 +11536,8 @@ class _RequestDetailBody extends ConsumerWidget {
                 idempotencyKey: const Uuid().v4(),
               ),
             );
-        ref.invalidate(yorksV1ArrangementWorkspaceProvider(requestId));
-        ref.invalidate(yorksV1MaterialRequestDetailProvider(requestId));
+        yorksV1InvalidateArrangementWorkspace(ref, requestId);
+        yorksV1InvalidateMaterialRequestDetail(ref, requestId);
         ref.invalidate(yorksV1MaterialRequestListProvider);
       } on YorksV1DomainException catch (error) {
         if (context.mounted) {
@@ -11608,13 +11618,12 @@ class _RequestDetailBody extends ConsumerWidget {
     YorksV1LogisticsWorkspace workspace,
     YorksV1MaterialDispatch dispatch,
   ) async {
-    final changed = await showYorksV1ReceiptReviewDialog(
+    await showYorksV1ReceiptReviewDialog(
       context,
       workspace: workspace,
       dispatch: dispatch,
       onChanged: () => _refreshWorkflow(ref, request),
     );
-    if (changed == true) _refreshWorkflow(ref, request);
   }
 
   Future<void> _generateDeliveryOrder(
@@ -11635,9 +11644,8 @@ class _RequestDetailBody extends ConsumerWidget {
   }
 
   void _refreshWorkflow(WidgetRef ref, YorksV1MaterialRequest request) {
-    ref.invalidate(yorksV1MaterialRequestDetailProvider(request.id));
+    yorksV1InvalidateMaterialRequestDetail(ref, request.id);
     ref.invalidate(yorksV1MaterialRequestDocumentProvider(request.id));
-    ref.invalidate(yorksV1ArrangementWorkspaceProvider(request.id));
     ref.invalidate(yorksV1LogisticsWorkspaceProvider(request.id));
     ref.invalidate(yorksV1ReturnsDocumentsWorkspaceProvider(request.id));
     ref.invalidate(yorksV1MaterialRequestListProvider(null));
@@ -11663,7 +11671,7 @@ class _RequestDetailBody extends ConsumerWidget {
             ),
           );
       if (!context.mounted) return;
-      ref.invalidate(yorksV1MaterialRequestDetailProvider(request.id));
+      yorksV1InvalidateMaterialRequestDetail(ref, request.id);
       ref.invalidate(yorksV1MaterialRequestListProvider);
       _snack(context, YorksV1MaterialRequestStrings.cancelled.primary);
     } on YorksV1DomainException catch (error) {
@@ -12762,7 +12770,7 @@ class _RequestApprovalActionsState
         idempotencyKey: const Uuid().v4(),
       );
       if (!mounted) return;
-      ref.invalidate(yorksV1MaterialRequestDetailProvider(widget.request.id));
+      yorksV1InvalidateMaterialRequestDetail(ref, widget.request.id);
       ref.invalidate(yorksV1MaterialRequestListProvider);
       await ref.read(
         yorksV1MaterialRequestDetailProvider(widget.request.id).future,
@@ -12985,7 +12993,7 @@ class _RequestApprovalActionsState
         procurementRoleEditEnabled: selected.enabled && selected.roleEnabled,
         idempotencyKey: const Uuid().v4(),
       );
-      ref.invalidate(yorksV1MaterialRequestDetailProvider(widget.request.id));
+      yorksV1InvalidateMaterialRequestDetail(ref, widget.request.id);
       ref.invalidate(yorksV1MaterialRequestListProvider);
       if (mounted && openEditor && updated.canEditPostApproval) _openEditor();
     } on YorksV1DomainException catch (error) {
@@ -13082,7 +13090,7 @@ class _RequestApprovalActionsState
               idempotencyKey: const Uuid().v4(),
             ),
           );
-      ref.invalidate(yorksV1MaterialRequestDetailProvider(widget.request.id));
+      yorksV1InvalidateMaterialRequestDetail(ref, widget.request.id);
       ref.invalidate(yorksV1MaterialRequestListProvider);
     } on YorksV1DomainException catch (error) {
       if (mounted) {
@@ -14258,7 +14266,7 @@ class _MaterialRequestDiscussionState
       _mentions.clear();
       _pendingAttachments.clear();
       _replyingTo = null;
-      ref.invalidate(yorksV1MaterialRequestDetailProvider(widget.request.id));
+      yorksV1InvalidateMaterialRequestDetail(ref, widget.request.id);
       setState(() => _commentPosted = true);
     } on YorksV1DomainException catch (error) {
       if (mounted) {
@@ -15318,12 +15326,8 @@ class _RequestArrangementApprovalActionsState
               idempotencyKey: const Uuid().v4(),
             ),
           );
-      ref.invalidate(
-        yorksV1ArrangementWorkspaceProvider(widget.workspace.requestId),
-      );
-      ref.invalidate(
-        yorksV1MaterialRequestDetailProvider(widget.workspace.requestId),
-      );
+      yorksV1InvalidateArrangementWorkspace(ref, widget.workspace.requestId);
+      yorksV1InvalidateMaterialRequestDetail(ref, widget.workspace.requestId);
       ref.invalidate(yorksV1MaterialRequestListProvider);
       if (mounted) {
         _snack(
@@ -15915,6 +15919,7 @@ class _RequestRecordContent extends StatelessWidget {
     required this.language,
     required this.arrangement,
     required this.documentModel,
+    required this.useDocumentArrangementProjection,
     required this.canOpenLogistics,
     required this.canOpenReturnsDocuments,
     required this.logisticsWorkspace,
@@ -15931,6 +15936,7 @@ class _RequestRecordContent extends StatelessWidget {
   final AppLanguage language;
   final AsyncValue<YorksV1ArrangementWorkspace?> arrangement;
   final AsyncValue<YorksV1MaterialRequestDocumentModel> documentModel;
+  final bool useDocumentArrangementProjection;
   final bool canOpenLogistics;
   final bool canOpenReturnsDocuments;
   final YorksV1LogisticsWorkspace? logisticsWorkspace;
@@ -16004,6 +16010,9 @@ class _RequestRecordContent extends StatelessWidget {
         request: request,
         language: language,
         arrangement: arrangement,
+        documentModel: useDocumentArrangementProjection
+            ? documentModel.valueOrNull
+            : null,
         logisticsWorkspace: logisticsWorkspace,
         returnsDocumentsWorkspace: returnsDocumentsWorkspace,
         canOpenLogistics: canOpenLogistics,
@@ -16024,6 +16033,7 @@ class _ProcurementDeliveryReturnsDisclosure extends StatelessWidget {
     required this.request,
     required this.language,
     required this.arrangement,
+    required this.documentModel,
     required this.logisticsWorkspace,
     required this.returnsDocumentsWorkspace,
     required this.canOpenLogistics,
@@ -16039,6 +16049,7 @@ class _ProcurementDeliveryReturnsDisclosure extends StatelessWidget {
   final YorksV1MaterialRequest request;
   final AppLanguage language;
   final AsyncValue<YorksV1ArrangementWorkspace?> arrangement;
+  final YorksV1MaterialRequestDocumentModel? documentModel;
   final YorksV1LogisticsWorkspace? logisticsWorkspace;
   final YorksV1ReturnsDocumentsWorkspace? returnsDocumentsWorkspace;
   final bool canOpenLogistics;
@@ -16056,6 +16067,11 @@ class _ProcurementDeliveryReturnsDisclosure extends StatelessWidget {
     final hasOperationalRecord =
         arrangementWorkspace?.workingArrangement != null ||
         arrangementWorkspace?.currentArrangement != null ||
+        documentModel?.arrangement != null ||
+        (documentModel?.lineLifecycles.values.any(
+              (line) => line.arrangementStatus != null,
+            ) ??
+            false) ||
         (logisticsWorkspace?.dispatches.isNotEmpty ?? false) ||
         (returnsDocumentsWorkspace?.deliveryOrderDispatches.isNotEmpty ??
             false) ||
@@ -16135,6 +16151,7 @@ class _ProcurementDeliveryReturnsDisclosure extends StatelessWidget {
                 data: (workspace) => _ArrangementSummarySurface(
                   request: request,
                   workspace: workspace,
+                  documentModel: documentModel,
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),
@@ -16960,20 +16977,91 @@ class _ArrangementSummarySurface extends StatelessWidget {
   const _ArrangementSummarySurface({
     required this.request,
     required this.workspace,
+    required this.documentModel,
   });
 
   final YorksV1MaterialRequest request;
   final YorksV1ArrangementWorkspace? workspace;
+  final YorksV1MaterialRequestDocumentModel? documentModel;
 
   @override
   Widget build(BuildContext context) {
     final current = workspace?.currentArrangement;
-    if (current == null) {
+    final projectionRows =
+        <
+          ({
+            String description,
+            String? brandOrigin,
+            String decision,
+            String source,
+            String requestedQuantity,
+            String arrangedQuantity,
+            String unit,
+          })
+        >[
+          if (current != null)
+            for (final line in current.lines)
+              (
+                description: line.description,
+                brandOrigin: line.brandOrigin,
+                decision: line.decision == null
+                    ? '—'
+                    : yorksV1ArrangementDecisionCopy(line.decision!).primary,
+                source: line.source == YorksV1ArrangementSource.warehouse
+                    ? YorksV1MaterialRequestStrings.warehouse.primary
+                    : line.externalSupplier ??
+                          YorksV1MaterialRequestStrings
+                              .externalSupplier
+                              .primary,
+                requestedQuantity: line.requestedQuantity,
+                arrangedQuantity: line.arrangedQuantity ?? '0',
+                unit: line.unit,
+              )
+          else
+            for (final line in request.lines)
+              if (documentModel?.lineLifecycles[line.id]?.arrangementStatus !=
+                  null)
+                (
+                  description: line.description,
+                  brandOrigin: line.brandOrigin,
+                  decision: _workflowDecision(
+                    documentModel?.lineLifecycles[line.id]?.arrangementDecision,
+                  ),
+                  source: _workflowSource(
+                    documentModel?.lineLifecycles[line.id]?.sourceKind,
+                  ),
+                  requestedQuantity: line.quantity,
+                  arrangedQuantity:
+                      documentModel
+                          ?.lineLifecycles[line.id]
+                          ?.arrangedQuantity ??
+                      '0',
+                  unit: line.unit,
+                ),
+        ];
+    if (projectionRows.isEmpty) {
+      final arrangementShouldExist = switch (request.state) {
+        YorksV1MaterialRequestState.awaitingApproval ||
+        YorksV1MaterialRequestState.approved ||
+        YorksV1MaterialRequestState.partiallyDispatched ||
+        YorksV1MaterialRequestState.dispatched ||
+        YorksV1MaterialRequestState.partiallyReceived ||
+        YorksV1MaterialRequestState.received ||
+        YorksV1MaterialRequestState.closed => true,
+        _ => false,
+      };
       return _PendingWorkflowSurface(
         icon: Icons.inventory_2_outlined,
-        title: YorksV1MaterialRequestStrings.notArrangedYet.primary,
-        description:
-            YorksV1MaterialRequestStrings.arrangementPendingDescription.primary,
+        title: arrangementShouldExist
+            ? YorksV1MaterialRequestStrings.arrangementUnavailable.primary
+            : YorksV1MaterialRequestStrings.notArrangedYet.primary,
+        description: arrangementShouldExist
+            ? YorksV1MaterialRequestStrings
+                  .arrangementUnavailableDescription
+                  .primary
+            : YorksV1MaterialRequestStrings
+                  .arrangementPendingDescription
+                  .primary,
       );
     }
     return _R35RecordSurface(
@@ -17021,34 +17109,21 @@ class _ArrangementSummarySurface extends StatelessWidget {
                       ),
                     ],
                   ),
-                  for (final line in current.lines)
+                  for (final line in projectionRows)
                     TableRow(
                       children: [
                         _FormalCell(
                           line.description,
                           supporting: line.brandOrigin,
                         ),
-                        _FormalCell(
-                          line.decision == null
-                              ? '—'
-                              : yorksV1ArrangementDecisionCopy(
-                                  line.decision!,
-                                ).primary,
-                        ),
-                        _FormalCell(
-                          line.source == YorksV1ArrangementSource.warehouse
-                              ? YorksV1MaterialRequestStrings.warehouse.primary
-                              : line.externalSupplier ??
-                                    YorksV1MaterialRequestStrings
-                                        .externalSupplier
-                                        .primary,
-                        ),
+                        _FormalCell(line.decision),
+                        _FormalCell(line.source),
                         _FormalCell(
                           '${yorksV1DisplayQuantity(line.requestedQuantity)} ${line.unit}',
                           alignEnd: true,
                         ),
                         _FormalCell(
-                          '${yorksV1DisplayQuantity(line.arrangedQuantity ?? '0')} ${line.unit}',
+                          '${yorksV1DisplayQuantity(line.arrangedQuantity)} ${line.unit}',
                           alignEnd: true,
                         ),
                       ],
@@ -17067,18 +17142,21 @@ class _ArrangementSummarySurface extends StatelessWidget {
             ),
             child: Text(
               [
-                '${current.lines.length} ${YorksV1MaterialRequestStrings.items.primary.toLowerCase()}',
-                current.savedByDisplayName ?? current.startedByDisplayName,
-                if (current.decidedByDisplayName != null)
-                  current.decidedByDisplayName!,
-                if (current.decidedByRole != null)
+                '${projectionRows.length} ${YorksV1MaterialRequestStrings.items.primary.toLowerCase()}',
+                if (current != null)
+                  current.savedByDisplayName ?? current.startedByDisplayName,
+                if (current?.decidedByDisplayName != null)
+                  current!.decidedByDisplayName!,
+                if (current?.decidedByRole != null)
                   YorksV1ProjectStrings.roleLabel(
-                    current.decidedByRole,
+                    current!.decidedByRole,
                   ).primary,
-                if (current.decidedAt != null)
+                if (current?.decidedAt != null)
                   MaterialLocalizations.of(
                     context,
-                  ).formatMediumDate(current.decidedAt!.toLocal()),
+                  ).formatMediumDate(current!.decidedAt!.toLocal()),
+                if (current == null && documentModel?.arrangement != null)
+                  documentModel!.arrangement!.displayName,
               ].join(' · '),
               style: AppTypography.bodySmall.copyWith(color: AppColors.ink),
             ),
@@ -17086,6 +17164,21 @@ class _ArrangementSummarySurface extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  static String _workflowDecision(String? value) {
+    final decision = YorksV1ArrangementDecision.fromWireValue(value);
+    return decision == null
+        ? '—'
+        : yorksV1ArrangementDecisionCopy(decision).primary;
+  }
+
+  static String _workflowSource(String? value) {
+    final normalized = value?.trim();
+    if (normalized == null || normalized.isEmpty) return '—';
+    return yorksV1ArrangementSourceCopy(
+      YorksV1ArrangementSource.fromWireValue(normalized),
+    ).primary;
   }
 }
 

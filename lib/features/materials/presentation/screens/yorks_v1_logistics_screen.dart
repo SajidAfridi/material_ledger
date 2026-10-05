@@ -178,7 +178,7 @@ class YorksV1LogisticsScreen extends ConsumerWidget {
     // returns to the detail page. Receipt review is a later, independent
     // workflow fact and is not required for this refresh.
     ref.invalidate(yorksV1ReturnsDocumentsWorkspaceProvider(requestId));
-    ref.invalidate(yorksV1MaterialRequestDetailProvider(requestId));
+    yorksV1InvalidateMaterialRequestDetail(ref, requestId);
   }
 }
 
