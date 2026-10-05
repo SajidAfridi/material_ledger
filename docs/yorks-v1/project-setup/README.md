@@ -23,11 +23,15 @@ The later owner correction simplifies building and attachment controls and remov
 the Details information panel. [Setup controls and preceding staging evidence](SETUP_CONTROL_POLISH_2026-10-05.md)
 records the deployment preceding the multiple-draft candidate.
 
-The latest owner correction separates new setup from selected Resume and retains
+The earlier owner correction separates new setup from selected Resume and retains
 multiple local saved proposals. [Independent saved setups, preservation and release status](MULTIPLE_LOCAL_PROJECT_DRAFTS_2026-10-05.md)
 records the confirmed singleton cause, additive catalogue, guarded recovery,
-local verification and pending final staging evidence. Earlier discovery and
+local verification and staging evidence. Earlier discovery and
 acceptance reports retain their historical single-slot boundaries.
+
+The latest owner correction makes Resume setup acquire the chosen proposal
+directly and removes the extra Take over draft action. [Direct draft editing and verification](RESUME_DRAFT_EDITING_2026-10-05.md)
+records the entry policy, preserved writer fencing, recovery and release evidence.
 
 - [Requirements](registers/Requirements.csv)
 - [Acceptance catalogue](registers/Acceptance_Tests.csv)
@@ -46,5 +50,6 @@ acceptance reports retain their historical single-slot boundaries.
 - [Saved setup discovery and previous staging evidence](SAVED_DRAFT_DISCOVERY_2026-10-05.md)
 - [Setup controls and preceding staging evidence](SETUP_CONTROL_POLISH_2026-10-05.md)
 - [Independent saved setups and current release status](MULTIPLE_LOCAL_PROJECT_DRAFTS_2026-10-05.md)
+- [Direct draft editing and verification](RESUME_DRAFT_EDITING_2026-10-05.md)
 
 The source acceptance catalogue retains its original Not run status. Candidate evidence and unresolved gates are recorded separately in IMPLEMENTATION_EVIDENCE.md; source requirements must not be silently rewritten into passes.
