@@ -21,6 +21,7 @@ class YorksV1ProjectSetupJournalStore {
     this.projectId,
     this.restoreConfirmedFollowUps = true,
     this.updateLatestOperation = true,
+    this.preferLatestOperation = false,
   });
 
   final ProjectDraftAtomicStorage storage;
@@ -33,6 +34,10 @@ class YorksV1ProjectSetupJournalStore {
   final String? projectId;
   final bool restoreConfirmedFollowUps;
   final bool updateLatestOperation;
+
+  /// Explicit singleton recovery can follow its original unknown intent even
+  /// after a different proposal gains an exact acknowledged journal.
+  final bool preferLatestOperation;
   final YorksV1ProjectSetupOwnedTransaction atomicOwned;
 
   YorksV1ProjectSetupOperation? read() => _readFrom(storage.read);
@@ -50,6 +55,16 @@ class YorksV1ProjectSetupJournalStore {
     final key = next.draftId == draftId
         ? journalKey
         : '${journalKey.substring(0, journalKey.lastIndexOf(':journal:'))}:journal:${next.draftId}';
+    if (next.coreSucceeded) {
+      // Some adapters acknowledge staged writes sequentially. Make the
+      // confirmed result discoverable before its exact journal can hide the
+      // editable proposal, even if later retirement housekeeping fails.
+      retainCompletedOperation(
+        tx,
+        scopeKey: journalKey.substring(0, journalKey.lastIndexOf(':journal:')),
+        operation: next,
+      );
+    }
     tx.write(key, jsonEncode(next.toJson()));
     if (latestOperationKey != null && updateLatestOperation) {
       tx.write(latestOperationKey!, jsonEncode({'journal_key': key}));
@@ -58,11 +73,17 @@ class YorksV1ProjectSetupJournalStore {
   });
 
   YorksV1ProjectSetupOperation? _readFrom(String? Function(String) read) {
-    final current = _decode(read(journalKey), expectedDraftId: draftId);
-    if (current != null) return current;
+    if (!preferLatestOperation) {
+      final current = _decode(read(journalKey), expectedDraftId: draftId);
+      if (current != null) return current;
+    }
     final pointer = latestOperationKey == null
         ? null
         : read(latestOperationKey!);
+    if (preferLatestOperation && pointer == null) {
+      final current = _decode(read(journalKey), expectedDraftId: draftId);
+      if (current != null) return current;
+    }
     if (pointer == null) return null;
     final key = (jsonDecode(pointer) as Map)['journal_key'] as String;
     final prefix = journalKey.substring(0, journalKey.lastIndexOf(':journal:'));
@@ -92,9 +113,10 @@ class YorksV1ProjectSetupJournalStore {
   static String completedProjectKey(String scopeKey, String projectId) =>
       '$scopeKey:completed_project:$projectId';
 
-  /// Retains a discovery link before freeing the completed proposal slot. Each
-  /// exact journal stays independent, so a later project/edit cannot hide an
-  /// older pending file or activation intent by replacing the latest pointer.
+  /// Retains a discovery link before acknowledging the confirmed core or
+  /// freeing its proposal slot. Each exact journal stays independent, so a
+  /// later project/edit cannot hide an older pending file or activation intent
+  /// by replacing the latest pointer.
   static void retainCompletedOperation(
     ProjectDraftAtomicTransaction tx, {
     required String scopeKey,

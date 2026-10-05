@@ -27,7 +27,16 @@ import '../../../projects/presentation/screens/yorks_v1_project_legacy_flow_scre
 /// Stable route entry point. The V7 flow remains fail-closed behind its module
 /// flag while the legacy form stays available for production rollback.
 class EngineerCreateProjectScreen extends ConsumerWidget {
-  const EngineerCreateProjectScreen({super.key});
+  const EngineerCreateProjectScreen({
+    super.key,
+    this.resumeDraftId,
+    this.legacyRecovery = false,
+  });
+
+  /// Only explicit Resume links select a saved setup. A normal Create entry
+  /// has no ID and starts an independent device-local proposal.
+  final String? resumeDraftId;
+  final bool legacyRecovery;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -36,7 +45,10 @@ class EngineerCreateProjectScreen extends ConsumerWidget {
     // this legacy shell role as project authority.
     if (ref.watch(yorksV1FeatureFlagsProvider).projects) {
       return ref.watch(yorksV1FeatureFlagsProvider).projectSetup && kIsWeb
-          ? const YorksV1ProjectCreateFlowScreen()
+          ? YorksV1ProjectCreateFlowScreen(
+              resumeDraftId: resumeDraftId,
+              legacyRecovery: legacyRecovery,
+            )
           : const YorksV1LegacyProjectCreateFlowScreen();
     }
     if (ref.watch(nexusFeatureFlagsProvider).projects) {

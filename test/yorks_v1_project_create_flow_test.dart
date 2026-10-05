@@ -1415,7 +1415,11 @@ void main() {
           routes: [
             GoRoute(
               path: '/',
-              builder: (_, _) => const YorksV1ProjectCreateFlowScreen(),
+              builder: (_, _) => YorksV1ProjectCreateFlowScreen(
+                resumeDraftId: container
+                    .read(yorksV1ProjectSetupCreationDraftProvider(_authUserId))
+                    .draftId,
+              ),
             ),
             GoRoute(
               path: '/yorks/projects/:projectId',
@@ -1497,7 +1501,11 @@ void main() {
         routes: [
           GoRoute(
             path: '/',
-            builder: (_, _) => const YorksV1ProjectCreateFlowScreen(),
+            builder: (_, _) => YorksV1ProjectCreateFlowScreen(
+              resumeDraftId: container
+                  .read(yorksV1ProjectSetupCreationDraftProvider(_authUserId))
+                  .draftId,
+            ),
           ),
           GoRoute(
             path: '/yorks/projects',
@@ -1720,7 +1728,7 @@ void main() {
   );
 
   testWidgets(
-    'phone new setup leaves historical confirmed file recovery private and never replays it',
+    'phone Resume opens the known project and preserves its original file recovery',
     (tester) async {
       final bytes = Uint8List.fromList([1, 2, 3]);
       final hash = sha256.convert(bytes).toString();
@@ -1807,7 +1815,8 @@ void main() {
       expect(fresh.attachments, isEmpty);
       expect(fresh.currentStage, YorksV1ProjectCreationStage.projectDetails);
       expect(find.byType(YorksV1ProjectSetupCompletion), findsNothing);
-      expect(opened, isEmpty);
+      expect(opened, hasLength(1));
+      expect(opened.single.id, original.project!.id);
       expect(picker.selections, 0);
       expect(repository.receivedCreationInputs, hasLength(1));
       expect(preferences.getString(journalKey), originalJournal);
@@ -1831,7 +1840,8 @@ void main() {
       expect(find.byType(YorksV1ProjectSetupCompletion), findsNothing);
       expect(preferences.getString(journalKey), originalJournal);
       expect(repository.receivedCreationInputs, hasLength(1));
-      expect(opened, isEmpty);
+      expect(opened, hasLength(1));
+      expect(opened.single.id, original.project!.id);
       expect(picker.selections, 0);
       expect(tester.takeException(), isNull);
     },
@@ -3478,6 +3488,30 @@ Future<void> _pumpScreen(
           child: Directionality(textDirection: textDirection, child: child!),
         ),
         home: YorksV1ProjectCreateFlowScreen(
+          // Retained proposals select their exact ID. Only corrupt/unverified
+          // original storage uses the explicit legacy recovery route.
+          legacyRecovery:
+              editItem == null &&
+              container
+                      .read(
+                        yorksV1ProjectSetupCreationDraftProvider(_authUserId),
+                      )
+                      .storageState ==
+                  YorksV1ProjectDraftStorageState.recoveryRequired,
+          resumeDraftId:
+              editItem == null &&
+                  container
+                          .read(
+                            yorksV1ProjectSetupCreationDraftProvider(
+                              _authUserId,
+                            ),
+                          )
+                          .storageState !=
+                      YorksV1ProjectDraftStorageState.recoveryRequired
+              ? container
+                    .read(yorksV1ProjectSetupCreationDraftProvider(_authUserId))
+                    .draftId
+              : null,
           onProjectCreated: onProjectCreated,
           editItem: editItem,
           onProjectUpdated: onProjectUpdated,

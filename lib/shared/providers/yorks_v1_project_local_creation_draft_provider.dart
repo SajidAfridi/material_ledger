@@ -61,6 +61,8 @@ final yorksV1ProjectLocalCreationDraftProvider =
                   keys.any(
                     (changed) =>
                         changed == key ||
+                        changed == '$key:catalogue' ||
+                        changed.startsWith('$key:draft:') ||
                         changed == '$key:latest_operation' ||
                         changed.startsWith('$key:journal:') ||
                         changed == '$key:quarantine' ||
@@ -75,7 +77,9 @@ final yorksV1ProjectLocalCreationDraftProvider =
         });
       }
       try {
-        return YorksV1ProjectLocalCreationDraftRepository(storage).read(
+        return YorksV1ProjectLocalCreationDraftRepository(
+          storage,
+        ).readCatalogue(
           storageKey: key,
           ownerAuthUserId: owner,
           backendIdentity: backend,

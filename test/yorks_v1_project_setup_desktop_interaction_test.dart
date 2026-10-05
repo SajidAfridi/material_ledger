@@ -620,8 +620,10 @@ void main() {
         routes: [
           GoRoute(
             path: '/',
-            builder: (_, _) =>
-                YorksV1ProjectCreateFlowScreen(onProjectCreated: opened.add),
+            builder: (_, _) => YorksV1ProjectCreateFlowScreen(
+              resumeDraftId: fixture.draft.draftId,
+              onProjectCreated: opened.add,
+            ),
           ),
           GoRoute(
             path: '/yorks/projects',
@@ -951,14 +953,19 @@ Future<void> _pump(
         ),
         home:
             child ??
-            YorksV1ProjectCreateFlowScreen(onProjectCreated: onProjectCreated),
+            YorksV1ProjectCreateFlowScreen(
+              resumeDraftId: container
+                  .read(yorksV1ProjectSetupCreationDraftProvider(_owner))
+                  .draftId,
+              onProjectCreated: onProjectCreated,
+            ),
       ),
     ),
   );
   await tester.pumpAndSettle();
   addTearDown(() async {
     await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
+    await tester.pumpAndSettle();
   });
 }
 

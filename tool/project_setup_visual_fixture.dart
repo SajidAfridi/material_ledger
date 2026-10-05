@@ -5,6 +5,7 @@ import 'package:material_ledger/app/router.dart';
 import 'package:material_ledger/app/yorks_v1_workspace_shell.dart';
 import 'package:material_ledger/core/theme/app_theme.dart';
 import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_project_create_flow_screen.dart';
+import 'package:material_ledger/features/projects/presentation/widgets/yorks_v1_project_local_draft_section.dart';
 import 'package:material_ledger/shared/models/app_language.dart';
 import 'package:material_ledger/shared/models/app_user.dart';
 import 'package:material_ledger/shared/models/user_role.dart';
@@ -23,6 +24,7 @@ import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart
 import 'package:material_ledger/shared/providers/yorks_v1_project_creation_draft_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_project_team_directory_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_project_setup_navigation_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_project_local_creation_draft_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_workspace_status_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_permission_provider.dart';
@@ -225,16 +227,25 @@ Future<void> main() async {
   final router = GoRouter(
     initialLocation: stageIndex == 5
         ? '/yorks/projects/fixture-confirmed-project'
-        : RoutePaths.engineerCreateProject,
+        : Uri.base.queryParameters['fresh'] == 'true'
+        ? RoutePaths.engineerCreateProject
+        : RoutePaths.yorksV1ProjectSetupDraftPath(
+            container
+                .read(yorksV1ProjectSetupCreationDraftProvider(user.id))
+                .draftId,
+          ),
     routes: [
       GoRoute(
         path: RoutePaths.engineerCreateProject,
         onExit: (context, state) => container
             .read(yorksV1ProjectSetupNavigationGuardProvider)
             .canLeave(),
-        builder: (context, _) => YorksV1WorkspaceShell(
+        builder: (context, state) => YorksV1WorkspaceShell(
           featureOwnsBackNavigation: true,
-          child: const YorksV1ProjectCreateFlowScreen(),
+          child: YorksV1ProjectCreateFlowScreen(
+            resumeDraftId: state.uri.queryParameters['draft'],
+            legacyRecovery: state.uri.queryParameters['recovery'] == 'legacy',
+          ),
         ),
       ),
       GoRoute(
@@ -248,22 +259,44 @@ Future<void> main() async {
       GoRoute(
         path: RoutePaths.yorksV1Projects,
         builder: (context, _) => YorksV1WorkspaceShell(
-          child: Scaffold(
-            body: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('Local synthetic project setup fixture'),
-                  FilledButton(
-                    onPressed: () =>
-                        context.go(RoutePaths.engineerCreateProject),
-                    child: Text(
-                      YorksV1ProjectStrings.createProject.active(
-                        container.read(languageProvider),
+          child: Consumer(
+            builder: (context, ref, _) => Scaffold(
+              body: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('Local synthetic project setup fixture'),
+                    FilledButton(
+                      onPressed: () =>
+                          context.go(RoutePaths.engineerCreateProject),
+                      child: Text(
+                        YorksV1ProjectStrings.createProject.active(
+                          container.read(languageProvider),
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                    Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: YorksV1ProjectLocalDraftSection(
+                        draftState: ref.watch(
+                          yorksV1ProjectLocalCreationDraftProvider,
+                        ),
+                        language: ref.watch(languageProvider),
+                        scopeIdentity:
+                            'local-visual-fixture-$session:${user.id}',
+                        onResume: (id) => context.go(
+                          RoutePaths.yorksV1ProjectSetupDraftPath(id),
+                        ),
+                        onLegacyRecovery: () => context.go(
+                          RoutePaths.yorksV1ProjectSetupLegacyRecovery,
+                        ),
+                        onRetry: () => ref.invalidate(
+                          yorksV1ProjectLocalCreationDraftProvider,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

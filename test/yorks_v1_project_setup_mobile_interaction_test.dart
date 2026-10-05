@@ -216,6 +216,12 @@ void main() {
         ),
       );
       expect(fixture.repository.commandCalls, 0);
+      // Finish the bottom-scroll checkpoint while its listeners are mounted;
+      // testWidgets verifies pending timers before registered teardown hooks.
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
     });
   }
 
@@ -802,14 +808,20 @@ Future<void> _pump(
             child: child!,
           ),
         ),
-        home: child ?? const YorksV1ProjectCreateFlowScreen(),
+        home:
+            child ??
+            YorksV1ProjectCreateFlowScreen(
+              resumeDraftId: container
+                  .read(yorksV1ProjectSetupCreationDraftProvider(_owner))
+                  .draftId,
+            ),
       ),
     ),
   );
   await tester.pumpAndSettle();
   addTearDown(() async {
     await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
+    await tester.pumpAndSettle();
   });
 }
 

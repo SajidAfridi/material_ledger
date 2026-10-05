@@ -54,7 +54,8 @@ import '../../../company_overview/domain/company_analytics_models.dart';
 import '../../../materials/presentation/yorks_v1_feature_action_access.dart';
 import '../../../materials/presentation/screens/yorks_v1_material_request_screens.dart';
 import '../../../accounts/presentation/screens/yorks_accounts_screens.dart';
-import '../widgets/yorks_v1_project_local_draft_card.dart';
+import '../widgets/yorks_v1_project_local_draft_section.dart';
+import '../../../../shared/providers/yorks_v1_project_creation_draft_provider.dart';
 
 /// The normalized, R35-aligned project portfolio.
 ///
@@ -3481,23 +3482,44 @@ class _YorksV1ProjectsScreenState extends ConsumerState<YorksV1ProjectsScreen> {
       final owner = ref.watch(yorksV1AuthUserIdProvider);
       if (owner != null && owner.trim().isNotEmpty) {
         final draftState = ref.watch(yorksV1ProjectLocalCreationDraftProvider);
-        if (draftState.status != YorksV1ProjectLocalCreationDraftStatus.empty) {
-          savedDraft = YorksV1ProjectLocalDraftCard(
+        if (draftState.status != YorksV1ProjectLocalCreationDraftStatus.empty ||
+            draftState.summaries.isNotEmpty ||
+            draftState.recoveryDraftIds.isNotEmpty ||
+            draftState.hasLegacyRecovery) {
+          final backend = ref.watch(yorksV1ProjectDraftBackendIdentityProvider);
+          bool canOpenSavedSetup() {
+            if (ref.read(yorksV1AuthUserIdProvider) != owner ||
+                ref.read(yorksV1ProjectDraftBackendIdentityProvider) !=
+                    backend ||
+                !ref.read(yorksV1FeatureFlagsProvider).projectSetup) {
+              return false;
+            }
+            final currentRole = ref.read(yorksV1CurrentRoleProvider);
+            final access = yorksV1FeatureActionAccess(
+              ref.read(yorksV1CurrentPermissionSnapshotProvider),
+              YorksV1CapabilityKeys.projectsCreate,
+              legacyAllowed: currentRole?.canCreateProject == true,
+            );
+            return currentRole?.canCreateProject == true && access.canWrite;
+          }
+
+          savedDraft = YorksV1ProjectLocalDraftSection(
             draftState: draftState,
             language: language,
-            onResume: () {
-              if (ref.read(yorksV1AuthUserIdProvider) != owner ||
-                  !ref.read(yorksV1FeatureFlagsProvider).projectSetup) {
-                return;
+            scopeIdentity: '$owner|$backend',
+            onResume: (draftId) {
+              if (canOpenSavedSetup()) {
+                context.push(RoutePaths.yorksV1ProjectSetupDraftPath(draftId));
               }
-              final currentRole = ref.read(yorksV1CurrentRoleProvider);
-              final access = yorksV1FeatureActionAccess(
-                ref.read(yorksV1CurrentPermissionSnapshotProvider),
-                YorksV1CapabilityKeys.projectsCreate,
-                legacyAllowed: currentRole?.canCreateProject == true,
-              );
-              if (currentRole?.canCreateProject == true && access.canWrite) {
-                onCreate?.call();
+            },
+            onLegacyRecovery: () {
+              if (canOpenSavedSetup()) {
+                context.push(RoutePaths.yorksV1ProjectSetupLegacyRecovery);
+              }
+            },
+            onRetry: () {
+              if (canOpenSavedSetup()) {
+                ref.invalidate(yorksV1ProjectLocalCreationDraftProvider);
               }
             },
           );

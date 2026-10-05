@@ -17,11 +17,17 @@ class YorksV1ProjectLocalDraftCard extends StatelessWidget {
     required this.draftState,
     required this.language,
     required this.onResume,
+    this.draftId,
+    this.entryKey,
+    this.resumeLabel,
   });
 
   final YorksV1ProjectLocalCreationDraftState draftState;
   final AppLanguage language;
-  final VoidCallback onResume;
+  final VoidCallback? onResume;
+  final String? draftId;
+  final String? entryKey;
+  final TranslatableString? resumeLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -29,6 +35,7 @@ class YorksV1ProjectLocalDraftCard extends StatelessWidget {
       return const SizedBox.shrink();
     }
     final summary = draftState.summary;
+    final identity = entryKey ?? summary?.draftId ?? draftId ?? 'notice';
     final saved = summary != null;
     final title = saved
         ? YorksV1ProjectLocalDraftStrings.title
@@ -47,7 +54,7 @@ class YorksV1ProjectLocalDraftCard extends StatelessWidget {
     return Directionality(
       textDirection: language.isRtl ? TextDirection.rtl : TextDirection.ltr,
       child: Material(
-        key: const ValueKey('yorks-v1-project-saved-local-draft'),
+        key: ValueKey('yorks-v1-project-saved-local-draft-$identity'),
         color: AppColors.surfaceContainerLowest,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
@@ -141,7 +148,7 @@ class YorksV1ProjectLocalDraftCard extends StatelessWidget {
                 ],
               );
               final action = OutlinedButton.icon(
-                key: const ValueKey('yorks-v1-project-resume-local-draft'),
+                key: ValueKey('yorks-v1-project-resume-local-draft-$identity'),
                 style: const ButtonStyle(
                   minimumSize: WidgetStatePropertyAll(Size(44, 44)),
                   visualDensity: VisualDensity.standard,
@@ -150,9 +157,11 @@ class YorksV1ProjectLocalDraftCard extends StatelessWidget {
                 onPressed: onResume,
                 icon: const Icon(Icons.arrow_forward_rounded, size: 18),
                 label: Text(
-                  YorksV1ProjectLocalDraftStrings.resume.active(language),
+                  (resumeLabel ?? YorksV1ProjectLocalDraftStrings.resume)
+                      .active(language),
                 ),
               );
+              if (onResume == null) return details;
               if (stacked) {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,

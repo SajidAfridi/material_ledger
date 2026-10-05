@@ -13,6 +13,7 @@ import 'package:material_ledger/shared/controllers/yorks_v1_project_creation_dra
 import 'package:material_ledger/shared/models/yorks_v1_project_creation_draft.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_project_draft_storage_web.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_project_draft_store.dart';
+import 'package:material_ledger/shared/repositories/yorks_v1_project_creation_draft_catalogue.dart';
 
 void main() {
   var sequence = 0;
@@ -53,6 +54,65 @@ void main() {
     ]);
     expect(first.read(key), '40');
   });
+
+  test(
+    'independent browser adapters retain concurrent draft IDs and fence only the selected proposal',
+    () async {
+      final root = '$prefix-multiple-create';
+      final catalogue = YorksV1ProjectCreationDraftCatalogue(
+        scopeKey: root,
+        ownerAuthUserId: 'synthetic-owner',
+        backendIdentity: 'synthetic-backend',
+      );
+      YorksV1ProjectCreationDraftController selected(
+        String id, {
+        bool resume = false,
+      }) => YorksV1ProjectCreationDraftController(
+        ownerAuthUserId: 'synthetic-owner',
+        backendIdentity: 'synthetic-backend',
+        storageKey: catalogue.recordKey(id),
+        storage: BrowserProjectDraftStorage(),
+        idempotencyKeyFactory: () => '$prefix-${++sequence}',
+        initialDraftId: id,
+        requireExistingRecord: resume,
+        catalogue: catalogue,
+        journalScopeKey: root,
+      );
+      final writers = [for (var i = 0; i < 8; i++) selected('proposal-$i')];
+      for (final current in writers) {
+        addTearDown(current.dispose);
+      }
+      await Future.wait(writers.map((current) => current.initialized));
+      expect(
+        catalogue
+            .ids(BrowserProjectDraftStorage().read(catalogue.indexKey))
+            .toSet(),
+        {for (var i = 0; i < 8; i++) 'proposal-$i'},
+      );
+      await writers[0].save(writers[0].state.copyWith(name: 'Original A'));
+      await writers[1].save(writers[1].state.copyWith(name: 'Independent B'));
+      final exactB = BrowserProjectDraftStorage().read(writers[1].storageKey);
+      final secondA = selected('proposal-0', resume: true);
+      addTearDown(secondA.dispose);
+      await secondA.initialized;
+      expect(
+        secondA.state.storageState,
+        YorksV1ProjectDraftStorageState.ownedElsewhere,
+      );
+      await secondA.takeOver();
+      await secondA.save(secondA.state.copyWith(name: 'Selected A newest'));
+      await expectLater(
+        writers[0].save(writers[0].state.copyWith(name: 'Stale A')),
+        throwsA(isA<ProjectDraftStorageException>()),
+      );
+      expect(BrowserProjectDraftStorage().read(writers[1].storageKey), exactB);
+      expect(writers[1].writable, true);
+      await writers[1].save(
+        writers[1].state.copyWith(name: 'B still writable'),
+      );
+      expect(secondA.state.name, 'Selected A newest');
+    },
+  );
 
   test(
     'browser refresh hints are asynchronous and emitted only for changed commits',

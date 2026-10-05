@@ -206,6 +206,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ref.watch(yorksV1FeatureFlagsProvider).projectSetup && kIsWeb,
     onLeaveYorksProjectSetup: () =>
         ref.read(yorksV1ProjectSetupNavigationGuardProvider).canLeave(),
+    onSelectYorksProjectSetup: (draftId, legacyRecovery) => ref
+        .read(yorksV1ProjectSetupNavigationGuardProvider)
+        .canSelectCreation(draftId, legacyRecovery: legacyRecovery),
     yorksV1BoqEnabled: yorksV1BoqEnabled,
     yorksV1RequestsEnabled: yorksV1RequestsEnabled,
     yorksV1ArrangementEnabled: yorksV1ArrangementEnabled,

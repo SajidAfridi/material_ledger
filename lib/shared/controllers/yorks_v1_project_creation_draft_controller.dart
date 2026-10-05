@@ -7,6 +7,7 @@ import '../models/analytics_event.dart';
 import '../models/yorks_v1_domain_error.dart';
 import '../models/yorks_v1_project_creation_draft.dart';
 import '../models/yorks_v1_project_setup_operation.dart';
+import '../repositories/yorks_v1_project_creation_draft_catalogue.dart';
 import '../repositories/yorks_v1_project_draft_store.dart';
 import '../repositories/yorks_v1_project_setup_journal_store.dart';
 import '../services/analytics_service.dart';
@@ -24,6 +25,10 @@ class YorksV1ProjectCreationDraftController
     YorksV1ProjectDraftMode mode = YorksV1ProjectDraftMode.create,
     String? projectId,
     String? legacyRaw,
+    String? initialDraftId,
+    bool requireExistingRecord = false,
+    this.catalogue,
+    String? journalScopeKey,
     AnalyticsService analytics = const NoopAnalyticsService(),
   }) : _ownerAuthUserId = ownerAuthUserId,
        _backendIdentity = backendIdentity,
@@ -32,6 +37,9 @@ class YorksV1ProjectCreationDraftController
        _writerId = idempotencyKeyFactory(),
        _analytics = analytics,
        _legacyRaw = legacyRaw,
+       _selectedDraftId = initialDraftId,
+       _requireExistingRecord = requireExistingRecord,
+       journalScopeKey = journalScopeKey ?? storageKey,
        super(
          _restoreOrEmpty(
            ownerAuthUserId: ownerAuthUserId,
@@ -42,6 +50,8 @@ class YorksV1ProjectCreationDraftController
            storageKey: storageKey,
            idempotencyKeyFactory: idempotencyKeyFactory,
            legacyRaw: legacyRaw,
+           initialDraftId: initialDraftId,
+           requireExistingRecord: requireExistingRecord,
          ),
        ) {
     _initialization = _claim(legacyRaw: legacyRaw);
@@ -54,7 +64,15 @@ class YorksV1ProjectCreationDraftController
   final String _writerId;
   final AnalyticsService _analytics;
   final String? _legacyRaw;
+  final String? _selectedDraftId;
+  final bool _requireExistingRecord;
+  final YorksV1ProjectCreationDraftCatalogue? catalogue;
   final String storageKey;
+
+  /// Original command journals and completed-project locators never move when
+  /// the editable envelopes become individually addressable.
+  final String journalScopeKey;
+  String get _lockKey => catalogue?.scopeKey ?? storageKey;
   late final Future<void> _initialization;
   YorksV1ProjectCreationDraft? _pending;
   Future<void>? _draining;
@@ -80,6 +98,8 @@ class YorksV1ProjectCreationDraftController
     required String storageKey,
     required String Function() idempotencyKeyFactory,
     required String? legacyRaw,
+    required String? initialDraftId,
+    required bool requireExistingRecord,
   }) {
     final empty = YorksV1ProjectCreationDraft.empty(
       ownerAuthUserId: ownerAuthUserId,
@@ -87,10 +107,15 @@ class YorksV1ProjectCreationDraftController
       backendIdentity: backendIdentity,
       mode: mode,
       projectId: projectId,
-    );
+    ).copyWith(draftId: initialDraftId);
     try {
       final raw = storage.read(storageKey);
       if (raw == null) {
+        if (requireExistingRecord) {
+          return empty.copyWith(
+            storageState: YorksV1ProjectDraftStorageState.recoveryRequired,
+          );
+        }
         // Old keys contain no verified backend provenance. Preserve them for
         // explicit recovery; assigning them to the active backend could leak a
         // staging proposal into production.
@@ -105,6 +130,11 @@ class YorksV1ProjectCreationDraftController
       }
       final record = _record(raw);
       if (record['retired'] == true) {
+        if (requireExistingRecord || initialDraftId != null) {
+          return empty.copyWith(
+            storageState: YorksV1ProjectDraftStorageState.recoveryRequired,
+          );
+        }
         return empty.copyWith(
           writerEpoch: (record['writerEpoch'] as int? ?? 0) + 1,
           storageState: YorksV1ProjectDraftStorageState.initializing,
@@ -114,7 +144,8 @@ class YorksV1ProjectCreationDraftController
       if (draft.ownerAuthUserId != ownerAuthUserId ||
           draft.backendIdentity != backendIdentity ||
           draft.mode != mode ||
-          draft.projectId != projectId) {
+          draft.projectId != projectId ||
+          initialDraftId != null && draft.draftId != initialDraftId) {
         throw const FormatException('Project draft context mismatch');
       }
       return draft.copyWith(
@@ -153,7 +184,7 @@ class YorksV1ProjectCreationDraftController
     try {
       if (state.storageState ==
           YorksV1ProjectDraftStorageState.recoveryRequired) {
-        await _storage.transaction(storageKey, (tx) {
+        await _storage.transaction(_lockKey, (tx) {
           final raw = tx.read(storageKey) ?? legacyRaw;
           if (raw != null) {
             // Raw data and the original key are retained. No parse/coercion is
@@ -171,13 +202,23 @@ class YorksV1ProjectCreationDraftController
         });
         return;
       }
-      final claimed = await _storage.transaction(storageKey, (tx) {
+      final claimed = await _storage.transaction(_lockKey, (tx) {
         if (_disposed) {
           throw const ProjectDraftStorageException('controller_disposed');
         }
         final raw = tx.read(storageKey);
+        if (_requireExistingRecord && raw == null) {
+          throw const ProjectDraftStorageException('selected_draft_missing');
+        }
         final record = raw == null ? <String, dynamic>{} : _record(raw);
         final retained = raw == null ? null : _draftFromRecord(record);
+        if (_selectedDraftId != null &&
+            retained != null &&
+            !(recoveringFailedClaim && _pending != null) &&
+            (retained.draftId != _selectedDraftId ||
+                record['retired'] == true)) {
+          throw const ProjectDraftStorageException('selected_draft_changed');
+        }
         if (retained != null &&
             (retained.ownerAuthUserId != _ownerAuthUserId ||
                 retained.backendIdentity != _backendIdentity ||
@@ -232,6 +273,13 @@ class YorksV1ProjectCreationDraftController
             ? _draftFromRecord(record)
             : state;
         final draft = latest.copyWith(writerEpoch: epoch + 1);
+        // Index first: adapters acknowledge staged writes sequentially. A
+        // failed first-envelope commit then leaves a discoverable recovery ID,
+        // never an acknowledged but invisible proposal. Existing IDs/unknown
+        // index fields are retained under this same owner/backend lock.
+        if (storageKey != catalogue?.scopeKey) {
+          catalogue?.register(tx, draft.draftId);
+        }
         if (record['retired'] == true) {
           tx.write(
             '$storageKey:retired:${_draftFromRecord(record).draftId}',
@@ -259,7 +307,7 @@ class YorksV1ProjectCreationDraftController
             quarantineReason != null &&
             (state.draftId != preserved.draftId ||
                 state.revision != preserved.revision)) {
-          preserved = await _storage.transaction(storageKey, (tx) {
+          preserved = await _storage.transaction(_lockKey, (tx) {
             if (_disposed) {
               throw const ProjectDraftStorageException('controller_disposed');
             }
@@ -317,7 +365,7 @@ class YorksV1ProjectCreationDraftController
     T Function(ProjectDraftAtomicTransaction tx) work,
   ) async {
     await _initialization;
-    return _storage.transaction(storageKey, (tx) {
+    return _storage.transaction(_lockKey, (tx) {
       final raw = tx.read(storageKey);
       if (raw == null) {
         throw const ProjectDraftStorageException('owner_missing');
@@ -333,6 +381,9 @@ class YorksV1ProjectCreationDraftController
           );
         }
         throw const ProjectDraftStorageException('writer_fenced');
+      }
+      if (storageKey != catalogue?.scopeKey) {
+        catalogue?.register(tx, state.draftId);
       }
       return work(tx);
     });
@@ -587,7 +638,7 @@ class YorksV1ProjectCreationDraftController
       // its historical tombstone then still fences the old writer. A new claim
       // copies the retired envelope before reusing this slot.
       tx.write(storageKey, tombstone);
-      tx.write('$storageKey:retired:${state.draftId}', tombstone);
+      tx.write('$journalScopeKey:retired:${state.draftId}', tombstone);
     });
   }
 
@@ -608,7 +659,7 @@ class YorksV1ProjectCreationDraftController
       throw const ProjectDraftStorageException('confirmed_core_scope_mismatch');
     }
     await flush();
-    return _storage.transaction(storageKey, (tx) {
+    return _storage.transaction(_lockKey, (tx) {
       if (_disposed) {
         throw const ProjectDraftStorageException('controller_disposed');
       }
@@ -622,7 +673,9 @@ class YorksV1ProjectCreationDraftController
           _draftFromRecord(record).draftId != state.draftId) {
         throw const ProjectDraftStorageException('writer_fenced');
       }
-      final journalRaw = tx.read('$storageKey:journal:${operation.draftId}');
+      final journalRaw = tx.read(
+        '$journalScopeKey:journal:${operation.draftId}',
+      );
       if (journalRaw == null) {
         throw const ProjectDraftStorageException(
           'confirmed_core_not_acknowledged',
@@ -655,7 +708,7 @@ class YorksV1ProjectCreationDraftController
       // before the pending manifest has a project-scoped recovery locator.
       YorksV1ProjectSetupJournalStore.retainCompletedOperation(
         tx,
-        scopeKey: storageKey,
+        scopeKey: journalScopeKey,
         operation: persisted,
       );
       if (!matchingProposal) {
@@ -673,7 +726,7 @@ class YorksV1ProjectCreationDraftController
               'retiredAt': DateTime.now().toUtc().toIso8601String(),
             });
       tx.write(storageKey, tombstone);
-      tx.write('$storageKey:retired:${operation.draftId}', tombstone);
+      tx.write('$journalScopeKey:retired:${operation.draftId}', tombstone);
       return true;
     });
   }
@@ -681,6 +734,14 @@ class YorksV1ProjectCreationDraftController
   Future<void> discard() async {
     await retire(resultProjectId: 'explicit_discard');
     if (_disposed) return;
+    if (_selectedDraftId != null) {
+      // A selected URL keeps its identity. Explicit discard retires that
+      // identity; a separate fresh entry allocates the next proposal.
+      state = state.copyWith(
+        storageState: YorksV1ProjectDraftStorageState.recoveryRequired,
+      );
+      return;
+    }
     state = YorksV1ProjectCreationDraft.empty(
       ownerAuthUserId: _ownerAuthUserId,
       creationIdempotencyKey: _idempotencyKeyFactory(),
@@ -719,7 +780,7 @@ class YorksV1ProjectCreationDraftController
     _waiters.clear();
     unawaited(
       _storage
-          .transaction(storageKey, (tx) {
+          .transaction(_lockKey, (tx) {
             final raw = tx.read(storageKey);
             if (raw == null) return;
             final record = _record(raw);

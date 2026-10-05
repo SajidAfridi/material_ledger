@@ -17,6 +17,7 @@ import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_
 import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_projects_screen.dart';
 import 'package:material_ledger/shared/controllers/yorks_v1_project_creation_draft_controller.dart';
 import 'package:material_ledger/shared/models/app_language.dart';
+import 'package:material_ledger/shared/models/user_role.dart';
 import 'package:material_ledger/shared/models/yorks_v1_document.dart';
 import 'package:material_ledger/shared/models/yorks_v1_feature_flags.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project.dart';
@@ -58,8 +59,6 @@ const _searchKey = ValueKey('project-setup-workspace-search');
 const _drawerKey = ValueKey('yorks-workspace-navigation-drawer');
 const _sidebarToggleKey = ValueKey('yorks-workspace-sidebar-toggle');
 const _saveDraftKey = ValueKey('project-setup-save-draft');
-const _savedLocalDraftKey = ValueKey('yorks-v1-project-saved-local-draft');
-const _resumeLocalDraftKey = ValueKey('yorks-v1-project-resume-local-draft');
 const _engineerCapabilities = <String>{
   YorksV1CapabilityKeys.projectsView,
   YorksV1CapabilityKeys.projectsCreate,
@@ -204,7 +203,11 @@ void main() {
           );
         }
         expect(
-          fixture.container.read(yorksNavigationHistoryProvider).locations,
+          fixture.container
+              .read(yorksNavigationHistoryProvider)
+              .locations
+              .map((location) => Uri.parse(location).path)
+              .toList(),
           [RoutePaths.yorksV1Projects, RoutePaths.engineerCreateProject],
         );
         expect(fixture.commands.calls, 0);
@@ -241,7 +244,7 @@ void main() {
       (tester) async {
         final fixture = await _pumpWorkspace(tester, size: size);
         final originalDraftId = fixture.container
-            .read(yorksV1ProjectSetupCreationDraftProvider(_owner))
+            .read(_activeProvider(fixture))
             .draftId;
         const proposedName =
             'Unpublished proposal preserved through navigation';
@@ -299,17 +302,19 @@ void main() {
         );
         await tester.pumpAndSettle();
         _expectPortfolio(fixture);
-        final draft = fixture.container.read(
-          yorksV1ProjectSetupCreationDraftProvider(_owner),
-        );
+        final draft = fixture.container.read(_activeProvider(fixture));
         expect(draft.name, proposedName);
         expect(draft.storageState, YorksV1ProjectDraftStorageState.saved);
         expect(draft.acknowledgedRevision, draft.revision);
 
-        await _openCreateProject(tester);
+        await _resumeDraft(tester, originalDraftId);
         _expectResumedDraft(tester, fixture, originalDraftId, proposedName);
         expect(
-          fixture.container.read(yorksNavigationHistoryProvider).locations,
+          fixture.container
+              .read(yorksNavigationHistoryProvider)
+              .locations
+              .map((location) => Uri.parse(location).path)
+              .toList(),
           [
             RoutePaths.engineerCreateProject,
             RoutePaths.yorksV1Projects,
@@ -329,10 +334,10 @@ void main() {
           size: size,
           initialLocation: RoutePaths.yorksV1Projects,
         );
-        expect(find.byKey(_savedLocalDraftKey), findsNothing);
+        expect(_allDraftCards(), findsNothing);
         await _openCreateProject(tester);
         final originalDraftId = fixture.container
-            .read(yorksV1ProjectSetupCreationDraftProvider(_owner))
+            .read(_activeProvider(fixture))
             .draftId;
         const proposedName = 'Explicitly saved inside Yorks workspace';
         const proposedReference = 'YRA-WORKSPACE-LOCAL';
@@ -347,24 +352,20 @@ void main() {
         await tester.ensureVisible(find.byKey(_saveDraftKey));
         await tester.pumpAndSettle();
         expect(find.byKey(_saveDraftKey).hitTestable(), findsOneWidget);
+        await tester.ensureVisible(find.byKey(_saveDraftKey));
+        await tester.pumpAndSettle();
         await tester.tap(find.byKey(_saveDraftKey));
         await tester.pumpAndSettle();
-        final saved = fixture.container.read(
-          yorksV1ProjectSetupCreationDraftProvider(_owner),
-        );
+        final saved = fixture.container.read(_activeProvider(fixture));
         expect(saved.storageState, YorksV1ProjectDraftStorageState.saved);
         expect(saved.acknowledgedRevision, saved.revision);
         expect(
           find.text(YorksV1ProjectStrings.draftSaved.primary),
           findsOneWidget,
         );
-        final storageKey = yorksV1ProjectDraftStorageKey(
-          backendIdentity: fixture.container.read(
-            yorksV1ProjectDraftBackendIdentityProvider,
-          ),
-          ownerAuthUserId: _owner,
-          mode: YorksV1ProjectDraftMode.create,
-        );
+        final storageKey = fixture.container
+            .read(_activeProvider(fixture).notifier)
+            .storageKey;
         final stored = fixture.preferences.getString(storageKey);
         expect(stored, isNotNull);
         final envelope = jsonDecode(stored!) as Map<String, dynamic>;
@@ -387,7 +388,7 @@ void main() {
           findsNothing,
         );
         _expectPortfolio(fixture);
-        final localCard = find.byKey(_savedLocalDraftKey);
+        final localCard = _allDraftCards();
         expect(localCard, findsOneWidget);
         expect(
           find.descendant(
@@ -412,7 +413,7 @@ void main() {
           ),
           findsOneWidget,
         );
-        final resume = find.byKey(_resumeLocalDraftKey);
+        final resume = _allDraftResumes();
         expect(resume, findsOneWidget);
         expect(tester.getSize(resume).height, greaterThanOrEqualTo(44));
         expect(tester.getSize(resume).width, greaterThanOrEqualTo(44));
@@ -426,9 +427,7 @@ void main() {
         await tester.pumpAndSettle();
         _expectResumedDraft(tester, fixture, originalDraftId, proposedName);
         expect(
-          fixture.container
-              .read(yorksV1ProjectSetupCreationDraftProvider(_owner))
-              .reference,
+          fixture.container.read(_activeProvider(fixture)).reference,
           proposedReference,
         );
         expect(fixture.commands.calls, 0);
@@ -437,6 +436,394 @@ void main() {
     );
   }
 
+  for (final size in [const Size(1536, 1024), const Size(360, 800)]) {
+    testWidgets(
+      '${size.width} saved A and new B stay independent and explicitly resumable',
+      (tester) async {
+        final fixture = await _pumpWorkspace(
+          tester,
+          size: size,
+          initialLocation: RoutePaths.yorksV1Projects,
+        );
+        await _openCreateProject(tester);
+        final aProvider = _activeProvider(fixture);
+        final aWriter = fixture.container.read(aProvider.notifier);
+        final aId = fixture.container.read(aProvider).draftId;
+        await tester.enterText(
+          find.byKey(const ValueKey('yorks-v1-project-reference')),
+          'LOCAL-A',
+        );
+        await tester.enterText(
+          find.byKey(const ValueKey('yorks-v1-project-name')),
+          'Saved project Alpha',
+        );
+        final date = find.byKey(
+          ValueKey(
+            'yorks-v1-project-date-${YorksV1ProjectStrings.startDate.en}',
+          ),
+        );
+        await tester.ensureVisible(date);
+        await tester.enterText(date, '12/');
+        await _tapSaveDraft(tester);
+        await aWriter.save(
+          fixture.container
+              .read(aProvider)
+              .copyWith(
+                attachments: const [
+                  YorksV1ProjectAttachmentInput(
+                    localId: 'alpha-local-file',
+                    fileName: 'alpha-plan.pdf',
+                    mimeType: 'application/pdf',
+                    sizeBytes: 3,
+                    contentHash: 'alpha-exact-hash',
+                    categoryKey: 'drawing',
+                  ),
+                ],
+              ),
+        );
+        await tester.pumpAndSettle();
+        await _tapSaveDraft(tester);
+        expect(fixture.container.read(aProvider).isAcknowledged, true);
+        await tester.tap(
+          find.text(YorksV1ProjectSetupShellStrings.returnToProjects.primary),
+        );
+        await tester.pumpAndSettle();
+        _expectPortfolio(fixture);
+        expect(_draftCard(aId), findsOneWidget);
+        final exactA = fixture.preferences.getString(aWriter.storageKey);
+
+        await _openCreateProject(tester);
+        final bProvider = _activeProvider(fixture);
+        final bId = fixture.container.read(bProvider).draftId;
+        final b = fixture.container.read(bProvider);
+        expect(bId, isNot(aId));
+        expect(
+          b.creationIdempotencyKey,
+          isNot(fixture.container.read(aProvider).creationIdempotencyKey),
+        );
+        expect(b.reference, isEmpty);
+        expect(b.name, isEmpty);
+        expect(b.notes, isNull);
+        expect(b.attachments, isEmpty);
+        expect(b.buildings, isEmpty);
+        expect(b.rawEditorState['dateStartText'] ?? '', isEmpty);
+        expect(fixture.preferences.getString(aWriter.storageKey), exactA);
+        for (final field in [
+          'yorks-v1-project-reference',
+          'yorks-v1-project-name',
+        ]) {
+          final input = tester.widget<EditableText>(
+            find.descendant(
+              of: find.byKey(ValueKey(field)),
+              matching: find.byType(EditableText),
+            ),
+          );
+          expect(input.controller.text, isEmpty);
+        }
+        expect(
+          fixture
+              .router
+              .routeInformationProvider
+              .value
+              .uri
+              .queryParameters['draft'],
+          bId,
+        );
+        // The URL identifies this exact proposal. Independent restoration is
+        // exercised by the storage/provider tests and live browser verification.
+        expect(fixture.container.read(_activeProvider(fixture)).draftId, bId);
+        await tester.enterText(
+          find.byKey(const ValueKey('yorks-v1-project-reference')),
+          'LOCAL-B',
+        );
+        await tester.enterText(
+          find.byKey(const ValueKey('yorks-v1-project-name')),
+          'Saved project Beta',
+        );
+        await _tapSaveDraft(tester);
+        await tester.tap(
+          find.text(YorksV1ProjectSetupShellStrings.returnToProjects.primary),
+        );
+        await tester.pumpAndSettle();
+        _expectPortfolio(fixture);
+        expect(_allDraftCards(), findsNWidgets(2));
+        expect(_draftCard(aId), findsOneWidget);
+        expect(_draftCard(bId), findsOneWidget);
+        expect(fixture.preferences.getString(aWriter.storageKey), exactA);
+
+        await _resumeDraft(tester, aId);
+        _expectResumedDraft(tester, fixture, aId, 'Saved project Alpha');
+        final resumedA = fixture.container.read(_activeProvider(fixture));
+        expect(resumedA.reference, 'LOCAL-A');
+        expect(resumedA.rawEditorState['dateStartText'], '12/');
+        expect(resumedA.attachments.single.localId, 'alpha-local-file');
+        expect(resumedA.attachments.single.contentHash, 'alpha-exact-hash');
+        expect(
+          resumedA.attachments.single.category,
+          YorksV1ProjectAttachmentCategory.drawing,
+        );
+        await _tapSaveDraft(tester);
+        await tester.tap(
+          find.text(YorksV1ProjectSetupShellStrings.returnToProjects.primary),
+        );
+        await tester.pumpAndSettle();
+        expect(_allDraftCards(), findsNWidgets(2));
+        await _resumeDraft(tester, bId);
+        _expectResumedDraft(tester, fixture, bId, 'Saved project Beta');
+        final resumedB = fixture.container.read(_activeProvider(fixture));
+        expect(resumedB.reference, 'LOCAL-B');
+        expect(resumedB.attachments, isEmpty);
+        expect(resumedB.rawEditorState['dateStartText'] ?? '', isEmpty);
+        expect(fixture.commands.calls, 0);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets(
+    'canonical same-ID anchor retains the mounted editor and its input controllers',
+    (tester) async {
+      final fixture = await _pumpWorkspace(tester, settle: false);
+      final feature = find.byType(YorksV1ProjectCreateFlowScreen);
+      final originalState = tester.state(feature);
+      final name = find.byKey(const ValueKey('yorks-v1-project-name'));
+      final originalController = tester
+          .widget<EditableText>(
+            find.descendant(of: name, matching: find.byType(EditableText)),
+          )
+          .controller;
+      await _settleFreshAnchor(tester);
+      expect(tester.state(feature), same(originalState));
+      expect(
+        tester
+            .widget<EditableText>(
+              find.descendant(of: name, matching: find.byType(EditableText)),
+            )
+            .controller,
+        same(originalController),
+      );
+      final aId = fixture.container.read(_activeProvider(fixture)).draftId;
+      expect(
+        fixture
+            .router
+            .routeInformationProvider
+            .value
+            .uri
+            .queryParameters['draft'],
+        aId,
+      );
+      await tester.enterText(name, 'Retained editor Alpha');
+      await _tapSaveDraft(tester);
+      await tester.tap(
+        find.text(YorksV1ProjectSetupShellStrings.returnToProjects.primary),
+      );
+      await tester.pumpAndSettle();
+      await _openCreateProject(tester);
+      expect(tester.state(feature), isNot(same(originalState)));
+      expect(
+        fixture.container.read(_activeProvider(fixture)).draftId,
+        isNot(aId),
+      );
+      expect(
+        tester
+            .widget<EditableText>(
+              find.descendant(of: name, matching: find.byType(EditableText)),
+            )
+            .controller
+            .text,
+        isEmpty,
+      );
+      expect(fixture.commands.calls, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'captured A input and category callbacks cannot write after B opens',
+    (tester) async {
+      final aContext = YorksV1ProjectCreationDraftContext(
+        ownerAuthUserId: _owner,
+        draftId: 'callback-alpha',
+        entry: YorksV1ProjectCreationDraftEntry.newProposal,
+      );
+      final aProvider = yorksV1ProjectSetupCreationDraftByIdProvider(aContext);
+      final fixture = await _pumpWorkspace(
+        tester,
+        initialLocation: RoutePaths.yorksV1ProjectSetupDraftPath(
+          aContext.draftId,
+        ),
+        seed: (container, preferences) async {
+          final writer = container.read(aProvider.notifier);
+          await writer.initialized;
+          await writer.save(
+            writer.state.copyWith(
+              reference: 'CALLBACK-A',
+              name: 'Captured Alpha',
+              visitedStages: YorksV1ProjectCreationStage.values.toSet(),
+              attachments: const [
+                YorksV1ProjectAttachmentInput(
+                  localId: 'callback-file',
+                  fileName: 'alpha.pdf',
+                  mimeType: 'application/pdf',
+                  sizeBytes: 3,
+                ),
+              ],
+            ),
+          );
+        },
+      );
+      final nameField = find
+          .ancestor(
+            of: find.descendant(
+              of: find.byKey(const ValueKey('yorks-v1-project-name')),
+              matching: find.byType(EditableText),
+            ),
+            matching: find.byType(TextFormField),
+          )
+          .first;
+      final capturedName = tester.widget<TextFormField>(nameField).onChanged!;
+      final aWriter = fixture.container.read(aProvider.notifier);
+      await aWriter.save(
+        aWriter.state.copyWith(
+          currentStage: YorksV1ProjectCreationStage.attachments,
+        ),
+      );
+      await tester.pumpAndSettle();
+      // Capture the product callback, rather than Flutter FormField.didChange,
+      // which is correctly invalid once its own widget has been disposed.
+      final picker = tester.widget<Widget>(
+        find.byKey(
+          const ValueKey('yorks-v1-desktop-file-category-callback-file'),
+        ),
+      );
+      final capturedCategory =
+          (picker as dynamic).onChanged
+              as ValueChanged<YorksV1ProjectAttachmentCategory>;
+      await _tapSaveDraft(tester);
+      await tester.tap(
+        find.descendant(
+          of: _sidebarSurface(),
+          matching: find.text(YorksV1ShellStrings.projects.primary),
+        ),
+      );
+      await tester.pumpAndSettle();
+      if (find.byType(AlertDialog).evaluate().isNotEmpty) {
+        await tester.tap(
+          find.text(YorksV1ProjectStrings.leaveWithSavedDraft.primary),
+        );
+        await tester.pumpAndSettle();
+      }
+      _expectPortfolio(fixture);
+      await _openCreateProject(tester);
+      final bProvider = _activeProvider(fixture);
+      final b = fixture.container.read(bProvider);
+      expect(b.draftId, isNot(aContext.draftId));
+      await aWriter.flush();
+      final exactA = fixture.preferences.getString(aWriter.storageKey);
+      final exactB = b.toJson();
+      capturedName('Stale captured Alpha text');
+      capturedCategory(YorksV1ProjectAttachmentCategory.drawing);
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+      expect(fixture.container.read(bProvider).toJson(), exactB);
+      expect(fixture.preferences.getString(aWriter.storageKey), exactA);
+      expect(
+        fixture.container.read(aProvider).attachments.single.category,
+        YorksV1ProjectAttachmentCategory.general,
+      );
+      final currentName = tester.widget<EditableText>(
+        find.descendant(
+          of: find.byKey(const ValueKey('yorks-v1-project-name')),
+          matching: find.byType(EditableText),
+        ),
+      );
+      expect(currentName.controller.text, isEmpty);
+      expect(fixture.commands.calls, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'failed unanchored B save blocks a query switch to saved A and retains typed B',
+    (tester) async {
+      late _ClaimGateDraftStorage storage;
+      late YorksV1ProjectCreationDraft a;
+      late String aKey;
+      final fixture = await _pumpWorkspace(
+        tester,
+        initialLocation: RoutePaths.yorksV1Projects,
+        draftStorageFactory: (preferences) =>
+            storage = _ClaimGateDraftStorage(preferences),
+        seed: (container, preferences) async {
+          final provider = yorksV1ProjectSetupCreationDraftProvider(_owner);
+          final writer = container.read(provider.notifier);
+          await writer.initialized;
+          await writer.save(
+            writer.state.copyWith(
+              reference: 'RETAINED-A',
+              name: 'Acknowledged Alpha',
+            ),
+          );
+          a = writer.state;
+          aKey = writer.storageKey;
+          storage.failNewEnvelopeWrites = true;
+        },
+      );
+      final exactA = fixture.preferences.getString(aKey);
+      await _openCreateProject(tester);
+      await tester.enterText(
+        find.byKey(const ValueKey('yorks-v1-project-name')),
+        'B unsaved progress',
+      );
+      await _tapSaveDraft(tester);
+      expect(
+        find.text(YorksV1ProjectStrings.localSaveFailed.primary),
+        findsWidgets,
+      );
+      fixture.router.go(RoutePaths.yorksV1ProjectSetupDraftPath(a.draftId));
+      await tester.pumpAndSettle();
+      final editor = tester.widget<EditableText>(
+        find.descendant(
+          of: find.byKey(const ValueKey('yorks-v1-project-name')),
+          matching: find.byType(EditableText),
+        ),
+      );
+      expect(editor.controller.text, 'B unsaved progress');
+      expect(
+        GoRouterState.of(
+          tester.element(find.byType(YorksV1ProjectCreateFlowScreen)),
+        ).uri.queryParameters['draft'],
+        isNot(a.draftId),
+      );
+      expect(fixture.preferences.getString(aKey), exactA);
+      storage.failNewEnvelopeWrites = false;
+      await _tapSaveDraft(tester);
+      await _settleFreshAnchor(tester);
+      final b = fixture.container.read(_activeProvider(fixture));
+      expect(b.name, 'B unsaved progress');
+      expect(b.isAcknowledged, true);
+      expect(b.draftId, isNot(a.draftId));
+      fixture.router.go(RoutePaths.yorksV1ProjectSetupDraftPath(a.draftId));
+      await tester.pumpAndSettle();
+      _expectResumedDraft(tester, fixture, a.draftId, 'Acknowledged Alpha');
+      expect(
+        fixture.container
+            .read(
+              yorksV1ProjectSetupCreationDraftByIdProvider(
+                YorksV1ProjectCreationDraftContext(
+                  ownerAuthUserId: _owner,
+                  draftId: b.draftId,
+                ),
+              ),
+            )
+            .name,
+        'B unsaved progress',
+      );
+      expect(fixture.commands.calls, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets(
     'untouched Create checkpoint stays hidden while a saved unfinished date resumes from Projects',
     (tester) async {
@@ -444,27 +831,30 @@ void main() {
         tester,
         initialLocation: RoutePaths.yorksV1Projects,
       );
-      expect(find.byKey(_savedLocalDraftKey), findsNothing);
+      expect(_allDraftCards(), findsNothing);
       await _openCreateProject(tester);
-      final provider = yorksV1ProjectSetupCreationDraftProvider(_owner);
-      final originalDraftId = fixture.container.read(provider).draftId;
+      final untouchedProvider = _activeProvider(fixture);
       await tester.tap(
         find.text(YorksV1ProjectSetupShellStrings.returnToProjects.primary),
       );
       await tester.pumpAndSettle();
       _expectPortfolio(fixture);
-      final untouched = fixture.container.read(provider);
+      final untouched = fixture.container.read(untouchedProvider);
       expect(untouched.rawEditorState['sectionContext'], isNotNull);
       expect(untouched.reference, isEmpty);
       expect(untouched.name, isEmpty);
-      expect(find.byKey(_savedLocalDraftKey), findsNothing);
+      expect(_allDraftCards(), findsNothing);
 
       await _openCreateProject(tester);
+      final provider = _activeProvider(fixture);
+      final originalDraftId = fixture.container.read(provider).draftId;
       final date = find.byKey(
         ValueKey('yorks-v1-project-date-${YorksV1ProjectStrings.startDate.en}'),
       );
       await tester.ensureVisible(date);
       await tester.enterText(date, '12/');
+      await tester.ensureVisible(find.byKey(_saveDraftKey));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(_saveDraftKey));
       await tester.pumpAndSettle();
       await tester.tap(
@@ -472,7 +862,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       _expectPortfolio(fixture);
-      expect(find.byKey(_savedLocalDraftKey), findsOneWidget);
+      expect(_allDraftCards(), findsOneWidget);
       expect(
         find.byKey(const ValueKey('yorks-v1-local-draft-reference')),
         findsNothing,
@@ -481,7 +871,7 @@ void main() {
         find.byKey(const ValueKey('yorks-v1-local-draft-name')),
         findsNothing,
       );
-      await tester.tap(find.byKey(_resumeLocalDraftKey));
+      await tester.tap(_allDraftResumes());
       await tester.pumpAndSettle();
       expect(fixture.container.read(provider).draftId, originalDraftId);
       expect(
@@ -505,7 +895,7 @@ void main() {
         initialLocation: RoutePaths.yorksV1Projects,
       );
       await _openCreateProject(tester);
-      final provider = yorksV1ProjectSetupCreationDraftProvider(_owner);
+      final provider = _activeProvider(fixture);
       final writer = fixture.container.read(provider.notifier);
       final originalDraftId = fixture.container.read(provider).draftId;
       await writer.save(
@@ -538,6 +928,8 @@ void main() {
         find.byKey(const ValueKey('yorks-v1-building-floors')),
         'Ground, Roof,',
       );
+      await tester.ensureVisible(find.byKey(_saveDraftKey));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(_saveDraftKey));
       await tester.pumpAndSettle();
       final saved = fixture.container.read(provider);
@@ -557,7 +949,7 @@ void main() {
         find.text(YorksV1ProjectStrings.leaveSetupTitle.primary),
         findsNothing,
       );
-      final card = find.byKey(_savedLocalDraftKey);
+      final card = _allDraftCards();
       expect(card, findsOneWidget);
       expect(
         find.descendant(
@@ -568,7 +960,7 @@ void main() {
         ),
         findsOneWidget,
       );
-      await tester.tap(find.byKey(_resumeLocalDraftKey));
+      await tester.tap(_allDraftResumes());
       await tester.pumpAndSettle();
       final resumed = fixture.container.read(provider);
       expect(resumed.draftId, originalDraftId);
@@ -655,8 +1047,8 @@ void main() {
             await preferences.setString(originalKey, envelope);
           },
         );
-        expect(find.byKey(_savedLocalDraftKey), findsNothing);
-        expect(find.byKey(_resumeLocalDraftKey), findsNothing);
+        expect(_allDraftCards(), findsNothing);
+        expect(_allDraftResumes(), findsNothing);
         expect(find.textContaining(privateDraft.reference), findsNothing);
         expect(find.textContaining(privateDraft.name), findsNothing);
         expect(storage.readKeys, isNot(contains(originalKey)));
@@ -715,7 +1107,7 @@ void main() {
           await preferences.setString(storageKey, envelope);
         },
       );
-      final card = find.byKey(_savedLocalDraftKey);
+      final card = _allDraftCards();
       expect(card, findsOneWidget);
       expect(Directionality.of(tester.element(card)), TextDirection.rtl);
       expect(
@@ -734,7 +1126,7 @@ void main() {
         ),
         findsOneWidget,
       );
-      final resume = find.byKey(_resumeLocalDraftKey);
+      final resume = _allDraftResumes();
       await tester.ensureVisible(resume);
       await tester.pumpAndSettle();
       final rect = tester.getRect(resume);
@@ -786,7 +1178,7 @@ void main() {
       );
 
       await _openCreateProject(tester);
-      final provider = yorksV1ProjectSetupCreationDraftProvider(_owner);
+      final provider = _activeProvider(fixture);
       final writer = fixture.container.read(provider.notifier);
       final draftId = fixture.container.read(provider).draftId;
       await writer.save(
@@ -857,9 +1249,7 @@ void main() {
       final flowState = tester.state(
         find.byType(YorksV1ProjectCreateFlowScreen),
       );
-      final draftId = fixture.container
-          .read(yorksV1ProjectSetupCreationDraftProvider(_owner))
-          .draftId;
+      final draftId = fixture.container.read(_activeProvider(fixture)).draftId;
       const proposedName = 'Viewport recovery preserves the saved proposal';
       const partialDate = '12/10/';
       const notes = 'Unpublished notes remain local through every layout.';
@@ -875,15 +1265,15 @@ void main() {
       final notesField = find.byKey(const ValueKey('yorks-v1-project-notes'));
       await tester.ensureVisible(notesField);
       await tester.enterText(notesField, notes);
+      await tester.ensureVisible(find.byKey(_saveDraftKey));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(_saveDraftKey));
       await tester.pumpAndSettle();
       expect(
         find.text(YorksV1ProjectStrings.draftSaved.primary),
         findsOneWidget,
       );
-      final saved = fixture.container.read(
-        yorksV1ProjectSetupCreationDraftProvider(_owner),
-      );
+      final saved = fixture.container.read(_activeProvider(fixture));
       expect(saved.isAcknowledged, true);
       expect(saved.rawEditorState['dateStartText'], partialDate);
       final notesEditor = tester.widget<EditableText>(
@@ -902,9 +1292,7 @@ void main() {
           tester.state(find.byType(YorksV1ProjectCreateFlowScreen)),
           same(flowState),
         );
-        final current = fixture.container.read(
-          yorksV1ProjectSetupCreationDraftProvider(_owner),
-        );
+        final current = fixture.container.read(_activeProvider(fixture));
         expect(current.draftId, draftId);
         expect(current.name, proposedName);
         expect(current.notes, notes);
@@ -936,11 +1324,9 @@ void main() {
         findsNothing,
       );
       _expectPortfolio(fixture);
-      await _openCreateProject(tester);
+      await _resumeDraft(tester, draftId);
       _expectResumedDraft(tester, fixture, draftId, proposedName);
-      final restored = fixture.container.read(
-        yorksV1ProjectSetupCreationDraftProvider(_owner),
-      );
+      final restored = fixture.container.read(_activeProvider(fixture));
       expect(restored.rawEditorState['dateStartText'], partialDate);
       expect(restored.notes, notes);
       expect(fixture.commands.calls, 0);
@@ -957,7 +1343,7 @@ void main() {
       );
       await _openCreateProject(tester);
       final originalDraftId = fixture.container
-          .read(yorksV1ProjectSetupCreationDraftProvider(_owner))
+          .read(_activeProvider(fixture))
           .draftId;
       const proposedName = 'Guarded universal history proposal';
       await tester.enterText(
@@ -1094,7 +1480,10 @@ void main() {
           storage.failRetirementKey = storageKey;
         },
       );
-      await _openCreateProject(tester);
+      fixture.router.go(
+        RoutePaths.yorksV1ProjectSetupDraftPath(oldDraft.draftId),
+      );
+      await tester.pumpAndSettle();
       expect(storage.failedRetirements, 1);
       expect(
         find.text(YorksV1ProjectStrings.localSaveFailed.primary),
@@ -1155,9 +1544,7 @@ void main() {
         findsNothing,
       );
       expect(
-        fixture.container
-            .read(yorksV1ProjectSetupCreationDraftProvider(_owner))
-            .storageState,
+        fixture.container.read(_activeProvider(fixture)).storageState,
         YorksV1ProjectDraftStorageState.ownedElsewhere,
       );
       expect(fixture.preferences.getString(storageKey), foreignEnvelope);
@@ -1182,7 +1569,7 @@ void main() {
 
   for (final size in [const Size(1536, 1024), const Size(360, 800)]) {
     testWidgets(
-      '${size.width} confirmed prior writer waits for initialization and explicit takeover before fresh Create',
+      '${size.width} fresh Create waits for its own acknowledgement and preserves a foreign confirmed A',
       (tester) async {
         late _ClaimGateDraftStorage storage;
         late YorksV1ProjectCreationDraftController oldWriter;
@@ -1294,114 +1681,53 @@ void main() {
         fixture.router.go(RoutePaths.engineerCreateProject);
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 100));
-        final provider = yorksV1ProjectSetupCreationDraftProvider(_owner);
-        expect(
-          fixture.container.read(provider).storageState,
-          YorksV1ProjectDraftStorageState.initializing,
-        );
-        expect(
-          find.text(YorksV1ProjectStrings.localRecoveryUnavailable.primary),
-          findsNothing,
-        );
-        expect(
-          find.text(YorksV1ProjectStrings.localSaveFailed.primary),
-          findsNothing,
-        );
         expect(
           fixture.preferences.getString(oldWriter.storageKey),
           oldEnvelope,
         );
         expect(fixture.commands.calls, 0);
         expect(callbacks, 0);
-        expect(tester.takeException(), isNull);
-
+        expect(
+          find.text(YorksV1ProjectStrings.takeOverDraft.primary),
+          findsNothing,
+        );
         claim.complete();
-        await fixture.container.read(provider.notifier).initialized;
-        await tester.pumpAndSettle();
-        expect(
-          fixture.container.read(provider).storageState,
-          YorksV1ProjectDraftStorageState.ownedElsewhere,
-        );
-        expect(
-          find.text(YorksV1ProjectStrings.draftOwnedElsewhere.primary),
-          findsOneWidget,
-        );
-        final takeover = find.text(YorksV1ProjectStrings.takeOverDraft.primary);
-        expect(takeover, findsOneWidget);
-        expect(
-          find.text(YorksV1ProjectStrings.localRecoveryUnavailable.primary),
-          findsNothing,
-        );
-        expect(
-          fixture.preferences.getString(oldWriter.storageKey),
-          oldEnvelope,
-        );
-        expect(
-          fixture.preferences.getString(
-            '${oldWriter.storageKey}:retired:${oldDraft.draftId}',
-          ),
-          isNull,
-        );
-        expect(fixture.commands.calls, 0);
-        expect(callbacks, 0);
-
-        await tester.tap(takeover);
-        await tester.pumpAndSettle();
+        await _settleFreshAnchor(tester);
+        final provider = _activeProvider(fixture);
         final fresh = fixture.container.read(provider);
+        final freshWriter = fixture.container.read(provider.notifier);
         expect(fresh.draftId, isNot(oldDraft.draftId));
         expect(
           fresh.creationIdempotencyKey,
           isNot(oldDraft.creationIdempotencyKey),
         );
         expect(fresh.currentStage, YorksV1ProjectCreationStage.projectDetails);
-        expect(fresh.reference, isEmpty);
-        expect(fresh.name, isEmpty);
+        _expectEmptyProposal(fresh);
         expect(fresh.attachments, isEmpty);
-        expect(fresh.rawEditorState, isEmpty);
-        expect(
-          find.byKey(const ValueKey('yorks-v1-project-name')),
-          findsOneWidget,
-        );
+        expect(freshWriter.writable, true);
+        expect(oldWriter.state.writerEpoch, oldDraft.writerEpoch);
         expect(
           find.text(YorksV1ProjectStrings.takeOverDraft.primary),
           findsNothing,
         );
         expect(
-          fixture.router.routerDelegate.currentConfiguration.uri.path,
-          RoutePaths.engineerCreateProject,
+          fixture.preferences.getString(oldWriter.storageKey),
+          oldEnvelope,
         );
         final journalKey =
             '${oldWriter.storageKey}:journal:${oldDraft.draftId}';
         expect(fixture.preferences.getString(journalKey), originalJournal);
-        final tombstone =
-            jsonDecode(
-                  fixture.preferences.getString(
-                    '${oldWriter.storageKey}:retired:${oldDraft.draftId}',
-                  )!,
-                )
-                as Map;
-        final retained = YorksV1ProjectCreationDraft.fromJson(
-          Map<String, dynamic>.from(tombstone['draft'] as Map),
-        );
-        expect(tombstone['retired'], true);
-        expect(tombstone['resultProjectId'], 'old-confirmed-lease-project');
-        expect(retained.draftId, oldDraft.draftId);
         expect(
-          retained.attachments.single.toDraftJson(),
-          oldDraft.attachments.single.toDraftJson(),
+          fixture.preferences.getString(
+            '${oldWriter.storageKey}:retired:${oldDraft.draftId}',
+          ),
+          isNull,
         );
-        expect(retained.rawEditorState, oldDraft.rawEditorState);
-        final freshEnvelope = fixture.preferences.getString(
-          oldWriter.storageKey,
+        final exactB = fixture.preferences.getString(freshWriter.storageKey);
+        await oldWriter.save(
+          oldWriter.state.copyWith(name: 'Independent owner still retains A'),
         );
-        await expectLater(
-          oldWriter.save(oldDraft.copyWith(name: 'Stale writer overwrite')),
-          throwsA(isA<ProjectDraftStorageException>()),
-        );
-        expect(
-          fixture.preferences.getString(oldWriter.storageKey),
-          freshEnvelope,
-        );
+        expect(fixture.preferences.getString(freshWriter.storageKey), exactB);
         expect(fixture.preferences.getString(journalKey), originalJournal);
         expect(fixture.commands.calls, 0);
         expect(callbacks, 0);
@@ -1530,51 +1856,15 @@ void main() {
             },
           );
           if (historical != 'uncertain') {
-            expect(find.byKey(_savedLocalDraftKey), findsNothing);
+            expect(_allDraftCards(), findsNothing);
           }
+          final oldEnvelope = fixture.preferences.getString(storageKey);
+          final oldTombstone = fixture.preferences.getString(
+            '$storageKey:retired:${oldDraft.draftId}',
+          );
           await _openCreateProject(tester);
-          final provider = yorksV1ProjectSetupCreationDraftProvider(_owner);
+          final provider = _activeProvider(fixture);
           final fresh = fixture.container.read(provider);
-          if (historical == 'uncertain') {
-            expect(fresh.draftId, oldDraft.draftId);
-            expect(
-              fresh.creationIdempotencyKey,
-              oldDraft.creationIdempotencyKey,
-            );
-            expect(fresh.reference, oldDraft.reference);
-            expect(
-              find.byKey(const ValueKey('yorks-v1-project-operation-outcome')),
-              findsOneWidget,
-            );
-            expect(
-              find.text(YorksV1ProjectStrings.checkSavedStatus.primary),
-              findsWidgets,
-            );
-            expect(
-              find.descendant(
-                of: find.byKey(const ValueKey('yorks-v1-project-create')),
-                matching: find.text(
-                  YorksV1ProjectStrings.createProject.primary,
-                ),
-              ),
-              findsNothing,
-            );
-            expect(
-              fixture.preferences.getString(
-                '$storageKey:journal:${oldDraft.draftId}',
-              ),
-              originalJournal,
-            );
-            expect(
-              fixture.preferences.getString(
-                '$storageKey:retired:${oldDraft.draftId}',
-              ),
-              isNull,
-            );
-            expect(fixture.commands.calls, 0);
-            expect(tester.takeException(), isNull);
-            return;
-          }
           expect(fresh.draftId, isNot(oldDraft.draftId));
           expect(
             fresh.creationIdempotencyKey,
@@ -1584,27 +1874,11 @@ void main() {
             fresh.currentStage,
             YorksV1ProjectCreationStage.projectDetails,
           );
+          _expectEmptyProposal(fresh);
           expect(fresh.reference, isEmpty);
           expect(fresh.name, isEmpty);
           expect(fresh.buildings, isEmpty);
           expect(fresh.attachments, isEmpty);
-          expect(fresh.rawEditorState, isEmpty);
-          expect(
-            fixture
-                .router
-                .routerDelegate
-                .currentConfiguration
-                .last
-                .matchedLocation,
-            RoutePaths.engineerCreateProject,
-          );
-          final name = tester.widget<EditableText>(
-            find.descendant(
-              of: find.byKey(const ValueKey('yorks-v1-project-name')),
-              matching: find.byType(EditableText),
-            ),
-          );
-          expect(name.controller.text, isEmpty);
           expect(find.textContaining('Old created project'), findsNothing);
           expect(
             find.byKey(const ValueKey('yorks-v1-project-operation-outcome')),
@@ -1614,27 +1888,20 @@ void main() {
             find.text(YorksV1ProjectStrings.projectCreated.primary),
             findsNothing,
           );
+          expect(fixture.preferences.getString(storageKey), oldEnvelope);
           expect(
             fixture.preferences.getString(
               '$storageKey:journal:${oldDraft.draftId}',
             ),
             originalJournal,
           );
-          final retired = fixture.preferences.getString(
-            '$storageKey:retired:${oldDraft.draftId}',
-          )!;
-          if (historical == 'pointer') expect(retired, retiredJson);
-          final retainedDraft = YorksV1ProjectCreationDraft.fromJson(
-            Map<String, dynamic>.from(
-              (jsonDecode(retired) as Map)['draft'] as Map,
-            ),
-          );
-          expect(retainedDraft.draftId, oldDraft.draftId);
-          expect(retainedDraft.attachments.single.localId, 'old-file');
           expect(
-            retainedDraft.rawEditorState['private_unfinished_text'],
-            'Retain original private recovery',
+            fixture.preferences.getString(
+              '$storageKey:retired:${oldDraft.draftId}',
+            ),
+            oldTombstone,
           );
+          if (historical == 'pointer') expect(oldTombstone, retiredJson);
           expect(fixture.commands.calls, 0);
           await tester.tap(
             find
@@ -1643,9 +1910,30 @@ void main() {
           );
           await tester.pumpAndSettle();
           _expectPortfolio(fixture);
-          await _openCreateProject(tester);
-          expect(fixture.container.read(provider).draftId, fresh.draftId);
-          expect(fixture.container.read(provider).name, isEmpty);
+          if (historical == 'uncertain') {
+            await _resumeDraft(tester, oldDraft.draftId);
+            expect(
+              fixture.container.read(_activeProvider(fixture)).draftId,
+              oldDraft.draftId,
+            );
+            expect(
+              find.byKey(const ValueKey('yorks-v1-project-operation-outcome')),
+              findsOneWidget,
+            );
+            expect(
+              find.text(YorksV1ProjectStrings.checkSavedStatus.primary),
+              findsWidgets,
+            );
+          } else {
+            await _openCreateProject(tester);
+            expect(
+              fixture.container.read(_activeProvider(fixture)).draftId,
+              isNot(fresh.draftId),
+            );
+            _expectEmptyProposal(
+              fixture.container.read(_activeProvider(fixture)),
+            );
+          }
           expect(
             fixture.preferences.getString(
               '$storageKey:journal:${oldDraft.draftId}',
@@ -1686,6 +1974,105 @@ void main() {
   );
 }
 
+void _expectEmptyProposal(YorksV1ProjectCreationDraft draft) {
+  expect(draft.reference, isEmpty);
+  expect(draft.name, isEmpty);
+  expect(draft.clientName, isNull);
+  expect(draft.jobOrContractReference, isNull);
+  expect(draft.siteLocation, isNull);
+  expect(draft.notes, isNull);
+  expect(draft.startDate, isNull);
+  expect(draft.endDate, isNull);
+  expect(draft.parties, isEmpty);
+  expect(draft.initialMembers, isEmpty);
+  expect(draft.buildings, isEmpty);
+  expect(draft.attachments, isEmpty);
+  expect(draft.retainedFields, isEmpty);
+  for (final field in [
+    'buildingCode',
+    'buildingName',
+    'buildingFloors',
+    'buildingAddress',
+    'subcontractorText',
+    'otherContractorText',
+    'dateStartText',
+    'dateEndText',
+  ]) {
+    expect(draft.rawEditorState[field] ?? '', isEmpty, reason: field);
+  }
+  expect(draft.rawEditorState['buildingFrp'] ?? false, false);
+}
+
+Future<void> _tapSaveDraft(WidgetTester tester) async {
+  FocusManager.instance.primaryFocus?.unfocus();
+  tester.testTextInput.hide();
+  await tester.pumpAndSettle();
+  final save = find.byKey(_saveDraftKey);
+  await Scrollable.ensureVisible(tester.element(save), alignment: .5);
+  await tester.pumpAndSettle();
+  expect(save.hitTestable(), findsOneWidget);
+  await tester.tap(save);
+  await tester.pumpAndSettle();
+}
+
+StateNotifierProvider<
+  YorksV1ProjectCreationDraftController,
+  YorksV1ProjectCreationDraft
+>
+_activeProvider(_WorkspaceFixture fixture) {
+  final mounted = find.byType(YorksV1ProjectCreateFlowScreen).evaluate();
+  final uri = mounted.isNotEmpty
+      ? GoRouterState.of(mounted.single).uri
+      : fixture.router.routeInformationProvider.value.uri;
+  final draftId = uri.queryParameters['draft'] ?? fixture.lastActiveDraftId;
+  if (uri.queryParameters['draft'] != null) fixture.lastActiveDraftId = draftId;
+  if (uri.queryParameters['recovery'] == 'legacy') {
+    return yorksV1ProjectSetupCreationDraftProvider(_owner);
+  }
+  expect(
+    draftId,
+    isNotNull,
+    reason:
+        'Mounted setup must anchor its exact proposal ID; router=$uri; storedKeys=${fixture.preferences.getKeys()}',
+  );
+  final scope = YorksV1ProjectCreationDraftContext(
+    ownerAuthUserId: _owner,
+    draftId: draftId!,
+  );
+  return fixture.container.read(
+        yorksV1ProjectSelectedDraftUsesLegacyProvider(scope),
+      )
+      ? yorksV1ProjectSetupCreationDraftProvider(_owner)
+      : yorksV1ProjectSetupCreationDraftByIdProvider(scope);
+}
+
+Finder _draftCard(String id) =>
+    find.byKey(ValueKey('yorks-v1-project-saved-local-draft-$id'));
+Finder _draftResume(String id) =>
+    find.byKey(ValueKey('yorks-v1-project-resume-local-draft-$id'));
+Finder _allDraftResumes() => find.byWidgetPredicate(
+  (widget) =>
+      widget.key is ValueKey<String> &&
+      (widget.key as ValueKey<String>).value.startsWith(
+        'yorks-v1-project-resume-local-draft-',
+      ),
+);
+Finder _allDraftCards() => find.byWidgetPredicate(
+  (widget) =>
+      widget.key is ValueKey<String> &&
+      (widget.key as ValueKey<String>).value.startsWith(
+        'yorks-v1-project-saved-local-draft-',
+      ),
+);
+
+Future<void> _resumeDraft(WidgetTester tester, String id) async {
+  final resume = _draftResume(id);
+  await tester.ensureVisible(resume);
+  await tester.pumpAndSettle();
+  await tester.tap(resume);
+  await tester.pumpAndSettle();
+}
+
 Finder _sidebarSurface() => find
     .ancestor(
       of: find.text(YorksV1ShellStrings.companyLegalName.primary),
@@ -1706,6 +2093,23 @@ Future<void> _openCreateProject(WidgetTester tester) async {
   await tester.pumpAndSettle();
   expect(create.hitTestable(), findsOneWidget);
   await tester.tap(create);
+  await tester.pumpAndSettle();
+  await _settleFreshAnchor(tester);
+}
+
+Future<void> _settleFreshAnchor(WidgetTester tester) async {
+  // pumpAndSettle does not await an async post-frame storage flush. Let the
+  // acknowledged URI anchor finish before reading its selected draft scope.
+  for (var frame = 0; frame < 20; frame++) {
+    final mounted = find.byType(YorksV1ProjectCreateFlowScreen);
+    if (mounted.evaluate().isEmpty ||
+        GoRouterState.of(
+          tester.element(mounted),
+        ).uri.queryParameters.containsKey('draft')) {
+      break;
+    }
+    await tester.pump(const Duration(milliseconds: 50));
+  }
   await tester.pumpAndSettle();
 }
 
@@ -1752,9 +2156,7 @@ void _expectResumedDraft(
     ),
   );
   expect(name.controller.text, proposedName);
-  final resumed = fixture.container.read(
-    yorksV1ProjectSetupCreationDraftProvider(_owner),
-  );
+  final resumed = fixture.container.read(_activeProvider(fixture));
   expect(resumed.draftId, originalDraftId);
   expect(resumed.name, proposedName);
   expect(resumed.acknowledgedRevision, resumed.revision);
@@ -1871,23 +2273,47 @@ Future<_WorkspaceFixture> _pumpWorkspace(
     await container.read(languageProvider.notifier).setLanguage(language);
   }
 
-  // The browser-only rollout choice is tested separately. This VM integration
-  // uses the same route components, canonical paths and mounted onExit guard
-  // without changing kIsWeb or substituting a fake feature/navigation widget.
+  // Keep VM workspace composition while exercising the production route's
+  // real selection redirect/onExit callbacks, including query-only switches.
+  final productionRouter = createAppRouter(
+    isOnboarded: true,
+    isLoggedIn: true,
+    role: UserRole.engineer,
+    yorksV1Role: role,
+    yorksV1ProjectsEnabled: true,
+    yorksV1ProjectSetupEnabled: projectSetup,
+    onLeaveYorksProjectSetup: () =>
+        container.read(yorksV1ProjectSetupNavigationGuardProvider).canLeave(),
+    onSelectYorksProjectSetup: (draftId, legacyRecovery) => container
+        .read(yorksV1ProjectSetupNavigationGuardProvider)
+        .canSelectCreation(draftId, legacyRecovery: legacyRecovery),
+  );
+  addTearDown(productionRouter.dispose);
+  final setupRoute = productionRouter.configuration.routes
+      .whereType<GoRoute>()
+      .singleWhere((route) => route.path == RoutePaths.engineerCreateProject);
   final router = GoRouter(
     initialLocation: initialLocation,
     routes: [
       GoRoute(
         path: RoutePaths.engineerCreateProject,
-        onExit: (_, _) => container
-            .read(yorksV1ProjectSetupNavigationGuardProvider)
-            .canLeave(),
-        builder: (_, _) => YorksV1WorkspaceShell(
-          featureOwnsBackNavigation: true,
-          child: YorksV1ProjectCreateFlowScreen(
-            onProjectCreated: onProjectCreated,
-          ),
-        ),
+        redirect: setupRoute.redirect,
+        onExit: setupRoute.onExit,
+        pageBuilder: (context, state) {
+          final prototype = setupRoute.pageBuilder!(context, state);
+          return NoTransitionPage<void>(
+            key: prototype.key,
+            child: YorksV1WorkspaceShell(
+              featureOwnsBackNavigation: true,
+              child: YorksV1ProjectCreateFlowScreen(
+                onProjectCreated: onProjectCreated,
+                resumeDraftId: state.uri.queryParameters['draft'],
+                legacyRecovery:
+                    state.uri.queryParameters['recovery'] == 'legacy',
+              ),
+            ),
+          );
+        },
       ),
       GoRoute(
         path: RoutePaths.yorksV1Projects,
@@ -1930,12 +2356,13 @@ Future<_WorkspaceFixture> _pumpWorkspace(
 }
 
 class _WorkspaceFixture {
-  const _WorkspaceFixture(
+  _WorkspaceFixture(
     this.container,
     this.router,
     this.commands,
     this.preferences,
   );
+  String? lastActiveDraftId;
   final ProviderContainer container;
   final GoRouter router;
   final _NoProjectCommands commands;
@@ -1997,6 +2424,7 @@ class _ClaimGateDraftStorage extends _SupportedDraftStorage {
   _ClaimGateDraftStorage(super.preferences);
   Completer<void>? nextTransaction;
   String? failRetirementKey;
+  bool failNewEnvelopeWrites = false;
   int failedRetirements = 0;
 
   @override
@@ -2013,6 +2441,11 @@ class _ClaimGateDraftStorage extends _SupportedDraftStorage {
         _InterceptDraftTransaction(
           tx,
           beforeWrite: (key, value) {
+            if (failNewEnvelopeWrites && key.contains(':draft:')) {
+              throw const ProjectDraftStorageException(
+                'write_not_acknowledged',
+              );
+            }
             if (key == failRetirementKey &&
                 (jsonDecode(value) as Map)['retired'] == true) {
               failRetirementKey = null;

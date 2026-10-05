@@ -10,6 +10,7 @@ import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../app/router.dart';
+import '../../../../app/yorks_navigation_history.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/controllers/yorks_v1_project_controller.dart';
@@ -67,7 +68,20 @@ class YorksV1ProjectCreateFlowScreen extends ConsumerStatefulWidget {
     this.onProjectCreated,
     this.editItem,
     this.onProjectUpdated,
-  });
+    this.resumeDraftId,
+    this.newDraftId,
+    this.legacyRecovery = false,
+  }) : assert(resumeDraftId == null || newDraftId == null),
+       assert(!legacyRecovery || (resumeDraftId == null && newDraftId == null));
+
+  /// Explicit selection from Projects or an anchored setup URL. Missing and
+  /// unsupported selections stay guarded instead of resuming another draft.
+  final String? resumeDraftId;
+
+  /// Optional deterministic fresh ID for a composed entry/test fixture. Normal
+  /// Create navigation lets this mounted screen generate its own new ID.
+  final String? newDraftId;
+  final bool legacyRecovery;
 
   /// Lets route composition move to the authoritative project workspace after
   /// the server has committed the project. It is deliberately called only
@@ -148,7 +162,7 @@ class YorksV1ProjectEditFlowScreen extends ConsumerWidget {
 class _YorksV1ProjectCreateFlowScreenState
     extends ConsumerState<YorksV1ProjectCreateFlowScreen>
     with WidgetsBindingObserver {
-  final _detailsFormKey = GlobalKey<FormState>();
+  var _detailsFormKey = GlobalKey<FormState>();
   final _featureScaffoldKey = GlobalKey<ScaffoldState>();
   final _featureMessengerKey = GlobalKey<ScaffoldMessengerState>();
   final _scrollController = ScrollController();
@@ -232,6 +246,12 @@ class _YorksV1ProjectCreateFlowScreenState
   YorksV1ProjectCreationDraft? _editDraft;
   String? _activeAuthUserId;
   String? _activeEditProjectId;
+  String? _activeCreationDraftId;
+  String? _activeBackendIdentity;
+  bool _activeLegacyRecovery = false;
+  late String _freshDraftId;
+  YorksV1ProjectCreationDraftContext? _selectedCreationContext;
+  bool _draftUrlAnchorQueued = false;
   Set<YorksV1ProjectValidationCode> _validationErrors = const {};
   bool _hasFrpRoom = false;
   int? _editingBuildingIndex;
@@ -272,7 +292,31 @@ class _YorksV1ProjectCreateFlowScreenState
       mounted &&
       generation == _contextGeneration &&
       ref.read(yorksV1AuthUserIdProvider) == _activeAuthUserId &&
-      widget.editItem?.project.id == _activeEditProjectId;
+      widget.editItem?.project.id == _activeEditProjectId &&
+      ref.read(yorksV1ProjectDraftBackendIdentityProvider) ==
+          _activeBackendIdentity &&
+      _activeLegacyRecovery == widget.legacyRecovery &&
+      (_isEditing || _effectiveCreationDraftId == _activeCreationDraftId);
+
+  String get _effectiveCreationDraftId => widget.legacyRecovery
+      ? 'legacy-recovery'
+      : widget.resumeDraftId ?? _freshDraftId;
+
+  YorksV1ProjectCreationDraftContext _creationContext(String owner) {
+    final selected = _selectedCreationContext;
+    if (selected != null &&
+        selected.ownerAuthUserId == owner &&
+        selected.draftId == _effectiveCreationDraftId) {
+      return selected;
+    }
+    return _selectedCreationContext = YorksV1ProjectCreationDraftContext(
+      ownerAuthUserId: owner,
+      draftId: _effectiveCreationDraftId,
+      entry: widget.resumeDraftId == null
+          ? YorksV1ProjectCreationDraftEntry.newProposal
+          : YorksV1ProjectCreationDraftEntry.resume,
+    );
+  }
 
   void _seedEditDraft(String authUserId) {
     final item = widget.editItem;
@@ -337,16 +381,45 @@ class _YorksV1ProjectCreateFlowScreenState
         ownerAuthUserId: owner,
         projectId: widget.editItem!.project.id,
       );
+  bool _usesOriginalCreationProvider(String owner) => ref.read(
+    yorksV1ProjectSelectedDraftUsesLegacyProvider(_creationContext(owner)),
+  );
   YorksV1ProjectCreationDraftController _draftController(String owner) =>
       _isEditing
       ? ref.read(yorksV1ProjectEditDraftProvider(_editContext(owner)).notifier)
-      : ref.read(yorksV1ProjectSetupCreationDraftProvider(owner).notifier);
+      : widget.legacyRecovery
+      ? ref.read(yorksV1ProjectLegacyRecoveryDraftControllerProvider(owner))
+      : _usesOriginalCreationProvider(owner)
+      ? ref.read(yorksV1ProjectSetupCreationDraftProvider(owner).notifier)
+      : ref.read(
+          yorksV1ProjectSetupCreationDraftByIdProvider(
+            _creationContext(owner),
+          ).notifier,
+        );
 
   @override
   void initState() {
     super.initState();
+    _freshDraftId =
+        widget.newDraftId ??
+        (!widget.isEditing &&
+                !widget.legacyRecovery &&
+                widget.resumeDraftId == null
+            ? const Uuid().v4()
+            : '');
     _navigationService = ref.read(yorksV1ProjectSetupNavigationGuardProvider);
-    _navigationService.register(_navigationGuard);
+    _navigationService.register(
+      _navigationGuard,
+      creationSelection: () =>
+          _isEditing ||
+              _activeAuthUserId == null ||
+              !_isCurrentContext(_contextGeneration)
+          ? null
+          : (
+              draftId: widget.legacyRecovery ? null : _effectiveCreationDraftId,
+              legacyRecovery: widget.legacyRecovery,
+            ),
+    );
     WidgetsBinding.instance.addObserver(this);
     _scrollController.addListener(_queueNavigationContext);
     for (final entry in _fieldFocusNodes.entries) {
@@ -369,6 +442,159 @@ class _YorksV1ProjectCreateFlowScreenState
     }
     _startDateController.addListener(() => _typedDateChanged(true));
     _endDateController.addListener(() => _typedDateChanged(false));
+  }
+
+  @override
+  void didUpdateWidget(covariant YorksV1ProjectCreateFlowScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // A canonical Create request can reuse this route's State after an
+    // anchored Resume. It still requests a new independent proposal.
+    if (!widget.isEditing &&
+        !widget.legacyRecovery &&
+        widget.resumeDraftId == null &&
+        (oldWidget.resumeDraftId != null ||
+            oldWidget.legacyRecovery ||
+            oldWidget.newDraftId != widget.newDraftId)) {
+      _freshDraftId = widget.newDraftId ?? const Uuid().v4();
+      _draftUrlAnchorQueued = false;
+    }
+  }
+
+  void _anchorDraftUrl(YorksV1ProjectCreationDraft draft) {
+    if (_isEditing ||
+        _draftUrlAnchorQueued ||
+        _confirmedContextResult ||
+        _releasingConfirmedHistory ||
+        _isCreating) {
+      return;
+    }
+    final readOnlySelection = draft.isReadOnly && _pendingDraft == null;
+    if (!readOnlySelection &&
+        draft.storageState != YorksV1ProjectDraftStorageState.dirty &&
+        draft.storageState != YorksV1ProjectDraftStorageState.saved) {
+      return;
+    }
+    final router = GoRouter.maybeOf(context);
+    if (router == null) return;
+    final scene = GoRouterState.of(context).uri;
+    if (scene.path != RoutePaths.engineerCreateProject) return;
+    bool isCurrentCreationScene() {
+      if (router.routerDelegate.currentConfiguration.isEmpty ||
+          !(ModalRoute.of(context)?.isCurrent ?? true)) {
+        return false;
+      }
+      final top = router.state.uri;
+      return top.path == RoutePaths.engineerCreateProject &&
+          top.queryParameters.containsKey('draft') ==
+              scene.queryParameters.containsKey('draft') &&
+          top.queryParameters['draft'] == scene.queryParameters['draft'] &&
+          top.queryParameters['recovery'] == scene.queryParameters['recovery'];
+    }
+
+    if (!isCurrentCreationScene()) return;
+    final selectedId = widget.legacyRecovery ? null : _effectiveCreationDraftId;
+    if (!widget.legacyRecovery &&
+        scene.queryParameters.containsKey('draft') &&
+        scene.queryParameters['draft'] != selectedId) {
+      return;
+    }
+    final target = widget.legacyRecovery
+        ? scene
+        : scene.replace(
+            queryParameters: {...scene.queryParameters, 'draft': selectedId!},
+          );
+    if (router.routerDelegate.currentConfiguration.uri == target) return;
+    final generation = _contextGeneration;
+    final controller = _draftController(draft.ownerAuthUserId);
+    _draftUrlAnchorQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await controller.initialized;
+      if (!_isCurrentContext(generation) ||
+          !isCurrentCreationScene() ||
+          _confirmedContextResult ||
+          _releasingConfirmedHistory ||
+          _isCreating) {
+        return;
+      }
+      final currentDraft = _currentDraft();
+      if (!currentDraft.isReadOnly) {
+        if (!controller.writable ||
+            currentDraft.storageState ==
+                YorksV1ProjectDraftStorageState.failed) {
+          _draftUrlAnchorQueued = false;
+          return;
+        }
+        try {
+          await _flushPendingDraft();
+          if (!_isCurrentContext(generation) || !isCurrentCreationScene()) {
+            return;
+          }
+          // Explicit checkpoint preserves fields, partial editors and local
+          // metadata even while navigation-restoration listeners are paused.
+          final checkpoint = _withLocalRowIds(_currentDraft());
+          await controller.save(
+            checkpoint.copyWith(rawEditorState: _rawEditorState(checkpoint)),
+            saveTrigger: 'navigation',
+          );
+          if (!_isCurrentContext(generation) || !isCurrentCreationScene()) {
+            return;
+          }
+          await controller.flush(saveTrigger: 'navigation');
+          if (!_isCurrentContext(generation) || !isCurrentCreationScene()) {
+            return;
+          }
+          if (!_currentDraft().isAcknowledged || _pendingDraft != null) {
+            _draftUrlAnchorQueued = false;
+            return;
+          }
+        } catch (_) {
+          if (_isCurrentContext(generation)) _draftUrlAnchorQueued = false;
+          return;
+        }
+      } else if (_pendingDraft != null) {
+        _draftUrlAnchorQueued = false;
+        return;
+      }
+      if (!mounted ||
+          !_isCurrentContext(generation) ||
+          !isCurrentCreationScene() ||
+          _confirmedContextResult ||
+          _releasingConfirmedHistory ||
+          _isCreating) {
+        return;
+      }
+      final current = GoRouterState.of(context).uri;
+      if (current.path != RoutePaths.engineerCreateProject) return;
+      final anchored = widget.legacyRecovery
+          ? current.toString()
+          : current
+                .replace(
+                  queryParameters: {
+                    ...current.queryParameters,
+                    'draft': selectedId!,
+                  },
+                )
+                .toString();
+      final page = ModalRoute.of(context)?.settings;
+      final pageKey = page is Page ? page.key : null;
+      final carryover =
+          pageKey is ValueKey<String> &&
+              pageKey.value.isNotEmpty &&
+              pageKey.value.length <= 160
+          ? <String, String>{
+              RoutePaths.projectSetupAnchorPageKeyExtra: pageKey.value,
+              RoutePaths.projectSetupAnchorSelectorExtra: widget.legacyRecovery
+                  ? 'legacy'
+                  : 'draft:$selectedId',
+            }
+          : null;
+      ref
+          .read(yorksNavigationHistoryProvider.notifier)
+          .replaceCurrent(current.toString(), anchored);
+      // Preserve the mounted same-proposal page while changing the real browser
+      // URL. The extra carries only page identity; query selects the draft.
+      Router.neglect(context, () => router.go(anchored, extra: carryover));
+    });
   }
 
   @override
@@ -441,6 +667,7 @@ class _YorksV1ProjectCreateFlowScreenState
     final language = ref.watch(languageProvider);
     final authUserId = ref.watch(yorksV1AuthUserIdProvider);
     final role = ref.watch(yorksV1CurrentRoleProvider);
+    final backend = ref.watch(yorksV1ProjectDraftBackendIdentityProvider);
     final permissionState = ref.watch(yorksV1CurrentPermissionSnapshotProvider);
     final permission = yorksV1FeatureActionAccess(
       permissionState,
@@ -466,16 +693,28 @@ class _YorksV1ProjectCreateFlowScreenState
       );
     }
     if (_activeAuthUserId != authUserId ||
-        _activeEditProjectId != widget.editItem?.project.id) {
+        _activeEditProjectId != widget.editItem?.project.id ||
+        _activeLegacyRecovery != widget.legacyRecovery ||
+        _activeBackendIdentity != backend ||
+        (!_isEditing && _activeCreationDraftId != _effectiveCreationDraftId)) {
       _contextGeneration++;
       _isCreating = false;
       _checkingOwnership = false;
       _ownershipCheckFailed = false;
+      for (final node in _fieldFocusNodes.values) {
+        node.unfocus();
+      }
       _draftSaveTimer?.cancel();
       _pendingDraft = null;
       _activeAuthUserId = authUserId;
       _activeEditProjectId = widget.editItem?.project.id;
+      _activeCreationDraftId = _isEditing ? null : _effectiveCreationDraftId;
+      _activeBackendIdentity = backend;
+      _activeLegacyRecovery = widget.legacyRecovery;
+      _selectedCreationContext = null;
+      _draftUrlAnchorQueued = false;
       _validationErrors = const {};
+      _detailsFormKey = GlobalKey<FormState>();
       _selectedAttachmentFiles = const [];
       _editDraft = null;
       _editingBuildingIndex = null;
@@ -504,9 +743,25 @@ class _YorksV1ProjectCreateFlowScreenState
     }
 
     _seedEditDraft(authUserId);
+    final useOriginalCreation =
+        !_isEditing &&
+        !widget.legacyRecovery &&
+        ref.watch(
+          yorksV1ProjectSelectedDraftUsesLegacyProvider(
+            _creationContext(authUserId),
+          ),
+        );
     final storedDraft = _isEditing
         ? ref.watch(yorksV1ProjectEditDraftProvider(_editContext(authUserId)))
-        : ref.watch(yorksV1ProjectSetupCreationDraftProvider(authUserId));
+        : widget.legacyRecovery
+        ? ref.watch(yorksV1ProjectLegacyRecoveryDraftProvider(authUserId))
+        : useOriginalCreation
+        ? ref.watch(yorksV1ProjectSetupCreationDraftProvider(authUserId))
+        : ref.watch(
+            yorksV1ProjectSetupCreationDraftByIdProvider(
+              _creationContext(authUserId),
+            ),
+          );
     _liveDraftController = _draftController(authUserId);
     if (_isEditing && storedDraft.baseVersion == null) {
       _editDraft = _editDraft!.copyWith(
@@ -521,6 +776,7 @@ class _YorksV1ProjectCreateFlowScreenState
     final draft = _isEditing && storedDraft.baseVersion == null
         ? _editDraft!
         : storedDraft;
+    _anchorDraftUrl(draft);
     _visitedStages.addAll(draft.visitedStages);
     _restoreRawEditor(draft);
     _visitedStages.add(draft.currentStage);
@@ -528,9 +784,7 @@ class _YorksV1ProjectCreateFlowScreenState
     _renderedStage = draft.currentStage;
     _restoreSectionContext(draft);
     final commandState = ref.watch(yorksV1ProjectCommandControllerProvider);
-    final setupState = ref.watch(
-      yorksV1ProjectSetupCoordinatorProvider(_setupScope(draft)),
-    );
+    final setupState = ref.watch(_coordinatorProvider(draft));
     final committed = setupState.operation?.coreSucceeded == true;
     // A confirmed result belongs to its project, not the next creation form.
     // Releasing the proposal preserves its exact journal and pending files.
@@ -543,6 +797,22 @@ class _YorksV1ProjectCreateFlowScreenState
       final historyReleaseFailed =
           _confirmedHistoryReleaseFailed || _ownershipCheckFailed;
       if (!waitingForOwnership &&
+          draft.storageState ==
+              YorksV1ProjectDraftStorageState.recoveryRequired &&
+          setupState.recoveryError == null &&
+          !_releasingConfirmedHistory) {
+        // A retired/missing local envelope needs no new writer when its exact
+        // immutable journal already verifies the committed project. Keep its
+        // local records untouched and open only the authorized known result.
+        _releasingConfirmedHistory = true;
+        final generation = _contextGeneration;
+        final operation = setupState.operation!;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!_isCurrentContext(generation)) return;
+          _confirmedContextResult = true;
+          _openConfirmedProject(operation.project!, operation: operation);
+        });
+      } else if (!waitingForOwnership &&
           !draft.isReadOnly &&
           !historyReleaseFailed &&
           !_releasingConfirmedHistory) {
@@ -633,18 +903,21 @@ class _YorksV1ProjectCreateFlowScreenState
         _ownershipCheckFailed ||
         (_isEditing && !_editReady) ||
         draft.storageState == YorksV1ProjectDraftStorageState.initializing;
+    final hasLocalInput = _isEditing
+        ? draft.hasRecoverableContent
+        : _hasMeaningfulSetupInput(_pendingDraft ?? draft);
     final acknowledged =
         draft.storageState == YorksV1ProjectDraftStorageState.saved &&
         draft.acknowledgedRevision == draft.revision &&
         _pendingDraft == null &&
-        draft.hasRecoverableContent;
+        hasLocalInput;
     final localStatus = recoveryRequired
         ? YorksV1ProjectStrings.draftNeedsRecovery
         : ownedElsewhere
         ? YorksV1ProjectStrings.draftOwnedElsewhere
         : storageFailed || _ownershipCheckFailed
         ? YorksV1ProjectStrings.localSaveFailed
-        : !draft.hasRecoverableContent && _pendingDraft == null
+        : !hasLocalInput && _pendingDraft == null
         ? YorksV1ProjectStrings.notSavedYet
         : _pendingDraft != null ||
               draft.storageState == YorksV1ProjectDraftStorageState.saving ||
@@ -1370,6 +1643,71 @@ class _YorksV1ProjectCreateFlowScreenState
   }) {
     final generation = _contextGeneration;
     final stage = draft.currentStage;
+    bool mayAct({
+      bool mutation = true,
+      bool fileRecovery = false,
+      bool bufferOnly = false,
+    }) {
+      if (!_isCurrentContext(generation) ||
+          _currentDraft().draftId != draft.draftId) {
+        return false;
+      }
+      final role = ref.read(yorksV1CurrentRoleProvider);
+      final access = yorksV1FeatureActionAccess(
+        ref.read(yorksV1CurrentPermissionSnapshotProvider),
+        _isEditing
+            ? YorksV1CapabilityKeys.projectsEdit
+            : YorksV1CapabilityKeys.projectsCreate,
+        legacyAllowed: role?.canCreateProject == true,
+        projectId: widget.editItem?.project.id,
+      );
+      if (!mutation) return access.isVisible;
+      final current = _currentDraft();
+      final operation = ref.read(_coordinatorProvider(current)).operation;
+      return (bufferOnly ? access.isVisible : access.canWrite) &&
+          !current.isReadOnly &&
+          current.storageState !=
+              YorksV1ProjectDraftStorageState.initializing &&
+          !_checkingOwnership &&
+          !_ownershipCheckFailed &&
+          !_isCreating &&
+          (fileRecovery &&
+                  (operation == null || operation.draftId == current.draftId) ||
+              operation?.coreSucceeded != true &&
+                  operation?.hasUnresolvedCommand != true);
+    }
+
+    VoidCallback guardedBufferAction(VoidCallback action) => () {
+      if (mayAct(bufferOnly: true)) action();
+    };
+    ValueChanged<T> guardedBufferValue<T>(ValueChanged<T> action) => (value) {
+      if (mayAct(bufferOnly: true)) action(value);
+    };
+    VoidCallback guardedFileAction(VoidCallback action) => () {
+      if (mayAct(fileRecovery: true)) action();
+    };
+    ValueChanged<T> guardedFileValue<T>(ValueChanged<T> action) => (value) {
+      if (mayAct(fileRecovery: true)) action(value);
+    };
+    ValueChanged<T> guardedReadValue<T>(ValueChanged<T> action) => (value) {
+      if (mayAct(mutation: false)) action(value);
+    };
+    VoidCallback guardedAction(VoidCallback action) => () {
+      if (mayAct()) action();
+    };
+    VoidCallback? guardedNullableAction(VoidCallback? action) =>
+        action == null ? null : guardedAction(action);
+    VoidCallback guardedReadAction(VoidCallback action) => () {
+      if (mayAct(mutation: false)) action();
+    };
+    ValueChanged<T> guardedValue<T>(ValueChanged<T> action) => (value) {
+      if (mayAct()) action(value);
+    };
+    void Function(A, B) guardedPair<A, B>(void Function(A, B) action) =>
+        (first, second) {
+          if (mayAct()) action(first, second);
+        };
+
     final advisory =
         stage == YorksV1ProjectCreationStage.projectDetails &&
             _referenceController.text.trim().isNotEmpty
@@ -1410,37 +1748,53 @@ class _YorksV1ProjectCreateFlowScreenState
         contactPhoneController: _clientContactPhoneController,
         contactEmailController: _clientContactEmailController,
         contactAddressController: _clientAddressController,
-        onContactChanged: _clientContactsChanged,
+        onContactChanged: guardedBufferValue(_clientContactsChanged),
         contactsExpanded: draft.rawEditorState['contactsExpanded'] == true,
-        onContactsExpanded: (expanded) => _queueDraft(
-          (current) => current.copyWith(
-            rawEditorState: {
-              ...current.rawEditorState,
-              'contactsExpanded': expanded,
-            },
+        onContactsExpanded: guardedBufferValue(
+          (expanded) => _queueDraft(
+            (current) => current.copyWith(
+              rawEditorState: {
+                ...current.rawEditorState,
+                'contactsExpanded': expanded,
+              },
+            ),
+            semanticEdit: false,
           ),
-          semanticEdit: false,
         ),
         startDateController: _startDateController,
         endDateController: _endDateController,
         validationErrors: _validationErrors,
-        onReferenceChanged: (value) =>
-            _queueDraft((current) => current.copyWith(reference: value)),
-        onNameChanged: (value) =>
-            _queueDraft((current) => current.copyWith(name: value)),
-        onClientChanged: (value) =>
-            _queueDraft((current) => current.copyWith(clientName: value)),
-        onJobOrContractChanged: (value) => _queueDraft(
-          (current) => current.copyWith(jobOrContractReference: value),
+        onReferenceChanged: guardedBufferValue(
+          (value) =>
+              _queueDraft((current) => current.copyWith(reference: value)),
         ),
-        onSiteChanged: (value) =>
-            _queueDraft((current) => current.copyWith(siteLocation: value)),
-        onNotesChanged: (value) =>
-            _queueDraft((current) => current.copyWith(notes: value)),
-        onSelectStartDate: () => _selectDate(isStartDate: true),
-        onSelectEndDate: () => _selectDate(isStartDate: false),
-        onTodayStart: () => _useToday(true),
-        onTodayEnd: () => _useToday(false),
+        onNameChanged: guardedBufferValue(
+          (value) => _queueDraft((current) => current.copyWith(name: value)),
+        ),
+        onClientChanged: guardedBufferValue(
+          (value) =>
+              _queueDraft((current) => current.copyWith(clientName: value)),
+        ),
+        onJobOrContractChanged: guardedBufferValue(
+          (value) => _queueDraft(
+            (current) => current.copyWith(jobOrContractReference: value),
+          ),
+        ),
+        onSiteChanged: guardedBufferValue(
+          (value) =>
+              _queueDraft((current) => current.copyWith(siteLocation: value)),
+        ),
+        onNotesChanged: guardedBufferValue(
+          (value) => _queueDraft((current) => current.copyWith(notes: value)),
+        ),
+        onSelectStartDate: guardedBufferAction(
+          () => _selectDate(isStartDate: true),
+        ),
+        onSelectEndDate: guardedBufferAction(
+          () => _selectDate(isStartDate: false),
+        ),
+        onTodayStart: guardedBufferAction(() => _useToday(true)),
+        onTodayEnd: guardedBufferAction(() => _useToday(false)),
       ),
       YorksV1ProjectCreationStage.partiesAndAccess => _PartiesAndAccessStage(
         draft: draft,
@@ -1454,29 +1808,40 @@ class _YorksV1ProjectCreateFlowScreenState
         creatorRole: creatorRole,
         creatorAuthUserId: creatorAuthUserId,
         teamDirectory: teamDirectory!,
-        onConsultantChanged: (value) =>
-            _setSingleParty(YorksV1ProjectPartyKind.consultant, value),
-        onMainContractorChanged: (value) =>
-            _setSingleParty(YorksV1ProjectPartyKind.mainContractor, value),
-        onAddSubcontractor: () => _addNamedParty(
-          YorksV1ProjectPartyKind.subcontractor,
-          _subcontractorController,
+        onConsultantChanged: guardedBufferValue(
+          (value) => _setSingleParty(YorksV1ProjectPartyKind.consultant, value),
         ),
-        onAddOtherContractor: () => _addNamedParty(
-          YorksV1ProjectPartyKind.otherContractor,
-          _otherContractorController,
+        onMainContractorChanged: guardedBufferValue(
+          (value) =>
+              _setSingleParty(YorksV1ProjectPartyKind.mainContractor, value),
         ),
-        onRemoveParty: _removePartyAt,
-        onUndoPartyRemoval: _removedParty == null ? null : _undoPartyRemoval,
-        onAddInitialMember: _addInitialMember,
-        onRemoveInitialMember: _removeInitialMemberAt,
+        onAddSubcontractor: guardedAction(
+          () => _addNamedParty(
+            YorksV1ProjectPartyKind.subcontractor,
+            _subcontractorController,
+          ),
+        ),
+        onAddOtherContractor: guardedAction(
+          () => _addNamedParty(
+            YorksV1ProjectPartyKind.otherContractor,
+            _otherContractorController,
+          ),
+        ),
+        onRemoveParty: guardedValue(_removePartyAt),
+        onUndoPartyRemoval: guardedNullableAction(
+          _removedParty == null ? null : _undoPartyRemoval,
+        ),
+        onAddInitialMember: guardedPair(_addInitialMember),
+        onRemoveInitialMember: guardedValue(_removeInitialMemberAt),
         showTeam: !_isEditing,
         editItem: widget.editItem,
-        onManageAccess: _isEditing
-            ? () => context.go(
-                RoutePaths.yorksV1ProjectPath(widget.editItem!.project.id),
-              )
-            : null,
+        onManageAccess: guardedNullableAction(
+          _isEditing
+              ? () => context.go(
+                  RoutePaths.yorksV1ProjectPath(widget.editItem!.project.id),
+                )
+              : null,
+        ),
       ),
       YorksV1ProjectCreationStage.buildings => _BuildingsStage(
         draft: draft,
@@ -1489,39 +1854,41 @@ class _YorksV1ProjectCreateFlowScreenState
         hasFrpRoom: _hasFrpRoom,
         editingBuildingIndex: _editingBuildingIndex,
         validationErrors: _validationErrors,
-        onHasFrpRoomChanged: (value) {
+        onHasFrpRoomChanged: guardedBufferValue((value) {
           setState(() => _hasFrpRoom = value);
           _queueEditorState();
-        },
-        onAddBuilding: _addBuilding,
-        onEditBuilding: _editBuildingAt,
-        onCancelEditing: _resetBuildingEditor,
-        onDuplicateBuilding: _duplicateBuildingAt,
-        onUndoRemove: _buildingUndoRows == null && _removedBuilding == null
-            ? null
-            : _undoRemoveBuilding,
-        onRemoveBuilding: _removeBuildingAt,
-        onMoveBuilding: _moveBuilding,
+        }),
+        onAddBuilding: guardedAction(_addBuilding),
+        onEditBuilding: guardedValue(_editBuildingAt),
+        onCancelEditing: guardedAction(_resetBuildingEditor),
+        onDuplicateBuilding: guardedValue(_duplicateBuildingAt),
+        onUndoRemove: guardedNullableAction(
+          _buildingUndoRows == null && _removedBuilding == null
+              ? null
+              : _undoRemoveBuilding,
+        ),
+        onRemoveBuilding: guardedValue(_removeBuildingAt),
+        onMoveBuilding: guardedPair(_moveBuilding),
       ),
       YorksV1ProjectCreationStage.attachments => _AttachmentsStage(
         draft: draft,
         language: language,
         validationErrors: _validationErrors,
-        onAddAttachment: _addAttachment,
+        onAddAttachment: guardedFileAction(_addAttachment),
         onDroppedAttachments: (files) async {
-          if (_isCurrentContext(generation)) {
+          if (mayAct(fileRecovery: true)) {
             await _addSelectedAttachments(files);
           }
         },
         onDropError: () {
-          if (_isCurrentContext(generation)) _showInvalidAttachmentMessage();
+          if (mayAct(mutation: false)) _showInvalidAttachmentMessage();
         },
-        onRemoveAttachment: _removeAttachmentAt,
+        onRemoveAttachment: guardedFileValue(_removeAttachmentAt),
         pendingFiles: _selectedAttachmentFiles,
         setupState: setupState,
-        onRetryFile: _retrySetupFile,
-        onChangeCategory: _setAttachmentCategory,
-        onPreviewAttachment: _previewAttachment,
+        onRetryFile: guardedFileValue(_retrySetupFile),
+        onChangeCategory: guardedPair(_setAttachmentCategory),
+        onPreviewAttachment: guardedReadValue(_previewAttachment),
       ),
       YorksV1ProjectCreationStage.reviewAndCreate => _ReviewStage(
         draft: draft,
@@ -1529,17 +1896,23 @@ class _YorksV1ProjectCreateFlowScreenState
         language: language,
         validationErrors: _validationErrors,
         teamDirectory: teamDirectory!,
-        onRetryDirectory: () =>
-            ref.invalidate(yorksV1ActiveProjectTeamDirectoryProvider),
+        onRetryDirectory: guardedReadAction(
+          () => ref.invalidate(yorksV1ActiveProjectTeamDirectoryProvider),
+        ),
         creatorRole: creatorRole,
         creatorAuthUserId: creatorAuthUserId,
         editItem: widget.editItem,
-        onResolveConflict: _reviewEditConflict,
-        onEdit: _selectStage,
+        onResolveConflict: guardedAction(_reviewEditConflict),
+        onEdit: guardedValue(_selectStage),
       ),
     };
 
-    return stageBody;
+    return KeyedSubtree(
+      key: ValueKey(
+        'project-setup-stage-${draft.ownerAuthUserId}|${draft.backendIdentity}|${draft.draftId}|${stage.name}',
+      ),
+      child: stageBody,
+    );
   }
 
   void _synchronizeControllers(YorksV1ProjectCreationDraft draft) {
@@ -1841,6 +2214,7 @@ class _YorksV1ProjectCreateFlowScreenState
     if (restore != true || !_isCurrentContext(generation)) return;
     await controller.adoptQuarantinedProposal();
     if (_isCurrentContext(generation)) {
+      ref.invalidate(yorksV1ProjectSelectedDraftUsesLegacyProvider);
       setState(() {
         _restoredEditor = false;
       });
@@ -1909,9 +2283,7 @@ class _YorksV1ProjectCreateFlowScreenState
   ) {
     _queueDraft((draft) {
       if (index < 0 || index >= draft.attachments.length) return draft;
-      final operation = ref
-          .read(yorksV1ProjectSetupCoordinatorProvider(_setupScope(draft)))
-          .operation;
+      final operation = ref.read(_coordinatorProvider(draft)).operation;
       if (operation != null &&
           (operation.coreSucceeded || operation.hasUnresolvedCommand)) {
         return draft;
@@ -2080,8 +2452,28 @@ class _YorksV1ProjectCreateFlowScreenState
     _pendingDraft = null;
     if (_isEditing) {
       ref.invalidate(yorksV1ProjectEditDraftProvider(_editContext(owner)));
-    } else {
+    } else if (widget.legacyRecovery) {
+      ref.invalidate(
+        ref.read(yorksV1ProjectLegacyRecoveryDraftSourceProvider(owner)),
+      );
+      ref.invalidate(yorksV1ProjectLegacyRecoveryDraftSourceProvider(owner));
+      ref.invalidate(yorksV1ProjectLegacyRecoveryDraftProvider(owner));
+      ref.invalidate(
+        yorksV1ProjectLegacyRecoveryDraftControllerProvider(owner),
+      );
+    } else if (_usesOriginalCreationProvider(owner)) {
       ref.invalidate(yorksV1ProjectSetupCreationDraftProvider(owner));
+      if (!widget.legacyRecovery) {
+        ref.invalidate(
+          yorksV1ProjectSelectedDraftUsesLegacyProvider(
+            _creationContext(owner),
+          ),
+        );
+      }
+    } else {
+      ref.invalidate(
+        yorksV1ProjectSetupCreationDraftByIdProvider(_creationContext(owner)),
+      );
     }
   }
 
@@ -2106,9 +2498,7 @@ class _YorksV1ProjectCreateFlowScreenState
       return;
     }
     try {
-      final coordinator = ref.read(
-        yorksV1ProjectSetupCoordinatorProvider(_setupScope(draft)).notifier,
-      );
+      final coordinator = ref.read(_coordinatorProvider(draft).notifier);
       await coordinator.uploadFile(
         localId: file.localId,
         bytes: bytes.bytes,
@@ -2129,9 +2519,7 @@ class _YorksV1ProjectCreateFlowScreenState
   Future<void> _removePendingSetupFile(YorksV1ProjectSetupFile file) async {
     final generation = _contextGeneration;
     final draft = _currentDraft();
-    final coordinator = ref.read(
-      yorksV1ProjectSetupCoordinatorProvider(_setupScope(draft)).notifier,
-    );
+    final coordinator = ref.read(_coordinatorProvider(draft).notifier);
     try {
       await coordinator.removePendingFile(file.localId);
       if (!_isCurrentContext(generation)) return;
@@ -2192,7 +2580,15 @@ class _YorksV1ProjectCreateFlowScreenState
       );
     }
     return _pendingDraft ??
-        ref.read(yorksV1ProjectSetupCreationDraftProvider(authUserId));
+        (widget.legacyRecovery
+            ? ref.read(yorksV1ProjectLegacyRecoveryDraftProvider(authUserId))
+            : _usesOriginalCreationProvider(authUserId)
+            ? ref.read(yorksV1ProjectSetupCreationDraftProvider(authUserId))
+            : ref.read(
+                yorksV1ProjectSetupCreationDraftByIdProvider(
+                  _creationContext(authUserId),
+                ),
+              ));
   }
 
   void _queueDraft(
@@ -2250,11 +2646,7 @@ class _YorksV1ProjectCreateFlowScreenState
     }
     if (_confirmedContextResult ||
         ref
-                .read(
-                  yorksV1ProjectSetupCoordinatorProvider(
-                    _setupScope(_currentDraft()),
-                  ),
-                )
+                .read(_coordinatorProvider(_currentDraft()))
                 .operation
                 ?.coreSucceeded ==
             true) {
@@ -2318,7 +2710,11 @@ class _YorksV1ProjectCreateFlowScreenState
     final inputOnly = draft.copyWith(
       rawEditorState: {
         for (final entry in draft.rawEditorState.entries)
-          if (!const {'sectionContext', 'contactsExpanded'}.contains(entry.key))
+          if (!const {
+            'sectionContext',
+            'contactsExpanded',
+            'buildingLocalId',
+          }.contains(entry.key))
             entry.key: entry.value,
       },
     );
@@ -2352,7 +2748,11 @@ class _YorksV1ProjectCreateFlowScreenState
     }
     json['rawEditorState'] = {
       for (final entry in draft.rawEditorState.entries)
-        if (!const {'sectionContext', 'contactsExpanded'}.contains(entry.key))
+        if (!const {
+          'sectionContext',
+          'contactsExpanded',
+          'buildingLocalId',
+        }.contains(entry.key))
           entry.key: entry.value,
     };
     return yorksV1CanonicalSetupJson(json);
@@ -3145,9 +3545,7 @@ class _YorksV1ProjectCreateFlowScreenState
     var skippedDuplicate = false;
     for (final selected in selectedFiles) {
       final hash = sha256.convert(selected.bytes).toString();
-      final operation = ref
-          .read(yorksV1ProjectSetupCoordinatorProvider(_setupScope(current)))
-          .operation;
+      final operation = ref.read(_coordinatorProvider(current)).operation;
       if (operation != null &&
           (operation.coreSucceeded || operation.hasUnresolvedCommand)) {
         final matchesOriginal = operation.files.any(
@@ -3225,9 +3623,7 @@ class _YorksV1ProjectCreateFlowScreenState
     final current = _currentDraft();
     if (index < 0 || index >= current.attachments.length) return;
     final removed = current.attachments[index];
-    final operation = ref
-        .read(yorksV1ProjectSetupCoordinatorProvider(_setupScope(current)))
-        .operation;
+    final operation = ref.read(_coordinatorProvider(current)).operation;
     if (operation?.hasUnresolvedCommand == true &&
         operation?.coreSucceeded != true) {
       _showMessage(
@@ -3275,6 +3671,15 @@ class _YorksV1ProjectCreateFlowScreenState
     });
   }
 
+  StateNotifierProvider<
+    YorksV1ProjectSetupCoordinator,
+    YorksV1ProjectSetupState
+  >
+  _coordinatorProvider(YorksV1ProjectCreationDraft draft) =>
+      widget.legacyRecovery
+      ? yorksV1ProjectLegacyRecoveryCoordinatorProvider(_setupScope(draft))
+      : yorksV1ProjectSetupCoordinatorProvider(_setupScope(draft));
+
   YorksV1ProjectSetupScope _setupScope(YorksV1ProjectCreationDraft draft) => (
     ownerAuthUserId: _activeAuthUserId!,
     draftId: draft.draftId,
@@ -3298,9 +3703,7 @@ class _YorksV1ProjectCreateFlowScreenState
       }
       await controller.verifyOwnership();
       if (!_isCurrentContext(generation)) return;
-      final coordinator = ref.read(
-        yorksV1ProjectSetupCoordinatorProvider(_setupScope(draft)).notifier,
-      );
+      final coordinator = ref.read(_coordinatorProvider(draft).notifier);
       final operation = await coordinator.acknowledgeConfirmedCore();
       if (!_isCurrentContext(generation)) return;
       final retired = await controller.retireConfirmedOperation(operation);
@@ -3308,11 +3711,9 @@ class _YorksV1ProjectCreateFlowScreenState
       _draftSaveTimer?.cancel();
       _pendingDraft = null;
       if (retired) _resetRetiredDraftProvider(draft.ownerAuthUserId);
-      ref.invalidate(
-        yorksV1ProjectSetupCoordinatorProvider(_setupScope(draft)),
-      );
-      // Rehydrate the next proposal from its own ID and clean editor state.
-      setState(() => _activeAuthUserId = null);
+      ref.invalidate(_coordinatorProvider(draft));
+      _confirmedContextResult = true;
+      _openConfirmedProject(operation.project!, operation: operation);
     } catch (_) {
       if (!_isCurrentContext(generation)) return;
       setState(() {
@@ -3421,9 +3822,7 @@ class _YorksV1ProjectCreateFlowScreenState
     await _flushPendingDraft();
     if (!_isCurrentContext(generation)) return;
     final draft = _currentDraft();
-    final coordinator = ref.read(
-      yorksV1ProjectSetupCoordinatorProvider(_setupScope(draft)).notifier,
-    );
+    final coordinator = ref.read(_coordinatorProvider(draft).notifier);
     final originalOperation = coordinator.currentState.operation;
     // Original unresolved/confirmed commands are recovered independently of
     // subsequently typed form values. Only a new reviewed intent is validated.
@@ -3593,9 +3992,7 @@ class _YorksV1ProjectCreateFlowScreenState
       }
       final completedOperation = coordinator.currentState.operation;
       if (draftRetired) _resetRetiredDraftProvider(draft.ownerAuthUserId);
-      ref.invalidate(
-        yorksV1ProjectSetupCoordinatorProvider(_setupScope(draft)),
-      );
+      ref.invalidate(_coordinatorProvider(draft));
       _openConfirmedProject(project, operation: completedOperation);
       unawaited(
         ref
