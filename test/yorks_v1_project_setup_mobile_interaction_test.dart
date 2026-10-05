@@ -17,6 +17,7 @@ import 'package:material_ledger/shared/models/yorks_v1_project.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_creation_draft.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_setup_shell_strings.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_strings.dart';
+import 'package:material_ledger/shared/models/yorks_v1_project_setup_desktop_strings.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_team_directory_member.dart';
 import 'package:material_ledger/shared/models/yorks_v1_role.dart';
 import 'package:material_ledger/shared/models/yorks_v1_shell_strings.dart';
@@ -56,6 +57,105 @@ void main() {
       ..addFont(Future.value(ByteData.sublistView(iconBytes)));
     await Future.wait([nexus.load(), arabic.load(), icons.load()]);
   });
+
+  testWidgets(
+    '360px Arabic Details omits the information card and keeps inline validation',
+    (tester) async {
+      final fixture = await _fixture(
+        YorksV1ProjectCreationStage.projectDetails,
+        language: AppLanguage.arabic,
+      );
+      await _pump(tester, fixture.container, viewport: const Size(360, 800));
+      expect(
+        find.text(
+          YorksV1ProjectSetupDesktopStrings.toContinue.active(
+            AppLanguage.arabic,
+          ),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.text(
+          YorksV1ProjectSetupDesktopStrings.otherDetailsLater.active(
+            AppLanguage.arabic,
+          ),
+        ),
+        findsNothing,
+      );
+      await tester.ensureVisible(_key('yorks-v1-project-reference'));
+      await tester.enterText(_key('yorks-v1-project-reference'), '');
+      await tester.ensureVisible(_key('yorks-v1-project-name'));
+      await tester.enterText(_key('yorks-v1-project-name'), '');
+      await _tapVisible(tester, _key('yorks-v1-project-continue'));
+      expect(
+        find.text(
+          YorksV1ProjectStrings.requiredField.active(AppLanguage.arabic),
+        ),
+        findsWidgets,
+      );
+      expect(
+        fixture.draft.currentStage,
+        YorksV1ProjectCreationStage.projectDetails,
+      );
+      expect(fixture.repository.commandCalls, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    '360px Arabic Add creates one building and Save edits its stable identity',
+    (tester) async {
+      final fixture = await _fixture(
+        YorksV1ProjectCreationStage.buildings,
+        language: AppLanguage.arabic,
+        buildings: const [],
+      );
+      await _pump(tester, fixture.container, viewport: const Size(360, 800));
+      final apply = _key('yorks-v1-mobile-apply-building');
+      expect(
+        find.descendant(
+          of: apply,
+          matching: find.text(
+            YorksV1ProjectStrings.addBuilding.active(AppLanguage.arabic),
+          ),
+        ),
+        findsOneWidget,
+      );
+      await tester.ensureVisible(_key('yorks-v1-building-name'));
+      await tester.enterText(_key('yorks-v1-building-name'), 'مبنى جديد');
+      await _tapVisible(tester, apply);
+      final created = fixture.draft.buildings.single;
+      expect(created.localRowId, isNotEmpty);
+      await _tapVisible(
+        tester,
+        _key('yorks-v1-mobile-building-${created.localRowId}'),
+      );
+      expect(
+        find.descendant(
+          of: apply,
+          matching: find.text(
+            YorksV1ProjectSetupDesktopStrings.saveBuilding.active(
+              AppLanguage.arabic,
+            ),
+          ),
+        ),
+        findsOneWidget,
+      );
+      await tester.ensureVisible(_key('yorks-v1-building-name'));
+      await tester.enterText(
+        _key('yorks-v1-building-name'),
+        'مبنى بعد التعديل',
+      );
+      await tester.ensureVisible(apply);
+      expect(tester.getSize(apply).height, greaterThanOrEqualTo(44));
+      await _tapVisible(tester, apply);
+      expect(fixture.draft.buildings, hasLength(1));
+      expect(fixture.draft.buildings.single.localRowId, created.localRowId);
+      expect(fixture.draft.buildings.single.name, 'مبنى بعد التعديل');
+      expect(fixture.repository.commandCalls, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   for (final stage in YorksV1ProjectCreationStage.values) {
     testWidgets('mobile reference ${stage.name} — content-only431×863', (
@@ -475,22 +575,25 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('phone unreviewed file classification blocks ready and Create', (
-    tester,
-  ) async {
-    final fixture = await _fixture(YorksV1ProjectCreationStage.reviewAndCreate);
-    await _pump(tester, fixture.container, viewport: const Size(360, 800));
-    expect(
-      find.text(YorksV1ProjectStrings.readyToCreateWorkspace.primary),
-      findsNothing,
-    );
-    expect(
-      tester.widget<FilledButton>(_key('yorks-v1-project-create')).onPressed,
-      isNull,
-    );
-    expect(fixture.repository.commandCalls, 0);
-    expect(tester.takeException(), isNull);
-  });
+  testWidgets(
+    'phone optional categories and missing bytes do not block core creation',
+    (tester) async {
+      final fixture = await _fixture(
+        YorksV1ProjectCreationStage.reviewAndCreate,
+      );
+      await _pump(tester, fixture.container, viewport: const Size(360, 800));
+      expect(
+        find.text(YorksV1ProjectStrings.readyToCreateWorkspace.primary),
+        findsOneWidget,
+      );
+      expect(
+        tester.widget<FilledButton>(_key('yorks-v1-project-create')).onPressed,
+        isNotNull,
+      );
+      expect(fixture.repository.commandCalls, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'phone same-name filtered file menu removes the stable identity',
@@ -511,23 +614,21 @@ void main() {
             mimeType: 'application/pdf',
             sizeBytes: 22,
             contentHash: 'second-content-hash',
+            categoryKey: 'drawing',
           ),
         ],
       );
       await _pump(tester, fixture.container, viewport: const Size(360, 800));
       final second = _key('yorks-v1-mobile-file-second-file');
-      await _tapVisible(
-        tester,
+      expect(
         find.descendant(of: second, matching: find.byType(Checkbox)),
+        findsNothing,
       );
-      await tester.pump(const Duration(milliseconds: 500));
-      await tester.pumpAndSettle();
-      expect(fixture.draft.rawEditorState['reviewedOperationalFiles'], [
-        'second-file:second-content-hash',
-      ]);
       await _tapVisible(tester, _key('yorks-v1-mobile-file-category-filter'));
       await tester.tap(
-        find.text(YorksV1ProjectStrings.operationalDocument.primary).last,
+        find
+            .text(YorksV1ProjectSetupDesktopStrings.categoryDrawing.primary)
+            .last,
       );
       await tester.pumpAndSettle();
       expect(_key('yorks-v1-mobile-file-first-file'), findsNothing);

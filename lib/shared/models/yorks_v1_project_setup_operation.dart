@@ -170,6 +170,8 @@ class YorksV1ProjectSetupFile {
     this.contentHash,
     this.status = YorksV1ProjectSetupFileStatus.needsReselect,
     this.errorCode,
+    this.categoryKey,
+    this.retainedFields = const {},
   });
 
   final String localId;
@@ -181,6 +183,15 @@ class YorksV1ProjectSetupFile {
   final String? contentHash;
   final YorksV1ProjectSetupFileStatus status;
   final YorksV1DomainErrorCode? errorCode;
+  // Organization metadata is independent of the protected classification and
+  // the exact idempotent upload intent. Older manifests retain an omitted key.
+  final String? categoryKey;
+  final Map<String, dynamic> retainedFields;
+
+  YorksV1ProjectAttachmentCategory? get category =>
+      YorksV1ProjectAttachmentCategory.fromWireValue(effectiveCategoryKey);
+  String get effectiveCategoryKey =>
+      categoryKey ?? YorksV1ProjectAttachmentCategory.general.wireValue;
 
   YorksV1ProjectSetupFile withOutcome(
     YorksV1ProjectSetupFileStatus status, {
@@ -196,9 +207,12 @@ class YorksV1ProjectSetupFile {
     contentHash: contentHash ?? this.contentHash,
     status: status,
     errorCode: errorCode,
+    categoryKey: categoryKey,
+    retainedFields: retainedFields,
   );
 
   Map<String, dynamic> toJson() => {
+    ...retainedFields,
     'local_id': localId,
     'key': idempotencyKey,
     'file_name': fileName,
@@ -208,6 +222,7 @@ class YorksV1ProjectSetupFile {
     'content_hash': contentHash,
     'status': status.name,
     'error_code': errorCode?.name,
+    if (categoryKey != null) 'category': categoryKey,
   };
 
   factory YorksV1ProjectSetupFile.fromJson(Map<String, dynamic> json) {
@@ -227,6 +242,23 @@ class YorksV1ProjectSetupFile {
       errorCode: json['error_code'] == null
           ? null
           : _enumValue(YorksV1DomainErrorCode.values, json['error_code']),
+      categoryKey: json['category'] as String?,
+      retainedFields: Map.unmodifiable({
+        for (final entry in json.entries)
+          if (!const {
+            'local_id',
+            'key',
+            'file_name',
+            'mime_type',
+            'size_bytes',
+            'classification',
+            'content_hash',
+            'status',
+            'error_code',
+            'category',
+          }.contains(entry.key))
+            entry.key: entry.value,
+      }),
     );
     if (file.localId.isEmpty ||
         file.idempotencyKey.isEmpty ||

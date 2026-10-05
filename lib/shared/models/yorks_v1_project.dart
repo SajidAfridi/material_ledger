@@ -1,5 +1,8 @@
 import 'yorks_v1_domain_error.dart';
+import 'yorks_v1_project_attachment_category.dart';
 import 'yorks_v1_role.dart';
+
+export 'yorks_v1_project_attachment_category.dart';
 
 /// The only Yorks V1 project lifecycle. This intentionally coexists with the
 /// legacy [ProjectState] and [ProjectLifecycleStatus] types until their screens
@@ -638,6 +641,8 @@ class YorksV1ProjectAttachmentInput {
     this.sizeBytes,
     this.localId,
     this.contentHash,
+    this.categoryKey,
+    this.retainedFields = const {},
   });
 
   final String fileName;
@@ -645,6 +650,32 @@ class YorksV1ProjectAttachmentInput {
   final int? sizeBytes;
   final String? localId;
   final String? contentHash;
+  // Keep absence and unknown values for exact historical local round-trips.
+  // This metadata never enters the reviewed server creation/upload payload.
+  final String? categoryKey;
+  final Map<String, dynamic> retainedFields;
+
+  YorksV1ProjectAttachmentCategory? get category =>
+      YorksV1ProjectAttachmentCategory.fromWireValue(effectiveCategoryKey);
+  String get effectiveCategoryKey =>
+      categoryKey ?? YorksV1ProjectAttachmentCategory.general.wireValue;
+
+  YorksV1ProjectAttachmentInput copyWith({
+    String? fileName,
+    String? mimeType,
+    int? sizeBytes,
+    String? localId,
+    String? contentHash,
+    String? categoryKey,
+  }) => YorksV1ProjectAttachmentInput(
+    fileName: fileName ?? this.fileName,
+    mimeType: mimeType ?? this.mimeType,
+    sizeBytes: sizeBytes ?? this.sizeBytes,
+    localId: localId ?? this.localId,
+    contentHash: contentHash ?? this.contentHash,
+    categoryKey: categoryKey ?? this.categoryKey,
+    retainedFields: retainedFields,
+  );
 
   Map<String, dynamic> toRpcJson() => {
     'file_name': fileName.trim(),
@@ -653,9 +684,11 @@ class YorksV1ProjectAttachmentInput {
   };
 
   Map<String, dynamic> toDraftJson() => {
+    ...retainedFields,
     ...toRpcJson(),
     'local_id': localId,
     'content_hash': contentHash,
+    if (categoryKey != null) 'category': categoryKey,
   };
 
   factory YorksV1ProjectAttachmentInput.fromDraftJson(
@@ -668,6 +701,22 @@ class YorksV1ProjectAttachmentInput {
       sizeBytes: ((json['size_bytes'] ?? json['sizeBytes']) as num?)?.toInt(),
       localId: json['local_id'] as String?,
       contentHash: json['content_hash'] as String?,
+      categoryKey: json['category'] as String?,
+      retainedFields: Map.unmodifiable({
+        for (final entry in json.entries)
+          if (!const {
+            'file_name',
+            'fileName',
+            'mime_type',
+            'mimeType',
+            'size_bytes',
+            'sizeBytes',
+            'local_id',
+            'content_hash',
+            'category',
+          }.contains(entry.key))
+            entry.key: entry.value,
+      }),
     );
   }
 }

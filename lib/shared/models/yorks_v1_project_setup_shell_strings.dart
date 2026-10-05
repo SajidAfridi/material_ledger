@@ -64,10 +64,10 @@ abstract final class YorksV1ProjectSetupShellStrings {
     hi: 'जारी रखें',
   );
   static const buildingEditPending = TranslatableString(
-    en: 'Apply or cancel the building edit to continue.',
-    ar: 'طبّق تعديل المبنى أو ألغِه للمتابعة.',
-    ur: 'جاری رکھنے کے لیے عمارت کی تبدیلی لاگو یا منسوخ کریں۔',
-    hi: 'जारी रखने के लिए इमारत का संपादन लागू करें या रद्द करें।',
+    en: 'Finish or cancel the building edit to continue.',
+    ar: 'أكمل تعديل المبنى أو ألغِه للمتابعة.',
+    ur: 'جاری رکھنے کے لیے عمارت کی ترمیم مکمل یا منسوخ کریں۔',
+    hi: 'जारी रखने के लिए इमारत का संपादन पूरा करें या रद्द करें।',
   );
   static const reviewHint = TranslatableString(
     en: 'This will save the project and open its workspace.',

@@ -369,76 +369,6 @@ class _DesktopDetailsStage extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(width: 20),
-        SizedBox(
-          width: 368,
-          child: Container(
-            constraints: const BoxConstraints(minHeight: 282),
-            margin: const EdgeInsets.only(top: 17),
-            padding: const EdgeInsets.all(23),
-            decoration: BoxDecoration(
-              color: YorksProjectSetupDesktopTheme.help,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(
-                  Icons.info_outline,
-                  size: 34,
-                  color: YorksProjectSetupDesktopTheme.blue,
-                ),
-                const SizedBox(width: 18),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 5),
-                      Text(
-                        YorksV1ProjectSetupDesktopStrings.toContinue.active(
-                          language,
-                        ),
-                        style: YorksProjectSetupDesktopTheme.body.copyWith(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        YorksV1ProjectSetupDesktopStrings.provideRequiredDetails
-                            .active(language),
-                        style: YorksProjectSetupDesktopTheme.body.copyWith(
-                          color: YorksProjectSetupDesktopTheme.muted,
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      for (final copy in [
-                        YorksV1ProjectStrings.yorksReference,
-                        YorksV1ProjectStrings.projectName,
-                      ])
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 7),
-                          child: Text(
-                            '•  ${copy.active(language)}',
-                            style: YorksProjectSetupDesktopTheme.body,
-                          ),
-                        ),
-                      const Divider(
-                        height: 35,
-                        color: YorksProjectSetupDesktopTheme.border,
-                      ),
-                      Text(
-                        YorksV1ProjectSetupDesktopStrings.otherDetailsLater
-                            .active(language),
-                        style: YorksProjectSetupDesktopTheme.small,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
       ],
     );
   }
@@ -1918,9 +1848,11 @@ class _DesktopBuildingsStageState extends State<_DesktopBuildingsStage> {
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
                       child: Text(
-                        YorksV1ProjectSetupDesktopStrings.applyToDraft.active(
-                          language,
-                        ),
+                        (c.editingBuildingIndex == null
+                                ? YorksV1ProjectStrings.addBuilding
+                                : YorksV1ProjectSetupDesktopStrings
+                                      .saveBuilding)
+                            .active(language),
                       ),
                     ),
                   ],
@@ -1960,20 +1892,13 @@ class _DesktopAttachmentsStageState extends State<_DesktopAttachmentsStage> {
   Widget build(BuildContext context) {
     final c = widget.config;
     final language = c.language;
-    final reviewed =
-        ((c.draft.rawEditorState['reviewedOperationalFiles'] as List?) ??
-        const []);
-    bool isReviewed(YorksV1ProjectAttachmentInput file) => reviewed.contains(
-      '${file.localId ?? file.fileName}:${file.contentHash ?? file.sizeBytes}',
-    );
     final rows = [
       for (var index = 0; index < c.draft.attachments.length; index++)
         if (c.draft.attachments[index].fileName.toLowerCase().contains(
               _query.trim().toLowerCase(),
             ) &&
             (_category == 'all' ||
-                (_category == 'operational') ==
-                    isReviewed(c.draft.attachments[index])))
+                c.draft.attachments[index].effectiveCategoryKey == _category))
           index,
     ];
     return Column(
@@ -2062,28 +1987,27 @@ class _DesktopAttachmentsStageState extends State<_DesktopAttachmentsStage> {
                                 .active(language),
                           ),
                         ),
-                        DropdownMenuItem(
-                          value: 'operational',
-                          child: Text(
-                            YorksV1ProjectStrings.operationalDocument.active(
-                              language,
+                        for (final category
+                            in YorksV1ProjectAttachmentCategory.values)
+                          DropdownMenuItem(
+                            value: category.wireValue,
+                            child: Text(
+                              _attachmentCategoryLabel(
+                                category,
+                              ).active(language),
                             ),
-                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                        DropdownMenuItem(
-                          value: 'review',
-                          child: Text(
-                            YorksV1ProjectSetupDesktopStrings.requiresReview
-                                .active(language),
-                          ),
-                        ),
                       ],
                       onChanged: (value) =>
                           setState(() => _category = value ?? 'all'),
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                YorksV1ProjectSetupDesktopStrings.categoryHelp.active(language),
+                style: YorksProjectSetupDesktopTheme.small,
               ),
               const SizedBox(height: 14),
               Container(
@@ -2105,10 +2029,7 @@ class _DesktopAttachmentsStageState extends State<_DesktopAttachmentsStage> {
                           YorksV1ProjectSetupDesktopStrings.category.active(
                             language,
                           ),
-                          YorksV1ProjectSetupDesktopStrings.addedBy.active(
-                            language,
-                          ),
-                          YorksV1ProjectSetupDesktopStrings.date.active(
+                          YorksV1ProjectSetupDesktopStrings.preview.active(
                             language,
                           ),
                           YorksV1ProjectSetupDesktopStrings.status.active(
@@ -2116,7 +2037,7 @@ class _DesktopAttachmentsStageState extends State<_DesktopAttachmentsStage> {
                           ),
                           '',
                         ],
-                        flex: const [28, 13, 16, 16, 20, 7],
+                        flex: const [34, 20, 17, 22, 7],
                         height: 42,
                       ),
                       for (final index in rows)
@@ -2210,46 +2131,48 @@ class _DesktopAttachmentsStageState extends State<_DesktopAttachmentsStage> {
                                   ),
                                 ],
                               ),
-                              Row(
-                                children: [
-                                  Checkbox(
-                                    value: isReviewed(file),
-                                    visualDensity: VisualDensity.compact,
-                                    materialTapTargetSize:
-                                        MaterialTapTargetSize.shrinkWrap,
-                                    onChanged: manifest != null
-                                        ? null
-                                        : (value) => c.onReviewClassification(
-                                            index,
-                                            value ?? false,
-                                          ),
+                              _AttachmentCategoryPicker(
+                                key: ValueKey(
+                                  'yorks-v1-desktop-file-category-$identity',
+                                ),
+                                attachment: file,
+                                language: language,
+                                onChanged:
+                                    manifest == null &&
+                                        c.setupState?.outcomeUncertain != true
+                                    ? (category) =>
+                                          c.onChangeCategory(index, category)
+                                    : null,
+                              ),
+                              Align(
+                                alignment: AlignmentDirectional.centerStart,
+                                child: OutlinedButton.icon(
+                                  key: ValueKey(
+                                    'yorks-v1-desktop-file-preview-$identity',
                                   ),
-                                  Expanded(
-                                    child: Text(
-                                      (isReviewed(file)
-                                              ? YorksV1ProjectStrings
-                                                    .operationalDocument
-                                              : YorksV1ProjectSetupDesktopStrings
-                                                    .requiresReview)
-                                          .active(language),
-                                      style: YorksProjectSetupDesktopTheme.small
-                                          .copyWith(
-                                            color: isReviewed(file)
-                                                ? YorksProjectSetupDesktopTheme
-                                                      .navy
-                                                : AppColors.warning,
-                                          ),
+                                  onPressed: pendingBytes == null
+                                      ? c.onAddAttachment
+                                      : () => c.onPreviewAttachment(file),
+                                  style: OutlinedButton.styleFrom(
+                                    minimumSize: const Size(44, 44),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
                                     ),
                                   ),
-                                ],
-                              ),
-                              Text(
-                                '—',
-                                style: YorksProjectSetupDesktopTheme.body,
-                              ),
-                              Text(
-                                '—',
-                                style: YorksProjectSetupDesktopTheme.body,
+                                  icon: Icon(
+                                    pendingBytes == null
+                                        ? Icons.attach_file
+                                        : Icons.visibility_outlined,
+                                    size: 17,
+                                  ),
+                                  label: Text(
+                                    (pendingBytes == null
+                                            ? YorksV1ProjectStrings.fileReselect
+                                            : YorksV1ProjectSetupDesktopStrings
+                                                  .preview)
+                                        .active(language),
+                                  ),
+                                ),
                               ),
                               Row(
                                 children: [
@@ -2296,13 +2219,7 @@ class _DesktopAttachmentsStageState extends State<_DesktopAttachmentsStage> {
                                       column++
                                     )
                                       Expanded(
-                                        flex: const [
-                                          28,
-                                          13,
-                                          16,
-                                          16,
-                                          20,
-                                        ][column],
+                                        flex: const [34, 20, 17, 22][column],
                                         child: Container(
                                           alignment:
                                               AlignmentDirectional.centerStart,
@@ -2354,12 +2271,12 @@ class _DesktopAttachmentsStageState extends State<_DesktopAttachmentsStage> {
                                                     .active(language),
                                               ),
                                             ),
-                                          if (manifest == null)
+                                          if (pendingBytes != null)
                                             PopupMenuItem(
-                                              value: 'review',
+                                              value: 'preview',
                                               child: Text(
-                                                YorksV1ProjectStrings
-                                                    .operationalDocument
+                                                YorksV1ProjectSetupDesktopStrings
+                                                    .preview
                                                     .active(language),
                                               ),
                                             ),
@@ -2380,11 +2297,8 @@ class _DesktopAttachmentsStageState extends State<_DesktopAttachmentsStage> {
                                               if (manifest != null) {
                                                 c.onRetryFile?.call(manifest);
                                               }
-                                            case 'review':
-                                              c.onReviewClassification(
-                                                index,
-                                                !isReviewed(file),
-                                              );
+                                            case 'preview':
+                                              c.onPreviewAttachment(file);
                                             case 'remove':
                                               c.onRemoveAttachment(index);
                                           }
@@ -2552,11 +2466,6 @@ class _DesktopReviewStage extends StatelessWidget {
                 '${(role == YorksV1ProjectMembershipRole.projectEngineer ? YorksV1ProjectStrings.projectEngineers : YorksV1ProjectStrings.siteEngineers).active(language)}: ${[if (autoRole == role) YorksV1ProjectStrings.you.active(language), for (final member in draft.initialMembers)
                   if (member.projectRole == role && (member.authUserId != c.creatorAuthUserId || role != autoRole)) _safeMemberDisplayName(byId[member.authUserId])].join(', ')}',
           ].join(' · ');
-    final reviewed =
-        (draft.rawEditorState['reviewedOperationalFiles'] as List?) ?? const [];
-    bool fileReviewed(YorksV1ProjectAttachmentInput file) => reviewed.contains(
-      '${file.localId ?? file.fileName}:${file.contentHash ?? file.sizeBytes}',
-    );
     bool fileBytesAvailable(YorksV1ProjectAttachmentInput attachment) =>
         attachment.contentHash != null &&
         c.pendingFiles.any(
@@ -2596,8 +2505,7 @@ class _DesktopReviewStage extends StatelessWidget {
         errors.isEmpty &&
         c.validationErrors.isEmpty &&
         !invalidRawDate &&
-        !unappliedEditor &&
-        draft.attachments.every(fileReviewed);
+        !unappliedEditor;
 
     Widget sheet(
       YorksV1ProjectCreationStage stage,
@@ -2769,9 +2677,9 @@ class _DesktopReviewStage extends StatelessWidget {
               YorksV1ProjectValidationCode.duplicateBuildingCode,
             }.contains(error),
           ),
-      YorksV1ProjectCreationStage.attachments:
-          !errors.contains(YorksV1ProjectValidationCode.invalidAttachment) &&
-          draft.attachments.every(fileReviewed),
+      YorksV1ProjectCreationStage.attachments: !errors.contains(
+        YorksV1ProjectValidationCode.invalidAttachment,
+      ),
     };
     final allComplete = stageComplete.values.every((value) => value) && ready;
     return Row(
@@ -2987,12 +2895,9 @@ class _DesktopReviewStage extends StatelessWidget {
                                     : _formatAttachmentSize(file.sizeBytes!),
                               ),
                               cell(
-                                (fileReviewed(file)
-                                        ? YorksV1ProjectStrings
-                                              .operationalDocument
-                                        : YorksV1ProjectSetupDesktopStrings
-                                              .requiresReview)
-                                    .active(language),
+                                _attachmentCategoryLabel(
+                                  file.category,
+                                ).active(language),
                               ),
                               cell(
                                 (fileBytesAvailable(file)

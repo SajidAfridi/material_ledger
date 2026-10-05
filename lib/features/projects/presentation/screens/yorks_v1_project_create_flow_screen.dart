@@ -51,6 +51,7 @@ import 'yorks_v1_project_setup_mobile_theme.dart';
 import '../../../../shared/models/yorks_v1_project_setup_mobile_strings.dart';
 import '../../../../shared/models/yorks_v1_project_setup_shell_strings.dart';
 import '../widgets/yorks_v1_project_setup_pending_recovery.dart';
+import '../widgets/yorks_v1_project_setup_attachment_preview.dart';
 
 part 'yorks_v1_project_setup_desktop_stages.dart';
 part 'yorks_v1_project_setup_mobile_stages.dart';
@@ -747,10 +748,7 @@ class _YorksV1ProjectCreateFlowScreenState
                               !(stage ==
                                       YorksV1ProjectCreationStage
                                           .projectDetails &&
-                                  _hasInvalidTypedDates) &&
-                              !(stage ==
-                                      YorksV1ProjectCreationStage.attachments &&
-                                  _hasUnreviewedAttachments))
+                                  _hasInvalidTypedDates))
                             stage,
                       };
                       final buildShell = desktop
@@ -797,8 +795,7 @@ class _YorksV1ProjectCreateFlowScreenState
                               permission.canWrite &&
                                   !readOnly &&
                                   (intentLocked ||
-                                      (!_hasUnreviewedAttachments &&
-                                          !_hasUnappliedBuildingEditor &&
+                                      (!_hasUnappliedBuildingEditor &&
                                           !_hasUnappliedPartyEditor))
                               ? _createProject
                               : null,
@@ -1523,7 +1520,8 @@ class _YorksV1ProjectCreateFlowScreenState
         pendingFiles: _selectedAttachmentFiles,
         setupState: setupState,
         onRetryFile: _retrySetupFile,
-        onReviewClassification: _reviewAttachmentClassification,
+        onChangeCategory: _setAttachmentCategory,
+        onPreviewAttachment: _previewAttachment,
       ),
       YorksV1ProjectCreationStage.reviewAndCreate => _ReviewStage(
         draft: draft,
@@ -1905,36 +1903,144 @@ class _YorksV1ProjectCreateFlowScreenState
     }
   }
 
-  String _attachmentReviewToken(YorksV1ProjectAttachmentInput file) =>
-      '${file.localId ?? file.fileName}:${file.contentHash ?? file.sizeBytes}';
-  bool get _hasUnreviewedAttachments {
-    final draft = _currentDraft();
-    final reviewed =
-        (draft.rawEditorState['reviewedOperationalFiles'] as List?)
-            ?.cast<String>() ??
-        const <String>[];
-    return draft.attachments.any(
-      (file) => !reviewed.contains(_attachmentReviewToken(file)),
-    );
-  }
-
-  void _reviewAttachmentClassification(int index, bool reviewed) {
+  void _setAttachmentCategory(
+    int index,
+    YorksV1ProjectAttachmentCategory category,
+  ) {
     _queueDraft((draft) {
       if (index < 0 || index >= draft.attachments.length) return draft;
-      final ids = {
-        ...(draft.rawEditorState['reviewedOperationalFiles'] as List?)
-                ?.cast<String>() ??
-            const <String>[],
-      };
-      final token = _attachmentReviewToken(draft.attachments[index]);
-      reviewed ? ids.add(token) : ids.remove(token);
+      final operation = ref
+          .read(yorksV1ProjectSetupCoordinatorProvider(_setupScope(draft)))
+          .operation;
+      if (operation != null &&
+          (operation.coreSucceeded || operation.hasUnresolvedCommand)) {
+        return draft;
+      }
       return draft.copyWith(
-        rawEditorState: {
-          ...draft.rawEditorState,
-          'reviewedOperationalFiles': ids.toList(),
-        },
+        attachments: [
+          for (var row = 0; row < draft.attachments.length; row++)
+            row == index
+                ? draft.attachments[row].copyWith(
+                    categoryKey: category.wireValue,
+                  )
+                : draft.attachments[row],
+        ],
       );
     });
+  }
+
+  Future<void> _previewAttachment(
+    YorksV1ProjectAttachmentInput attachment,
+  ) async {
+    final generation = _contextGeneration;
+    final owner = _activeAuthUserId;
+    if (owner == null ||
+        !_draftController(owner).writable ||
+        _checkingOwnership ||
+        _ownershipCheckFailed) {
+      return;
+    }
+    final backend = ref.read(yorksV1ProjectDraftBackendIdentityProvider);
+    bool hasAccess(WidgetRef reader) {
+      final role = reader.read(yorksV1CurrentRoleProvider);
+      return reader.read(yorksV1AuthUserIdProvider) == owner &&
+          reader.read(yorksV1ProjectDraftBackendIdentityProvider) == backend &&
+          yorksV1FeatureActionAccess(
+            reader.read(yorksV1CurrentPermissionSnapshotProvider),
+            _isEditing
+                ? YorksV1CapabilityKeys.projectsEdit
+                : YorksV1CapabilityKeys.projectsCreate,
+            legacyAllowed: role?.canCreateProject == true,
+            projectId: widget.editItem?.project.id,
+          ).canWrite;
+    }
+
+    if (!hasAccess(ref)) return;
+    try {
+      await _draftController(owner).verifyOwnership();
+    } catch (_) {
+      return;
+    }
+    if (!mounted || !_isCurrentContext(generation) || !hasAccess(ref)) return;
+    final current = _currentDraft();
+    final exact = current.attachments
+        .where(
+          (file) =>
+              file.localId == attachment.localId &&
+              file.fileName == attachment.fileName &&
+              file.mimeType == attachment.mimeType &&
+              file.sizeBytes == attachment.sizeBytes &&
+              file.contentHash == attachment.contentHash,
+        )
+        .firstOrNull;
+    if (exact == null) return;
+    final selected = _selectedAttachmentFiles
+        .where(
+          (file) =>
+              file.fileName == exact.fileName &&
+              file.mimeType == exact.mimeType &&
+              file.bytes.length == exact.sizeBytes &&
+              exact.contentHash != null &&
+              sha256.convert(file.bytes).toString() == exact.contentHash,
+        )
+        .firstOrNull;
+    if (selected == null) {
+      _showMessage(YorksV1ProjectStrings.fileReselect);
+      return;
+    }
+    final fileService = ref.read(yorksV1DocumentFileServiceProvider);
+    final language = ref.read(languageProvider);
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Consumer(
+        builder: (context, reader, _) {
+          reader.watch(yorksV1AuthUserIdProvider);
+          reader.watch(yorksV1ProjectDraftBackendIdentityProvider);
+          reader.watch(yorksV1CurrentRoleProvider);
+          reader.watch(yorksV1CurrentPermissionSnapshotProvider);
+          if (!_isCurrentContext(generation) || !hasAccess(reader)) {
+            return AlertDialog(
+              content: Text(
+                YorksV1ProjectStrings.noPermission.active(language),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: Text(
+                    YorksV1ProjectSetupDesktopStrings.closePreview.active(
+                      language,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }
+          return YorksV1ProjectSetupAttachmentPreview(
+            file: selected,
+            language: language,
+            onSave: () async {
+              if (!_isCurrentContext(generation) || !hasAccess(ref)) return;
+              try {
+                await fileService.saveDocument(
+                  bytes: selected.bytes,
+                  fileName: selected.fileName,
+                  mimeType: selected.mimeType,
+                );
+              } catch (_) {
+                if (_isCurrentContext(generation) && hasAccess(ref)) {
+                  _showMessage(
+                    YorksV1ProjectStrings.errorFor(
+                      YorksV1DomainErrorCode.unexpectedResponse,
+                    ),
+                    error: true,
+                  );
+                }
+              }
+            },
+          );
+        },
+      ),
+    );
   }
 
   Future<void> _finishResolvedRecovery(
@@ -3074,13 +3180,21 @@ class _YorksV1ProjectCreateFlowScreenState
             (attachment.contentHash == null || attachment.contentHash == hash),
       );
       final existing = index < 0 ? null : attachments[index];
-      final replacement = YorksV1ProjectAttachmentInput(
-        localId: existing?.localId ?? const Uuid().v4(),
-        fileName: selected.fileName,
-        mimeType: selected.mimeType,
-        sizeBytes: selected.bytes.length,
-        contentHash: hash,
-      );
+      final replacement =
+          (existing ??
+                  YorksV1ProjectAttachmentInput(
+                    localId: const Uuid().v4(),
+                    fileName: selected.fileName,
+                    mimeType: selected.mimeType,
+                    categoryKey:
+                        YorksV1ProjectAttachmentCategory.general.wireValue,
+                  ))
+              .copyWith(
+                fileName: selected.fileName,
+                mimeType: selected.mimeType,
+                sizeBytes: selected.bytes.length,
+                contentHash: hash,
+              );
       if (index < 0) {
         attachments.add(replacement);
       } else {
@@ -3358,14 +3472,6 @@ class _YorksV1ProjectCreateFlowScreenState
         );
         return;
       }
-      if (_hasUnreviewedAttachments) {
-        _showMessage(
-          YorksV1ProjectStrings.reviewAttachmentClassification,
-          error: true,
-        );
-        await _setStage(YorksV1ProjectCreationStage.attachments);
-        return;
-      }
       final loadedDirectory = ref
           .read(yorksV1ActiveProjectTeamDirectoryProvider)
           .asData
@@ -3552,6 +3658,7 @@ class _YorksV1ProjectCreateFlowScreenState
         fileName: attachment.fileName,
         mimeType: attachment.mimeType ?? 'application/octet-stream',
         sizeBytes: attachment.sizeBytes ?? 0,
+        categoryKey: attachment.categoryKey,
         classification: YorksV1DocumentClassification.operational,
         contentHash:
             attachment.contentHash ??
@@ -5470,7 +5577,8 @@ class _AttachmentsStage extends StatelessWidget {
     required this.onDropError,
     required this.onRemoveAttachment,
     required this.pendingFiles,
-    required this.onReviewClassification,
+    required this.onChangeCategory,
+    required this.onPreviewAttachment,
     this.setupState,
     this.onRetryFile,
   });
@@ -5484,7 +5592,8 @@ class _AttachmentsStage extends StatelessWidget {
   final VoidCallback onDropError;
   final ValueChanged<int> onRemoveAttachment;
   final List<YorksV1SelectedDocument> pendingFiles;
-  final void Function(int, bool) onReviewClassification;
+  final void Function(int, YorksV1ProjectAttachmentCategory) onChangeCategory;
+  final ValueChanged<YorksV1ProjectAttachmentInput> onPreviewAttachment;
   final YorksV1ProjectSetupState? setupState;
   final ValueChanged<YorksV1ProjectSetupFile>? onRetryFile;
 
@@ -5551,15 +5660,10 @@ class _AttachmentsStage extends StatelessWidget {
                     attachment: draft.attachments[index],
                     language: language,
                     onReselect: onAddAttachment,
-                    reviewedOperational:
-                        ((draft.rawEditorState['reviewedOperationalFiles']
-                                    as List?) ??
-                                const [])
-                            .contains(
-                              '${draft.attachments[index].localId ?? draft.attachments[index].fileName}:${draft.attachments[index].contentHash ?? draft.attachments[index].sizeBytes}',
-                            ),
-                    onReviewClassification: (value) =>
-                        onReviewClassification(index, value),
+                    onChangeCategory: (category) =>
+                        onChangeCategory(index, category),
+                    onPreview: () =>
+                        onPreviewAttachment(draft.attachments[index]),
                     pendingFile: _pendingFileFor(
                       draft.attachments[index],
                       pendingFiles,
@@ -5784,8 +5888,8 @@ class _AttachmentSummary extends StatelessWidget {
     required this.pendingFile,
     required this.onRemove,
     required this.onReselect,
-    required this.reviewedOperational,
-    required this.onReviewClassification,
+    required this.onChangeCategory,
+    required this.onPreview,
   });
 
   final AppLanguage language;
@@ -5793,8 +5897,8 @@ class _AttachmentSummary extends StatelessWidget {
   final YorksV1SelectedDocument? pendingFile;
   final VoidCallback onRemove;
   final VoidCallback onReselect;
-  final bool reviewedOperational;
-  final ValueChanged<bool> onReviewClassification;
+  final ValueChanged<YorksV1ProjectAttachmentCategory> onChangeCategory;
+  final VoidCallback onPreview;
 
   @override
   Widget build(BuildContext context) {
@@ -5807,17 +5911,25 @@ class _AttachmentSummary extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(attachment.fileName, style: AppTypography.titleMedium),
-              Material(
-                color: Colors.transparent,
-                child: CheckboxListTile(
-                  value: reviewedOperational,
-                  contentPadding: EdgeInsets.zero,
-                  controlAffinity: ListTileControlAffinity.leading,
-                  title: Text(
-                    YorksV1ProjectStrings.operationalDocument.active(language),
-                    style: AppTypography.bodySmall,
-                  ),
-                  onChanged: (value) => onReviewClassification(value ?? false),
+              const SizedBox(height: AppSpacing.sm),
+              _AttachmentCategoryPicker(
+                attachment: attachment,
+                language: language,
+                onChanged: onChangeCategory,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              OutlinedButton.icon(
+                onPressed: pendingFile == null ? onReselect : onPreview,
+                icon: Icon(
+                  pendingFile == null
+                      ? Icons.attach_file
+                      : Icons.visibility_outlined,
+                ),
+                label: Text(
+                  (pendingFile == null
+                          ? YorksV1ProjectStrings.fileReselect
+                          : YorksV1ProjectSetupDesktopStrings.preview)
+                      .active(language),
                 ),
               ),
               if (attachment.mimeType?.trim().isNotEmpty ?? false) ...[
@@ -5868,6 +5980,80 @@ class _AttachmentSummary extends StatelessWidget {
       ],
     );
   }
+}
+
+TranslatableString _attachmentCategoryLabel(
+  YorksV1ProjectAttachmentCategory? category,
+) => switch (category) {
+  YorksV1ProjectAttachmentCategory.general =>
+    YorksV1ProjectSetupDesktopStrings.categoryGeneral,
+  YorksV1ProjectAttachmentCategory.drawing =>
+    YorksV1ProjectSetupDesktopStrings.categoryDrawing,
+  YorksV1ProjectAttachmentCategory.calculation =>
+    YorksV1ProjectSetupDesktopStrings.categoryCalculation,
+  YorksV1ProjectAttachmentCategory.schedule =>
+    YorksV1ProjectSetupDesktopStrings.categorySchedule,
+  YorksV1ProjectAttachmentCategory.approval =>
+    YorksV1ProjectSetupDesktopStrings.categoryApproval,
+  YorksV1ProjectAttachmentCategory.materialList =>
+    YorksV1ProjectSetupDesktopStrings.categoryMaterialList,
+  YorksV1ProjectAttachmentCategory.other =>
+    YorksV1ProjectSetupDesktopStrings.categoryOther,
+  null => YorksV1ProjectSetupDesktopStrings.retainedCategory,
+};
+
+class _AttachmentCategoryPicker extends StatelessWidget {
+  const _AttachmentCategoryPicker({
+    super.key,
+    required this.attachment,
+    required this.language,
+    this.onChanged,
+  });
+  final YorksV1ProjectAttachmentInput attachment;
+  final AppLanguage language;
+  final ValueChanged<YorksV1ProjectAttachmentCategory>? onChanged;
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label:
+        '${YorksV1ProjectSetupDesktopStrings.category.active(language)} (${YorksV1ProjectStrings.optional.active(language)})',
+    child: DropdownButtonFormField<String>(
+      key: ValueKey('${attachment.localId}:${attachment.effectiveCategoryKey}'),
+      initialValue: attachment.effectiveCategoryKey,
+      isExpanded: true,
+      style: AppTypography.bodySmall.copyWith(color: AppColors.ink),
+      decoration: const InputDecoration(
+        isDense: true,
+        border: OutlineInputBorder(),
+        constraints: BoxConstraints(minHeight: 44),
+        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      ),
+      items: [
+        for (final category in YorksV1ProjectAttachmentCategory.values)
+          DropdownMenuItem(
+            value: category.wireValue,
+            child: Text(_attachmentCategoryLabel(category).active(language)),
+          ),
+        if (attachment.category == null)
+          DropdownMenuItem(
+            value: attachment.effectiveCategoryKey,
+            enabled: false,
+            child: Text(
+              YorksV1ProjectSetupDesktopStrings.retainedCategory.active(
+                language,
+              ),
+            ),
+          ),
+      ],
+      onChanged: onChanged == null
+          ? null
+          : (value) {
+              final selected = YorksV1ProjectAttachmentCategory.values
+                  .where((category) => category.wireValue == value)
+                  .firstOrNull;
+              if (selected != null) onChanged!(selected);
+            },
+    ),
+  );
 }
 
 String _formatAttachmentSize(int bytes) {

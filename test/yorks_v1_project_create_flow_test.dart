@@ -12,11 +12,13 @@ import 'package:go_router/go_router.dart';
 import 'package:material_ledger/core/theme/app_theme.dart';
 import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_project_create_flow_screen.dart';
 import 'package:material_ledger/features/projects/presentation/widgets/yorks_v1_project_setup_completion.dart';
+import 'package:material_ledger/features/projects/presentation/widgets/yorks_v1_project_setup_attachment_preview.dart';
 import 'package:material_ledger/shared/models/yorks_v1_domain_error.dart';
 import 'package:material_ledger/shared/models/yorks_v1_document.dart';
 import 'package:material_ledger/shared/models/analytics_event.dart';
 import 'package:material_ledger/shared/models/app_language.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project.dart';
+import 'package:material_ledger/shared/models/yorks_v1_project_setup_desktop_strings.dart';
 import 'package:material_ledger/shared/models/yorks_v1_permission_management.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_portfolio.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_creation_draft.dart';
@@ -633,7 +635,7 @@ void main() {
       await _pumpScreen(tester, container);
       expect(
         find.textContaining(YorksV1ProjectStrings.fileReselect.primary),
-        findsOneWidget,
+        findsWidgets,
       );
 
       await tester.tap(
@@ -1117,6 +1119,268 @@ void main() {
       );
     },
   );
+
+  for (final size in [const Size(1536, 1024), const Size(360, 800)]) {
+    testWidgets(
+      '${size.width} categories resume and local Preview uses each same-name file exact bytes',
+      (tester) async {
+        final language = size.width == 360
+            ? AppLanguage.arabic
+            : AppLanguage.english;
+        final images = (await tester.runAsync(
+          () => Future.wait([
+            File('assets/logo.png').readAsBytes(),
+            File('assets/branding/yorks_emblem_mobile.png').readAsBytes(),
+          ]),
+        ))!;
+        final selected = [
+          for (final bytes in images)
+            YorksV1SelectedDocument(
+              fileName: 'same-name.png',
+              mimeType: 'image/png',
+              bytes: bytes,
+            ),
+          YorksV1SelectedDocument(
+            fileName: 'schedule.docx',
+            mimeType:
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            bytes: Uint8List.fromList([80, 75, 3, 4, 11, 12]),
+          ),
+        ];
+        final picker = _PreviewDocumentFileService(selected);
+        final repository = _FakeProjectRepository();
+        final container = await createContainer(
+          role: YorksV1Role.projectEngineer,
+          repository: repository,
+          documentFileService: picker,
+        );
+        container.read(languageProvider.notifier).setLanguage(language);
+        final provider = yorksV1ProjectSetupCreationDraftProvider(_authUserId);
+        final writer = container.read(provider.notifier);
+        await writer.initialized;
+        await writer.save(
+          container
+              .read(provider)
+              .copyWith(
+                currentStage: YorksV1ProjectCreationStage.attachments,
+                reference: 'LOCAL-PREVIEW',
+                name: 'Exact local file preview',
+              ),
+        );
+        await _pumpScreen(
+          tester,
+          container,
+          size: size,
+          textDirection: language.isRtl ? TextDirection.rtl : TextDirection.ltr,
+        );
+        final prefix = size.width >= 1100 ? 'desktop' : 'mobile';
+        Future<void> tapVisible(Finder finder) async {
+          await Scrollable.ensureVisible(tester.element(finder), alignment: .5);
+          await tester.pumpAndSettle();
+          expect(finder.hitTestable(), findsOneWidget);
+          await tester.tap(finder);
+          await tester.pumpAndSettle();
+        }
+
+        await tapVisible(
+          find.byKey(const ValueKey('yorks-v1-attachment-dropzone')),
+        );
+        final first = container.read(provider).attachments.single;
+        expect(first.category, YorksV1ProjectAttachmentCategory.general);
+        final firstCategory = find.byKey(
+          ValueKey('yorks-v1-$prefix-file-category-${first.localId}'),
+        );
+        final categoryInput = find.descendant(
+          of: firstCategory,
+          matching: find.byType(DropdownButtonFormField<String>),
+        );
+        expect(
+          tester
+              .widget<DropdownButtonFormField<String>>(categoryInput)
+              .initialValue,
+          'general',
+        );
+        await tapVisible(firstCategory);
+        await tester.tap(
+          find
+              .text(
+                YorksV1ProjectSetupDesktopStrings.categoryDrawing.active(
+                  language,
+                ),
+              )
+              .last,
+        );
+        await tester.pumpAndSettle();
+        await writer.flush();
+        expect(
+          container.read(provider).attachments.single.category,
+          YorksV1ProjectAttachmentCategory.drawing,
+        );
+        for (var index = 1; index < selected.length; index++) {
+          await tapVisible(
+            find.byKey(const ValueKey('yorks-v1-attachment-dropzone')),
+          );
+        }
+        final files = container.read(provider).attachments;
+        expect(files, hasLength(3));
+        expect(files[0].fileName, files[1].fileName);
+        expect(files[0].localId, isNot(files[1].localId));
+        expect(files[0].contentHash, isNot(files[1].contentHash));
+        expect(files[1].category, YorksV1ProjectAttachmentCategory.general);
+        expect(find.byType(Checkbox), findsNothing);
+        for (var index = 0; index < files.length; index++) {
+          final preview = find.byKey(
+            ValueKey('yorks-v1-$prefix-file-preview-${files[index].localId}'),
+          );
+          await tapVisible(preview);
+          final dialog = find.byType(YorksV1ProjectSetupAttachmentPreview);
+          expect(dialog, findsOneWidget);
+          final rendered = tester.widget<YorksV1ProjectSetupAttachmentPreview>(
+            dialog,
+          );
+          expect(rendered.file.bytes, orderedEquals(selected[index].bytes));
+          expect(
+            sha256.convert(rendered.file.bytes).toString(),
+            files[index].contentHash,
+          );
+          if (index < 2) {
+            final image = tester.widget<Image>(
+              find.byKey(const ValueKey('yorks-v1-local-file-image-preview')),
+            );
+            expect(
+              (image.image as MemoryImage).bytes,
+              orderedEquals(selected[index].bytes),
+            );
+          } else {
+            expect(
+              find.byKey(const ValueKey('yorks-v1-local-file-image-preview')),
+              findsNothing,
+            );
+            expect(
+              find.text(
+                YorksV1ProjectSetupDesktopStrings.previewUnsupported.active(
+                  language,
+                ),
+              ),
+              findsOneWidget,
+            );
+            await tester.tap(
+              find.byKey(const ValueKey('yorks-v1-local-file-save')),
+            );
+            await tester.pumpAndSettle();
+            expect(
+              picker.saved.single.bytes,
+              orderedEquals(selected[index].bytes),
+            );
+            expect(picker.saved.single.mimeType, selected[index].mimeType);
+          }
+          await tester.tap(
+            find.byTooltip(
+              YorksV1ProjectSetupDesktopStrings.closePreview.active(language),
+            ),
+          );
+          await tester.pumpAndSettle();
+        }
+        await tapVisible(
+          find.byKey(
+            ValueKey('yorks-v1-$prefix-file-preview-${files.first.localId}'),
+          ),
+        );
+        final openPreview = tester.widget<YorksV1ProjectSetupAttachmentPreview>(
+          find.byType(YorksV1ProjectSetupAttachmentPreview),
+        );
+        final staleSave = openPreview.onSave!;
+        expect(
+          find.byKey(const ValueKey('yorks-v1-local-file-image-preview')),
+          findsOneWidget,
+        );
+        container.read(_testOwnerProvider.notifier).state =
+            'revoked-preview-owner';
+        await tester.pumpAndSettle();
+        expect(find.byType(YorksV1ProjectSetupAttachmentPreview), findsNothing);
+        expect(
+          find.byKey(const ValueKey('yorks-v1-local-file-image-preview')),
+          findsNothing,
+        );
+        expect(
+          find.byKey(const ValueKey('yorks-v1-local-file-save')),
+          findsNothing,
+        );
+        expect(
+          find.text(YorksV1ProjectStrings.noPermission.active(language)),
+          findsWidgets,
+        );
+        staleSave();
+        await tester.pumpAndSettle();
+        expect(
+          picker.saved,
+          hasLength(1),
+          reason:
+              'An already captured callback must not save after revocation.',
+        );
+        await tester.tap(
+          find.text(
+            YorksV1ProjectSetupDesktopStrings.closePreview.active(language),
+          ),
+        );
+        await tester.pumpAndSettle();
+        container.read(_testOwnerProvider.notifier).state = _authUserId;
+        await tester.pumpAndSettle();
+        await writer.flush();
+        final draftId = container.read(provider).draftId;
+        final acknowledgedFiles = container
+            .read(provider)
+            .attachments
+            .map((file) => file.toDraftJson())
+            .toList();
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pumpAndSettle();
+        await _pumpScreen(
+          tester,
+          container,
+          size: size,
+          textDirection: language.isRtl ? TextDirection.rtl : TextDirection.ltr,
+        );
+        expect(container.read(provider).draftId, draftId);
+        expect(
+          container
+              .read(provider)
+              .attachments
+              .map((file) => file.toDraftJson())
+              .toList(),
+          acknowledgedFiles,
+        );
+        final restoredCategory = tester.widget<DropdownButtonFormField<String>>(
+          find.descendant(
+            of: firstCategory,
+            matching: find.byType(DropdownButtonFormField<String>),
+          ),
+        );
+        expect(restoredCategory.initialValue, 'drawing');
+        final missing = find.byKey(
+          ValueKey('yorks-v1-$prefix-file-preview-${first.localId}'),
+        );
+        expect(
+          find.descendant(
+            of: missing,
+            matching: find.text(
+              YorksV1ProjectStrings.fileReselect.active(language),
+            ),
+          ),
+          findsOneWidget,
+        );
+        await tapVisible(missing);
+        expect(picker.selections, 4);
+        expect(find.byType(YorksV1ProjectSetupAttachmentPreview), findsNothing);
+        expect(
+          find.byKey(const ValueKey('yorks-v1-local-file-image-preview')),
+          findsNothing,
+        );
+        expect(repository.receivedCreationInputs, isEmpty);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 
   for (final size in [const Size(1280, 900), const Size(390, 844)]) {
     testWidgets(
@@ -2001,7 +2265,7 @@ void main() {
 
   for (final size in [const Size(1280, 900), const Size(390, 844)]) {
     testWidgets(
-      '${size.width} attachment classification is reviewed before committing and pending files remain recoverable after navigation',
+      '${size.width} optional file category preserves operational pending recovery after core navigation',
       (tester) async {
         final repository = _FakeProjectRepository();
         final container = await createContainer(
@@ -2029,6 +2293,7 @@ void main() {
                         fileName: 'site-plan.pdf',
                         mimeType: 'application/pdf',
                         sizeBytes: 3,
+                        categoryKey: 'drawing',
                       ),
                     ],
                   ),
@@ -2044,7 +2309,7 @@ void main() {
           size: size,
         );
         final submit = find.byKey(const ValueKey('yorks-v1-project-create'));
-        expect(tester.widget<FilledButton>(submit).onPressed, isNull);
+        expect(tester.widget<FilledButton>(submit).onPressed, isNotNull);
         expect(repository.receivedCreationInputs, isEmpty);
         final editAttachments = find.bySemanticsLabel(
           YorksV1ProjectStrings.editAttachments.primary,
@@ -2056,13 +2321,8 @@ void main() {
           container.read(provider).currentStage,
           YorksV1ProjectCreationStage.attachments,
         );
-        expect(
-          find.text(YorksV1ProjectStrings.operationalFilesOnly.primary),
-          findsOneWidget,
-        );
-        await tester.ensureVisible(find.byType(Checkbox));
-        await tester.tap(find.byType(Checkbox));
-        await tester.pumpAndSettle();
+        expect(find.byType(Checkbox), findsNothing);
+        expect(find.byType(YorksV1ProjectSetupAttachmentPreview), findsNothing);
         await tester.tap(
           find.byKey(const ValueKey('yorks-v1-project-continue')),
         );
@@ -2070,6 +2330,24 @@ void main() {
         await tester.tap(submit);
         await tester.pumpAndSettle();
         expect(repository.receivedCreationInputs, hasLength(1));
+        expect(
+          repository
+              .receivedCreationInputs
+              .single
+              .attachments
+              .single
+              .categoryKey,
+          isNull,
+        );
+        expect(
+          repository.receivedCreationInputs.single.attachments.single
+              .toRpcJson(),
+          {
+            'file_name': 'site-plan.pdf',
+            'mime_type': 'application/pdf',
+            'size_bytes': 3,
+          },
+        );
         expect(created?.reference, 'YRA-FILES-PENDING');
         expect(created?.state, YorksV1ProjectLifecycle.active);
         expect(find.byType(YorksV1ProjectSetupCompletion), findsNothing);
@@ -2111,6 +2389,11 @@ void main() {
         expect(persistedOperation.filesPending, isTrue);
         expect(persistedOperation.cleanupComplete, isFalse);
         expect(persistedOperation.files.single.localId, 'pending-file');
+        expect(persistedOperation.files.single.categoryKey, 'drawing');
+        expect(
+          persistedOperation.files.single.classification,
+          YorksV1DocumentClassification.operational,
+        );
         expect(
           persistedOperation.files.single.status,
           YorksV1ProjectSetupFileStatus.needsReselect,
@@ -3419,6 +3702,35 @@ class _QueuedDocumentFileService extends _FakeDocumentFileService {
         mimeType: 'application/pdf',
         bytes: bytes[selections++],
       );
+}
+
+class _PreviewDocumentFileService extends _FakeDocumentFileService {
+  _PreviewDocumentFileService(this.files);
+  final List<YorksV1SelectedDocument> files;
+  final List<YorksV1SelectedDocument> saved = [];
+  int selections = 0;
+
+  @override
+  Future<YorksV1SelectedDocument?> selectDocument() async {
+    final index = selections++;
+    return index < files.length ? files[index] : null;
+  }
+
+  @override
+  Future<bool> saveDocument({
+    required Uint8List bytes,
+    required String fileName,
+    required String mimeType,
+  }) async {
+    saved.add(
+      YorksV1SelectedDocument(
+        fileName: fileName,
+        mimeType: mimeType,
+        bytes: bytes,
+      ),
+    );
+    return true;
+  }
 }
 
 class _SupportedTestDraftStorage extends SharedPreferencesProjectDraftStorage {

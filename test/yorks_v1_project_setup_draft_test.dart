@@ -20,6 +20,87 @@ import 'package:material_ledger/shared/repositories/yorks_v1_project_repository.
 
 void main() {
   test(
+    'optional attachment category defaults locally and preserves historical JSON',
+    () {
+      final old = {
+        'file_name': 'legacy.pdf',
+        'mime_type': 'application/pdf',
+        'size_bytes': 3,
+        'local_id': 'legacy-file',
+        'content_hash': 'retained-hash',
+        'future_metadata': {'provenance': 'keep'},
+      };
+      final attachment = YorksV1ProjectAttachmentInput.fromDraftJson(old);
+      expect(attachment.category, YorksV1ProjectAttachmentCategory.general);
+      expect(attachment.toDraftJson(), old);
+      final serverPayload = attachment.toRpcJson();
+      final changed = attachment.copyWith(
+        categoryKey: YorksV1ProjectAttachmentCategory.materialList.wireValue,
+      );
+      expect(changed.category, YorksV1ProjectAttachmentCategory.materialList);
+      expect(changed.toRpcJson(), serverPayload);
+      expect(changed.localId, attachment.localId);
+      expect(changed.contentHash, attachment.contentHash);
+      expect(changed.retainedFields, attachment.retainedFields);
+      final restored = YorksV1ProjectAttachmentInput.fromDraftJson(
+        jsonDecode(jsonEncode(changed.toDraftJson())) as Map<String, dynamic>,
+      );
+      expect(restored.categoryKey, 'material_list');
+      expect(restored.toDraftJson(), changed.toDraftJson());
+      final future = YorksV1ProjectAttachmentInput.fromDraftJson({
+        ...old,
+        'category': 'future-category',
+      });
+      expect(future.category, isNull);
+      expect(
+        future.copyWith(fileName: 'renamed.pdf').categoryKey,
+        'future-category',
+      );
+      expect(future.copyWith(fileName: 'renamed.pdf').retainedFields, {
+        'future_metadata': {'provenance': 'keep'},
+      });
+      expect(future.toDraftJson()['category'], 'future-category');
+      expect(future.toRpcJson(), serverPayload);
+    },
+  );
+
+  test(
+    'file outcome changes preserve protected classification and unknown journal metadata',
+    () {
+      final original = {
+        'local_id': 'pending-file',
+        'key': 'original-file-command',
+        'file_name': 'commercial.pdf',
+        'mime_type': 'application/pdf',
+        'size_bytes': 3,
+        'classification': 'commercial',
+        'content_hash': 'original-byte-hash',
+        'status': 'outcomeUncertain',
+        'error_code': null,
+        'category': 'future-category',
+        'future_upload_receipt': {'version': 9, 'token': 'retained'},
+      };
+      final file = YorksV1ProjectSetupFile.fromJson(original);
+      expect(file.toJson(), original);
+      expect(file.category, isNull);
+      final resolved = file.withOutcome(YorksV1ProjectSetupFileStatus.ready);
+      expect(resolved.toJson(), {...original, 'status': 'ready'});
+      expect(resolved.classification, YorksV1DocumentClassification.commercial);
+      expect(resolved.idempotencyKey, 'original-file-command');
+      expect(resolved.contentHash, 'original-byte-hash');
+      final old = {...original}..remove('category');
+      final historical = YorksV1ProjectSetupFile.fromJson(old);
+      expect(historical.category, YorksV1ProjectAttachmentCategory.general);
+      expect(
+        historical
+            .withOutcome(YorksV1ProjectSetupFileStatus.needsReselect)
+            .toJson(),
+        {...old, 'status': 'needsReselect'},
+      );
+    },
+  );
+
+  test(
     'historical coordinator rebinds after rotation and cannot alter fresh draft or switched owner',
     () async {
       SharedPreferences.setMockInitialValues({});

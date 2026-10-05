@@ -164,6 +164,12 @@ abstract final class YorksV1ProjectSetupDesktopStrings {
     ur: 'ڈرافٹ پر لاگو کریں',
     hi: 'ड्राफ़्ट पर लागू करें',
   );
+  static const saveBuilding = TranslatableString(
+    en: 'Save building',
+    ar: 'حفظ المبنى',
+    ur: 'عمارت محفوظ کریں',
+    hi: 'भवन सहेजें',
+  );
   static const leaveBuildingCodeBlank = TranslatableString(
     en: 'Leave blank to generate a code.',
     ar: 'اتركه فارغاً لإنشاء رمز.',
@@ -171,10 +177,10 @@ abstract final class YorksV1ProjectSetupDesktopStrings {
     hi: 'कोड बनाने के लिए खाली छोड़ें।',
   );
   static const applyOrCancelBuilding = TranslatableString(
-    en: 'Apply or cancel the building edit to continue.',
-    ar: 'طبّق تعديل المبنى أو ألغِه للمتابعة.',
-    ur: 'جاری رکھنے کے لیے عمارت کی ترمیم لاگو یا منسوخ کریں۔',
-    hi: 'आगे बढ़ने के लिए इमारत का संपादन लागू या रद्द करें।',
+    en: 'Finish or cancel the building edit to continue.',
+    ar: 'أكمل تعديل المبنى أو ألغِه للمتابعة.',
+    ur: 'جاری رکھنے کے لیے عمارت کی ترمیم مکمل یا منسوخ کریں۔',
+    hi: 'आगे बढ़ने के लिए इमारत का संपादन पूरा या रद्द करें।',
   );
   static const searchFiles = TranslatableString(
     en: 'Search files…',
@@ -193,6 +199,90 @@ abstract final class YorksV1ProjectSetupDesktopStrings {
     ar: 'الفئة',
     ur: 'زمرہ',
     hi: 'श्रेणी',
+  );
+  static const categoryHelp = TranslatableString(
+    en: 'Categories are optional and help organize files.',
+    ar: 'الفئات اختيارية وتساعد على تنظيم الملفات.',
+    ur: 'زمرے اختیاری ہیں اور فائلوں کو منظم کرنے میں مدد دیتے ہیں۔',
+    hi: 'श्रेणियाँ वैकल्पिक हैं और फ़ाइलों को व्यवस्थित करने में मदद करती हैं।',
+  );
+  static const categoryGeneral = TranslatableString(
+    en: 'General',
+    ar: 'عام',
+    ur: 'عام',
+    hi: 'सामान्य',
+  );
+  static const categoryDrawing = TranslatableString(
+    en: 'Drawing',
+    ar: 'رسم',
+    ur: 'ڈرائنگ',
+    hi: 'आरेख',
+  );
+  static const categoryCalculation = TranslatableString(
+    en: 'Calculation',
+    ar: 'حسابات',
+    ur: 'حساب',
+    hi: 'गणना',
+  );
+  static const categorySchedule = TranslatableString(
+    en: 'Schedule',
+    ar: 'جدول',
+    ur: 'شیڈول',
+    hi: 'अनुसूची',
+  );
+  static const categoryApproval = TranslatableString(
+    en: 'Approval',
+    ar: 'اعتماد',
+    ur: 'منظوری',
+    hi: 'अनुमोदन',
+  );
+  static const categoryMaterialList = TranslatableString(
+    en: 'Material list',
+    ar: 'قائمة مواد',
+    ur: 'مواد کی فہرست',
+    hi: 'सामग्री सूची',
+  );
+  static const categoryOther = TranslatableString(
+    en: 'Other',
+    ar: 'أخرى',
+    ur: 'دیگر',
+    hi: 'अन्य',
+  );
+  static const retainedCategory = TranslatableString(
+    en: 'Retained category',
+    ar: 'فئة محفوظة',
+    ur: 'محفوظ زمرہ',
+    hi: 'सुरक्षित श्रेणी',
+  );
+  static const preview = TranslatableString(
+    en: 'Preview',
+    ar: 'معاينة',
+    ur: 'پیش نظارہ',
+    hi: 'पूर्वावलोकन',
+  );
+  static const closePreview = TranslatableString(
+    en: 'Close preview',
+    ar: 'إغلاق المعاينة',
+    ur: 'پیش نظارہ بند کریں',
+    hi: 'पूर्वावलोकन बंद करें',
+  );
+  static const previewUnsupported = TranslatableString(
+    en: 'Preview is available for PDF and image files. Save this file to open it in a suitable app.',
+    ar: 'تتوفر المعاينة لملفات PDF والصور. احفظ هذا الملف لفتحه في تطبيق مناسب.',
+    ur: 'PDF اور تصویری فائلوں کا پیش نظارہ دستیاب ہے۔ یہ فائل محفوظ کر کے موزوں ایپ میں کھولیں۔',
+    hi: 'PDF और चित्र फ़ाइलों का पूर्वावलोकन उपलब्ध है। इस फ़ाइल को सहेजकर उपयुक्त ऐप में खोलें।',
+  );
+  static const previewFailure = TranslatableString(
+    en: 'This file could not be previewed.',
+    ar: 'تعذرت معاينة هذا الملف.',
+    ur: 'اس فائل کا پیش نظارہ نہیں دکھایا جا سکا۔',
+    hi: 'इस फ़ाइल का पूर्वावलोकन नहीं दिखाया जा सका।',
+  );
+  static const saveLocalFile = TranslatableString(
+    en: 'Save file',
+    ar: 'حفظ الملف',
+    ur: 'فائل محفوظ کریں',
+    hi: 'फ़ाइल सहेजें',
   );
   static const fileType = TranslatableString(
     en: 'Type',

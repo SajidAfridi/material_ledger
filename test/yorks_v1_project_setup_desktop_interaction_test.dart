@@ -21,6 +21,7 @@ import 'package:material_ledger/shared/models/yorks_v1_project.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_portfolio.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_creation_draft.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_strings.dart';
+import 'package:material_ledger/shared/models/yorks_v1_project_setup_desktop_strings.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_setup_operation.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_setup_shell_strings.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_team_directory_member.dart';
@@ -65,6 +66,91 @@ void main() {
       ..addFont(Future.value(ByteData.sublistView(iconBytes)));
     await Future.wait([nexus.load(), arabic.load(), icons.load()]);
   });
+
+  testWidgets(
+    'desktop Details uses the form width without the information panel',
+    (tester) async {
+      final fixture = await _fixture(
+        YorksV1ProjectCreationStage.projectDetails,
+      );
+      await _pump(tester, fixture.container);
+      expect(
+        find.text(YorksV1ProjectSetupDesktopStrings.toContinue.primary),
+        findsNothing,
+      );
+      expect(
+        find.text(YorksV1ProjectSetupDesktopStrings.otherDetailsLater.primary),
+        findsNothing,
+      );
+      final reference = _key('yorks-v1-project-reference');
+      expect(tester.getSize(reference).width, greaterThan(500));
+      await tester.enterText(reference, '');
+      await tester.enterText(_key('yorks-v1-project-name'), '');
+      await tester.tap(_key('yorks-v1-project-continue'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text(YorksV1ProjectStrings.requiredField.primary),
+        findsWidgets,
+      );
+      expect(
+        fixture.draft.currentStage,
+        YorksV1ProjectCreationStage.projectDetails,
+      );
+      expect(fixture.repository.commandCalls, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'desktop new building says Add and editing says Save without duplicating rows',
+    (tester) async {
+      final fixture = await _fixture(
+        YorksV1ProjectCreationStage.buildings,
+        buildings: const [],
+      );
+      await _pump(tester, fixture.container);
+      final apply = _key('yorks-v1-desktop-apply-building');
+      expect(
+        find.descendant(
+          of: apply,
+          matching: find.text(YorksV1ProjectStrings.addBuilding.primary),
+        ),
+        findsOneWidget,
+      );
+      await tester.enterText(
+        _key('yorks-v1-building-name'),
+        'New physical building',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(apply);
+      await tester.pumpAndSettle();
+      final created = fixture.draft.buildings.single;
+      expect(created.name, 'New physical building');
+      expect(created.localRowId, isNotEmpty);
+      await tester.tap(_key('yorks-v1-desktop-building-${created.localRowId}'));
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: apply,
+          matching: find.text(
+            YorksV1ProjectSetupDesktopStrings.saveBuilding.primary,
+          ),
+        ),
+        findsOneWidget,
+      );
+      await tester.enterText(
+        _key('yorks-v1-building-name'),
+        'Renamed physical building',
+      );
+      await tester.tap(apply);
+      await tester.pumpAndSettle();
+      expect(fixture.draft.buildings, hasLength(1));
+      expect(fixture.draft.buildings.single.localRowId, created.localRowId);
+      expect(fixture.draft.buildings.single.name, 'Renamed physical building');
+      expect(fixture.repository.commandCalls, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'desktop filtered building Apply preserves the original stable scope and false FRP',
@@ -208,7 +294,6 @@ void main() {
     (tester) async {
       final fixture = await _fixture(
         YorksV1ProjectCreationStage.attachments,
-        reviewedFileIds: const ['file-second'],
         attachments: const [
           YorksV1ProjectAttachmentInput(
             localId: 'file-first',
@@ -223,6 +308,7 @@ void main() {
             mimeType: 'application/pdf',
             sizeBytes: 2,
             contentHash: 'second-content-hash',
+            categoryKey: 'drawing',
           ),
         ],
       );
@@ -234,7 +320,9 @@ void main() {
       await tester.tap(_key('yorks-v1-desktop-file-category-filter'));
       await tester.pumpAndSettle();
       await tester.tap(
-        find.text(YorksV1ProjectStrings.operationalDocument.primary).last,
+        find
+            .text(YorksV1ProjectSetupDesktopStrings.categoryDrawing.primary)
+            .last,
       );
       await tester.pumpAndSettle();
       expect(_key('yorks-v1-desktop-file-file-first'), findsNothing);
@@ -255,22 +343,25 @@ void main() {
     },
   );
 
-  testWidgets('desktop unreviewed files do not advertise ready to create', (
-    tester,
-  ) async {
-    final fixture = await _fixture(YorksV1ProjectCreationStage.reviewAndCreate);
-    await _pump(tester, fixture.container);
-    expect(
-      find.text(YorksV1ProjectStrings.readyToCreateWorkspace.primary),
-      findsNothing,
-    );
-    expect(
-      tester.widget<FilledButton>(_key('yorks-v1-project-create')).onPressed,
-      isNull,
-    );
-    expect(fixture.repository.commandCalls, 0);
-    expect(tester.takeException(), isNull);
-  });
+  testWidgets(
+    'desktop optional categories and missing bytes do not block core creation',
+    (tester) async {
+      final fixture = await _fixture(
+        YorksV1ProjectCreationStage.reviewAndCreate,
+      );
+      await _pump(tester, fixture.container);
+      expect(
+        find.text(YorksV1ProjectStrings.readyToCreateWorkspace.primary),
+        findsOneWidget,
+      );
+      expect(
+        tester.widget<FilledButton>(_key('yorks-v1-project-create')).onPressed,
+        isNotNull,
+      );
+      expect(fixture.repository.commandCalls, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   for (final stage in YorksV1ProjectCreationStage.values) {
     testWidgets('desktop content reference ${stage.name} — 1536×1024', (
@@ -716,13 +807,13 @@ void main() {
       await tester.tap(find.text(YorksV1ProjectStrings.addAttachment.primary));
       await tester.pumpAndSettle();
       final localId = fixture.draft.attachments.single.localId!;
-      await tester.tap(
+      expect(
         find.descendant(
           of: _key('yorks-v1-desktop-file-$localId'),
           matching: find.byType(Checkbox),
         ),
+        findsNothing,
       );
-      await tester.pumpAndSettle();
       await tester.tap(_key('yorks-v1-project-continue'));
       await tester.pumpAndSettle();
       await tester.tap(_key('yorks-v1-project-create'));
