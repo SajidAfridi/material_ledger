@@ -16,7 +16,11 @@ the footer Back action. [Single Back navigation and staging evidence](SINGLE_BAC
 records that presentation change and its staging deployment.
 
 The 5 October owner report adds local saved-setup discovery to Projects.
-[Saved draft visibility, resume and latest staging evidence](SAVED_DRAFT_DISCOVERY_2026-10-05.md)
+[Saved draft visibility, resume and previous staging evidence](SAVED_DRAFT_DISCOVERY_2026-10-05.md)
+records that earlier deployment.
+
+The later owner correction simplifies building and attachment controls and removes
+the Details information panel. [Setup controls and latest staging evidence](SETUP_CONTROL_POLISH_2026-10-05.md)
 records the current deployment.
 
 - [Requirements](registers/Requirements.csv)
@@ -33,6 +37,7 @@ records the current deployment.
 - [Universal workspace chrome and explicit local-save correction](UNIVERSAL_WORKSPACE_AND_DRAFT_SAVE_2026-10-04.md)
 - [Direct project navigation and fresh Create correction](DIRECT_PROJECT_NAVIGATION_2026-10-04.md)
 - [Single Back navigation and previous staging evidence](SINGLE_BACK_NAVIGATION_2026-10-05.md)
-- [Saved setup discovery and latest staging evidence](SAVED_DRAFT_DISCOVERY_2026-10-05.md)
+- [Saved setup discovery and previous staging evidence](SAVED_DRAFT_DISCOVERY_2026-10-05.md)
+- [Setup controls and latest staging evidence](SETUP_CONTROL_POLISH_2026-10-05.md)
 
 The source acceptance catalogue retains its original Not run status. Candidate evidence and unresolved gates are recorded separately in IMPLEMENTATION_EVIDENCE.md; source requirements must not be silently rewritten into passes.
