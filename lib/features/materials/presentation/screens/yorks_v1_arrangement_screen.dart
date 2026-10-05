@@ -75,8 +75,7 @@ class YorksV1ArrangementScreen extends ConsumerWidget {
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (_, _) => _ArrangementError(
         language: language,
-        onRetry: () =>
-            ref.invalidate(yorksV1ArrangementWorkspaceProvider(requestId)),
+        onRetry: () => yorksV1InvalidateArrangementWorkspace(ref, requestId),
       ),
       data: (value) {
         if ((permissionState.snapshot == null &&
@@ -158,9 +157,8 @@ class YorksV1ArrangementScreen extends ConsumerWidget {
               trailing: YorksMobileIconButton(
                 icon: Icons.menu_rounded,
                 tooltip: YorksV1ArrangementStrings.arrangement.active(language),
-                onPressed: () => ref.invalidate(
-                  yorksV1ArrangementWorkspaceProvider(requestId),
-                ),
+                onPressed: () =>
+                    yorksV1InvalidateArrangementWorkspace(ref, requestId),
               ),
             ),
             Expanded(child: body),
@@ -186,9 +184,8 @@ class YorksV1ArrangementScreen extends ConsumerWidget {
               actions: [
                 IconButton(
                   tooltip: YorksV1ArrangementStrings.arrangement.primary,
-                  onPressed: () => ref.invalidate(
-                    yorksV1ArrangementWorkspaceProvider(requestId),
-                  ),
+                  onPressed: () =>
+                      yorksV1InvalidateArrangementWorkspace(ref, requestId),
                   icon: const Icon(Icons.refresh_rounded),
                 ),
               ],
@@ -460,11 +457,11 @@ class _ArrangementWorkspaceBody extends ConsumerWidget {
                       SizedBox(
                         height: AppSpacing.controlHeight,
                         child: OutlinedButton.icon(
-                          onPressed: () => ref.invalidate(
-                            yorksV1ArrangementWorkspaceProvider(
-                              workspace.requestId,
-                            ),
-                          ),
+                          onPressed: () =>
+                              yorksV1InvalidateArrangementWorkspace(
+                                ref,
+                                workspace.requestId,
+                              ),
                           icon: const Icon(Icons.refresh_rounded, size: 18),
                           label: Text(
                             YorksV1ArrangementStrings.arrangement.primary,
@@ -743,12 +740,8 @@ class _BeginArrangementActionState
               idempotencyKey: _idempotencyKey,
             ),
           );
-      ref.invalidate(
-        yorksV1ArrangementWorkspaceProvider(widget.workspace.requestId),
-      );
-      ref.invalidate(
-        yorksV1MaterialRequestDetailProvider(widget.workspace.requestId),
-      );
+      yorksV1InvalidateArrangementWorkspace(ref, widget.workspace.requestId);
+      yorksV1InvalidateMaterialRequestDetail(ref, widget.workspace.requestId);
       ref.invalidate(yorksV1MaterialRequestListProvider);
       _idempotencyKey = const Uuid().v4();
     } on YorksV1DomainException catch (error) {
@@ -1151,12 +1144,8 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
         _canClarify = workspace.canClarify;
         _clarificationReviewRequired = workspace.clarificationReviewRequired;
       });
-      ref.invalidate(
-        yorksV1ArrangementWorkspaceProvider(widget.workspace.requestId),
-      );
-      ref.invalidate(
-        yorksV1MaterialRequestDetailProvider(widget.workspace.requestId),
-      );
+      yorksV1InvalidateArrangementWorkspace(ref, widget.workspace.requestId);
+      yorksV1InvalidateMaterialRequestDetail(ref, widget.workspace.requestId);
       ref.invalidate(yorksV1MaterialRequestListProvider);
       YorksAppToast.show(
         context,
@@ -1222,12 +1211,8 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
               idempotencyKey: _saveIdempotencyKey,
             ),
           );
-      ref.invalidate(
-        yorksV1ArrangementWorkspaceProvider(widget.workspace.requestId),
-      );
-      ref.invalidate(
-        yorksV1MaterialRequestDetailProvider(widget.workspace.requestId),
-      );
+      yorksV1InvalidateArrangementWorkspace(ref, widget.workspace.requestId);
+      yorksV1InvalidateMaterialRequestDetail(ref, widget.workspace.requestId);
       ref.invalidate(yorksV1MaterialRequestListProvider);
       _saveIdempotencyKey = const Uuid().v4();
       saved = true;
@@ -3108,12 +3093,8 @@ class _MobileArrangementDecisionViewState
               idempotencyKey: idempotencyKey,
             ),
           );
-      ref.invalidate(
-        yorksV1ArrangementWorkspaceProvider(widget.workspace.requestId),
-      );
-      ref.invalidate(
-        yorksV1MaterialRequestDetailProvider(widget.workspace.requestId),
-      );
+      yorksV1InvalidateArrangementWorkspace(ref, widget.workspace.requestId);
+      yorksV1InvalidateMaterialRequestDetail(ref, widget.workspace.requestId);
       ref.invalidate(yorksV1MaterialRequestListProvider);
       if (decision == YorksV1ArrangementReviewDecision.approved) {
         _approveIdempotencyKey = const Uuid().v4();
@@ -5692,12 +5673,8 @@ class _DecisionActionsState extends ConsumerState<_DecisionActions> {
                   : _returnIdempotencyKey,
             ),
           );
-      ref.invalidate(
-        yorksV1ArrangementWorkspaceProvider(widget.workspace.requestId),
-      );
-      ref.invalidate(
-        yorksV1MaterialRequestDetailProvider(widget.workspace.requestId),
-      );
+      yorksV1InvalidateArrangementWorkspace(ref, widget.workspace.requestId);
+      yorksV1InvalidateMaterialRequestDetail(ref, widget.workspace.requestId);
       ref.invalidate(yorksV1MaterialRequestListProvider);
       if (decision == YorksV1ArrangementReviewDecision.approved) {
         _approveIdempotencyKey = const Uuid().v4();

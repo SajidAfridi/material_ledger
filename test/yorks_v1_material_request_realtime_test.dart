@@ -118,6 +118,69 @@ void main() {
       },
     );
 
+    test('a burst of Realtime signals becomes one refresh revision', () async {
+      late Future<void> Function(YorksV1MaterialRequestRefreshReason reason)
+      emit;
+      final notifier = YorksV1MaterialRequestRealtimeNotifier(
+        enabled: true,
+        authUserId: '10000000-0000-4000-8000-000000000001',
+        client: null,
+        signalSubscription: ({required onSignal, required onUnavailable}) {
+          emit = onSignal;
+          return Future.value(true);
+        },
+        fallbackInterval: const Duration(days: 1),
+      );
+      addTearDown(notifier.dispose);
+      await notifier.start();
+      expect(notifier.state, 1);
+
+      final arrangement = emit(YorksV1MaterialRequestRefreshReason.arrangement);
+      final dispatch = emit(YorksV1MaterialRequestRefreshReason.dispatch);
+      final receipt = emit(YorksV1MaterialRequestRefreshReason.receiptReview);
+      await Future.wait([arrangement, dispatch, receipt]);
+
+      expect(notifier.state, 2);
+      expect(
+        notifier.lastReasons,
+        containsAll(<YorksV1MaterialRequestRefreshReason>{
+          YorksV1MaterialRequestRefreshReason.arrangement,
+          YorksV1MaterialRequestRefreshReason.dispatch,
+          YorksV1MaterialRequestRefreshReason.receiptReview,
+        }),
+      );
+    });
+
+    test(
+      'Realtime signals while hidden do not create a refresh storm',
+      () async {
+        late Future<void> Function(YorksV1MaterialRequestRefreshReason reason)
+        emit;
+        final notifier = YorksV1MaterialRequestRealtimeNotifier(
+          enabled: true,
+          authUserId: '10000000-0000-4000-8000-000000000001',
+          client: null,
+          signalSubscription: ({required onSignal, required onUnavailable}) {
+            emit = onSignal;
+            return Future.value(true);
+          },
+          fallbackInterval: const Duration(days: 1),
+        );
+        addTearDown(notifier.dispose);
+        await notifier.start();
+
+        notifier.didChangeAppLifecycleState(AppLifecycleState.paused);
+        await emit(YorksV1MaterialRequestRefreshReason.materialRequest);
+        await emit(YorksV1MaterialRequestRefreshReason.dispatch);
+        await emit(YorksV1MaterialRequestRefreshReason.receiptReview);
+        expect(notifier.state, 1);
+
+        notifier.didChangeAppLifecycleState(AppLifecycleState.resumed);
+        await Future<void>.delayed(Duration.zero);
+        expect(notifier.state, 2);
+      },
+    );
+
     test(
       'returning to the foreground refreshes authorized projections',
       () async {

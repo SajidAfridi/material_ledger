@@ -14,6 +14,7 @@ import '../repositories/yorks_v1_material_request_draft_store.dart';
 import '../repositories/yorks_v1_material_request_repository.dart';
 import '../services/analytics_service.dart';
 import '../sync/connectivity_service.dart';
+import '../sync/yorks_v1_protected_read_coordinator.dart';
 import 'yorks_v1_identity_provider.dart';
 import 'yorks_v1_material_request_repository_provider.dart';
 import 'yorks_v1_permission_provider.dart';
@@ -197,7 +198,19 @@ final yorksV1MaterialRequestCommentPageProvider = FutureProvider.autoDispose
 final yorksV1MaterialRequestWorkAssignmentProvider = FutureProvider.autoDispose
     .family<YorksV1MaterialRequestWorkAssignment, String>((ref, requestId) {
       yorksV1RefreshProtectedProjectionOnPermissionRevision(ref);
-      ref.watch(yorksV1MaterialRequestRealtimeRevisionProvider);
+      ref.listen<int>(yorksV1MaterialRequestRealtimeRevisionProvider, (
+        previous,
+        next,
+      ) {
+        if (previous != null &&
+            previous != next &&
+            yorksV1MaterialRequestRefreshIncludes(ref, const {
+              YorksV1MaterialRequestRefreshReason.materialRequest,
+              YorksV1MaterialRequestRefreshReason.subscriptionReconnected,
+            })) {
+          ref.invalidateSelf();
+        }
+      });
       final repository = ref.watch(yorksV1MaterialRequestRepositoryProvider);
       if (repository is! YorksV1MaterialRequestPhase2Repository) {
         throw const YorksV1DomainException(
@@ -211,7 +224,19 @@ final yorksV1MaterialRequestWorkAssignmentProvider = FutureProvider.autoDispose
 final yorksV1MaterialRequestChangeSummaryProvider = FutureProvider.autoDispose
     .family<YorksV1MaterialRequestChangeSummary?, String>((ref, requestId) {
       yorksV1RefreshProtectedProjectionOnPermissionRevision(ref);
-      ref.watch(yorksV1MaterialRequestRealtimeRevisionProvider);
+      ref.listen<int>(yorksV1MaterialRequestRealtimeRevisionProvider, (
+        previous,
+        next,
+      ) {
+        if (previous != null &&
+            previous != next &&
+            yorksV1MaterialRequestRefreshIncludes(ref, const {
+              YorksV1MaterialRequestRefreshReason.materialRequest,
+              YorksV1MaterialRequestRefreshReason.subscriptionReconnected,
+            })) {
+          ref.invalidateSelf();
+        }
+      });
       final repository = ref.watch(yorksV1MaterialRequestRepositoryProvider);
       if (repository is! YorksV1MaterialRequestPhase2Repository) {
         throw const YorksV1DomainException(
@@ -305,6 +330,18 @@ enum YorksV1MaterialRequestRefreshReason {
   subscriptionReconnected,
 }
 
+/// The most recent coalesced refresh contains only low-cardinality workflow
+/// reasons. It never contains a project/request identifier or domain data.
+bool yorksV1MaterialRequestRefreshIncludes(
+  Ref ref,
+  Set<YorksV1MaterialRequestRefreshReason> reasons,
+) {
+  final emitted = ref
+      .read(yorksV1MaterialRequestRealtimeRevisionProvider.notifier)
+      .lastReasons;
+  return emitted.any(reasons.contains);
+}
+
 /// Test seam for the recipient-scoped database-change subscription.
 ///
 /// Production subscribes to `v1_notifications`, whose rows contain only an
@@ -393,6 +430,11 @@ class YorksV1MaterialRequestRealtimeNotifier extends StateNotifier<int>
   bool _disposed = false;
   bool _observingLifecycle = false;
   bool _leftForeground = false;
+  final Set<YorksV1MaterialRequestRefreshReason> _pendingReasons = {};
+  Set<YorksV1MaterialRequestRefreshReason> _lastReasons = const {};
+  Future<void>? _scheduledRefresh;
+
+  Set<YorksV1MaterialRequestRefreshReason> get lastReasons => _lastReasons;
 
   /// Starts the safe notification signal.
   ///
@@ -550,12 +592,29 @@ class YorksV1MaterialRequestRealtimeNotifier extends StateNotifier<int>
   }
 
   Future<void> _refreshAuthorizedProjections(
-    YorksV1MaterialRequestRefreshReason _,
-  ) async {
-    if (!_enabled || _disposed || _leftForeground) return;
-    // This revision contains no server domain data. Every dependant uses it
-    // only to issue its normal RLS-protected repository read.
-    state += 1;
+    YorksV1MaterialRequestRefreshReason reason,
+  ) {
+    if (!_enabled || _disposed || _leftForeground) {
+      return Future<void>.value();
+    }
+    _pendingReasons.add(reason);
+    final scheduled = _scheduledRefresh;
+    if (scheduled != null) return scheduled;
+
+    late final Future<void> next;
+    next =
+        Future<void>.microtask(() {
+          if (_disposed || _leftForeground || _pendingReasons.isEmpty) return;
+          _lastReasons = Set.unmodifiable(_pendingReasons);
+          _pendingReasons.clear();
+          // This revision contains no server domain data. Every dependant uses it
+          // only to issue its normal RLS-protected repository read.
+          state += 1;
+        }).whenComplete(() {
+          if (identical(_scheduledRefresh, next)) _scheduledRefresh = null;
+        });
+    _scheduledRefresh = next;
+    return next;
   }
 
   void _onSignalUnavailable(Object? _) {
@@ -744,16 +803,54 @@ final yorksV1MaterialRequestInventorySearchProvider = FutureProvider.autoDispose
 final yorksV1MaterialRequestDetailProvider = FutureProvider.autoDispose
     .family<YorksV1MaterialRequest, String>((ref, requestId) {
       yorksV1RefreshProtectedProjectionOnPermissionRevision(ref);
+      final coordinator = ref.watch(
+        yorksV1MaterialRequestDetailReadCoordinatorProvider,
+      );
       ref.listen<int>(yorksV1MaterialRequestRealtimeRevisionProvider, (
         previous,
         next,
       ) {
-        if (previous != null && previous != next) ref.invalidateSelf();
+        if (previous != null && previous != next) {
+          coordinator.markStale(requestId);
+          ref.invalidateSelf();
+        }
       });
-      return ref
-          .watch(yorksV1MaterialRequestRepositoryProvider)
-          .getRequest(requestId);
+      final repository = ref.watch(yorksV1MaterialRequestRepositoryProvider);
+      return coordinator.load(
+        key: requestId,
+        read: () => repository.getRequest(requestId),
+      );
     });
+
+/// The coordinator is deliberately recreated at every authority boundary.
+/// Its cached projection can therefore bridge a transient timeout, but can
+/// never cross an auth user, exact role, deactivation, or permission revision.
+final yorksV1MaterialRequestDetailReadCoordinatorProvider =
+    Provider<YorksV1ProtectedReadCoordinator<YorksV1MaterialRequest>>((ref) {
+      ref.watch(yorksV1AuthUserIdProvider);
+      ref.watch(yorksV1CurrentRoleProvider);
+      ref.watch(
+        yorksV1CurrentPermissionSnapshotProvider.select(
+          (state) => (
+            revision: state.snapshot?.revision,
+            active: state.snapshot?.user.isActive,
+          ),
+        ),
+      );
+      ref.watch(yorksV1MaterialRequestRepositoryProvider);
+      return YorksV1ProtectedReadCoordinator<YorksV1MaterialRequest>();
+    });
+
+/// Marks the authority-scoped detail projection stale before rebuilding it.
+/// This is important when a confirmed command and its Realtime notification
+/// arrive while the previous read is still active: both requests then share
+/// one trailing refresh instead of racing in parallel.
+void yorksV1InvalidateMaterialRequestDetail(WidgetRef ref, String requestId) {
+  ref
+      .read(yorksV1MaterialRequestDetailReadCoordinatorProvider)
+      .markStale(requestId);
+  ref.invalidate(yorksV1MaterialRequestDetailProvider(requestId));
+}
 
 final yorksV1MaterialRequestPhase3PolicyProvider = FutureProvider.autoDispose
     .family<YorksV1MaterialRequestPhase3Policy, String>((ref, requestId) {
@@ -762,7 +859,16 @@ final yorksV1MaterialRequestPhase3PolicyProvider = FutureProvider.autoDispose
         previous,
         next,
       ) {
-        if (previous != null && previous != next) ref.invalidateSelf();
+        if (previous != null &&
+            previous != next &&
+            yorksV1MaterialRequestRefreshIncludes(ref, const {
+              YorksV1MaterialRequestRefreshReason.materialRequest,
+              YorksV1MaterialRequestRefreshReason.receiptReview,
+              YorksV1MaterialRequestRefreshReason.materialReturn,
+              YorksV1MaterialRequestRefreshReason.subscriptionReconnected,
+            })) {
+          ref.invalidateSelf();
+        }
       });
       final repository = ref.watch(yorksV1MaterialRequestRepositoryProvider);
       if (repository is! YorksV1MaterialRequestPhase3Repository) {

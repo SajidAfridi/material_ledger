@@ -43,7 +43,17 @@ final yorksV1LogisticsWorkspaceProvider = FutureProvider.autoDispose
         previous,
         next,
       ) {
-        if (previous != null && previous != next) ref.invalidateSelf();
+        if (previous != null &&
+            previous != next &&
+            yorksV1MaterialRequestRefreshIncludes(ref, const {
+              YorksV1MaterialRequestRefreshReason.materialRequest,
+              YorksV1MaterialRequestRefreshReason.arrangement,
+              YorksV1MaterialRequestRefreshReason.dispatch,
+              YorksV1MaterialRequestRefreshReason.receiptReview,
+              YorksV1MaterialRequestRefreshReason.subscriptionReconnected,
+            })) {
+          ref.invalidateSelf();
+        }
       });
       return ref
           .watch(yorksV1LogisticsRepositoryProvider)
@@ -56,7 +66,16 @@ final yorksV1ProjectMaterialMovementsProvider = FutureProvider.autoDispose
         previous,
         next,
       ) {
-        if (previous != null && previous != next) ref.invalidateSelf();
+        if (previous != null &&
+            previous != next &&
+            yorksV1MaterialRequestRefreshIncludes(ref, const {
+              YorksV1MaterialRequestRefreshReason.dispatch,
+              YorksV1MaterialRequestRefreshReason.receiptReview,
+              YorksV1MaterialRequestRefreshReason.materialReturn,
+              YorksV1MaterialRequestRefreshReason.subscriptionReconnected,
+            })) {
+          ref.invalidateSelf();
+        }
       });
       return ref
           .watch(yorksV1LogisticsRepositoryProvider)
@@ -69,7 +88,17 @@ final yorksV1ReturnsDocumentsWorkspaceProvider = FutureProvider.autoDispose
         previous,
         next,
       ) {
-        if (previous != null && previous != next) ref.invalidateSelf();
+        if (previous != null &&
+            previous != next &&
+            yorksV1MaterialRequestRefreshIncludes(ref, const {
+              YorksV1MaterialRequestRefreshReason.dispatch,
+              YorksV1MaterialRequestRefreshReason.receiptReview,
+              YorksV1MaterialRequestRefreshReason.deliveryOrder,
+              YorksV1MaterialRequestRefreshReason.materialReturn,
+              YorksV1MaterialRequestRefreshReason.subscriptionReconnected,
+            })) {
+          ref.invalidateSelf();
+        }
       });
       return ref
           .watch(yorksV1LogisticsRepositoryProvider)
@@ -107,7 +136,15 @@ final yorksV1MaterialReturnRegisterProvider = FutureProvider.autoDispose
         previous,
         next,
       ) {
-        if (previous != null && previous != next) ref.invalidateSelf();
+        if (previous != null &&
+            previous != next &&
+            yorksV1MaterialRequestRefreshIncludes(ref, const {
+              YorksV1MaterialRequestRefreshReason.materialReturn,
+              YorksV1MaterialRequestRefreshReason.receiptReview,
+              YorksV1MaterialRequestRefreshReason.subscriptionReconnected,
+            })) {
+          ref.invalidateSelf();
+        }
       });
       return _projectReturnRepository(ref).listProjectMaterialReturns(
         projectId: query.projectId,
@@ -127,7 +164,14 @@ final yorksV1ProjectMaterialReturnProvider = FutureProvider.autoDispose
         previous,
         next,
       ) {
-        if (previous != null && previous != next) ref.invalidateSelf();
+        if (previous != null &&
+            previous != next &&
+            yorksV1MaterialRequestRefreshIncludes(ref, const {
+              YorksV1MaterialRequestRefreshReason.materialReturn,
+              YorksV1MaterialRequestRefreshReason.subscriptionReconnected,
+            })) {
+          ref.invalidateSelf();
+        }
       });
       return _projectReturnRepository(ref).getProjectMaterialReturn(returnId);
     });

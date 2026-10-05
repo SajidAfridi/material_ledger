@@ -165,7 +165,7 @@ class YorksV1ReturnsDocumentsScreen extends ConsumerWidget {
   void _refresh(WidgetRef ref) {
     ref.invalidate(yorksV1ReturnsDocumentsWorkspaceProvider(requestId));
     ref.invalidate(yorksV1LogisticsWorkspaceProvider(requestId));
-    ref.invalidate(yorksV1MaterialRequestDetailProvider(requestId));
+    yorksV1InvalidateMaterialRequestDetail(ref, requestId);
   }
 }
 
