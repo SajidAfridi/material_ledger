@@ -21,7 +21,7 @@ import '../../../../shared/providers/nexus_feature_flags_provider.dart';
 import '../../../../shared/providers/session_provider.dart';
 import '../../../../shared/providers/yorks_v1_feature_flags_provider.dart';
 import '../../../projects/presentation/screens/project_create_flow_screen.dart';
-import '../../../projects/presentation/screens/yorks_v1_project_create_flow_screen.dart';
+import '../../../projects/presentation/screens/yorks_v1_project_setup_entry_screen.dart';
 import '../../../projects/presentation/screens/yorks_v1_project_legacy_flow_screen.dart';
 
 /// Stable route entry point. The V7 flow remains fail-closed behind its module
@@ -45,7 +45,7 @@ class EngineerCreateProjectScreen extends ConsumerWidget {
     // this legacy shell role as project authority.
     if (ref.watch(yorksV1FeatureFlagsProvider).projects) {
       return ref.watch(yorksV1FeatureFlagsProvider).projectSetup && kIsWeb
-          ? YorksV1ProjectCreateFlowScreen(
+          ? YorksV1ProjectSetupEntryScreen(
               resumeDraftId: resumeDraftId,
               legacyRecovery: legacyRecovery,
             )

@@ -65,7 +65,7 @@ import '../features/procurement/presentation/screens/procurement_plan_review_scr
 import '../features/procurement/presentation/screens/procurement_workspace_screen.dart';
 import '../features/projects/presentation/screens/project_workspace_screen.dart';
 import '../features/projects/presentation/screens/yorks_v1_boq_screens.dart';
-import '../features/projects/presentation/screens/yorks_v1_project_create_flow_screen.dart';
+import '../features/projects/presentation/screens/yorks_v1_project_setup_entry_screen.dart';
 import '../features/projects/presentation/screens/yorks_v1_project_legacy_flow_screen.dart';
 import '../features/projects/presentation/screens/yorks_v1_documents_screen.dart';
 import '../features/projects/presentation/screens/yorks_v1_projects_screen.dart';
@@ -1883,8 +1883,8 @@ GoRouter createAppRouter({
         pageBuilder: (context, state) => yorksV1ProjectSetupEnabled
             ? _yorksV1ProjectSetupSlide(
                 state.pageKey,
-                YorksV1ProjectEditFlowScreen(
-                  projectId: state.pathParameters['projectId'] ?? '',
+                YorksV1ProjectSetupEntryScreen(
+                  editProjectId: state.pathParameters['projectId'] ?? '',
                 ),
               )
             : _yorksV1Slide(

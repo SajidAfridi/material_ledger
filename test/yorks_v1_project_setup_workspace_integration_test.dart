@@ -14,6 +14,7 @@ import 'package:material_ledger/core/constants/app_spacing.dart';
 import 'package:material_ledger/core/theme/app_theme.dart';
 import 'package:material_ledger/core/widgets/yorks_mobile_ui.dart';
 import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_project_create_flow_screen.dart';
+import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_project_setup_entry_screen.dart';
 import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_projects_screen.dart';
 import 'package:material_ledger/shared/controllers/yorks_v1_project_creation_draft_controller.dart';
 import 'package:material_ledger/shared/models/app_language.dart';
@@ -21,6 +22,7 @@ import 'package:material_ledger/shared/models/user_role.dart';
 import 'package:material_ledger/shared/models/yorks_v1_document.dart';
 import 'package:material_ledger/shared/models/yorks_v1_feature_flags.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project.dart';
+import 'package:material_ledger/shared/models/yorks_v1_project_portfolio.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_setup_operation.dart';
 import 'package:material_ledger/shared/models/yorks_v1_permission_management.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_creation_draft.dart';
@@ -79,6 +81,9 @@ void main() {
       ..addFont(rootBundle.load('assets/fonts/NotoSans-Regular.ttf'))
       ..addFont(rootBundle.load('assets/fonts/NotoSans-Bold.ttf'));
     await font.load();
+    // Native deferred library I/O completes outside each widgettest FakeAsync
+    // zone; route tests still use the real entry and its FutureBuilder loader.
+    await loadYorksV1ProjectSetupLibrary();
   });
 
   for (final size in [
@@ -581,9 +586,152 @@ void main() {
   }
 
   testWidgets(
+    'shared deferred Edit loads the authorized existing version without creating a proposal',
+    (tester) async {
+      const projectId = '61000000-0000-4000-8000-000000000001';
+      final known = YorksV1ProjectPortfolioItem(
+        project: YorksV1Project(
+          id: projectId,
+          reference: 'KNOWN-EDIT',
+          name: 'Authorized existing project',
+          state: YorksV1ProjectLifecycle.active,
+          version: 9,
+          createdAt: DateTime.utc(2026, 10, 5),
+          updatedAt: DateTime.utc(2026, 10, 5),
+        ),
+        activeBuildingCount: 1,
+        activeProjectEngineerCount: 1,
+        activeSiteEngineerCount: 0,
+        buildings: const [
+          YorksV1ProjectBuildingInput(
+            sourceScopeId: 'retained-building-scope',
+            code: 'E1',
+            name: 'Existing building',
+            hasFrpRoom: false,
+          ),
+        ],
+      );
+      final release = Completer<void>();
+      Future<void> loader() async {
+        await release.future;
+        await loadYorksV1ProjectSetupLibrary();
+      }
+
+      late _ReadSpyDraftStorage storage;
+      final fixture = await _pumpWorkspace(
+        tester,
+        initialLocation: RoutePaths.yorksV1ProjectEditPath(projectId),
+        setupLoader: loader,
+        portfolio: [known],
+        settle: false,
+        draftStorageFactory: (preferences) =>
+            storage = _ReadSpyDraftStorage(preferences),
+      );
+      expect(
+        find.byKey(const ValueKey('yorks-v1-project-setup-loading')),
+        findsOneWidget,
+      );
+      expect(find.byType(YorksV1ProjectCreateFlowScreen), findsNothing);
+      expect(storage.transactions, 0);
+      release.complete();
+      await _settleDeferredSetup(tester);
+      expect(find.byType(YorksV1ProjectEditFlowScreen), findsOneWidget);
+      expect(find.byType(YorksV1ProjectCreateFlowScreen), findsOneWidget);
+      final provider = yorksV1ProjectEditDraftProvider(
+        const YorksV1ProjectEditDraftContext(
+          ownerAuthUserId: _owner,
+          projectId: projectId,
+        ),
+      );
+      await fixture.container.read(provider.notifier).initialized;
+      await tester.pumpAndSettle();
+      final proposal = fixture.container.read(provider);
+      expect(proposal.mode, YorksV1ProjectDraftMode.edit);
+      expect(proposal.projectId, projectId);
+      expect(proposal.baseVersion, 9);
+      expect(proposal.reference, 'KNOWN-EDIT');
+      expect(proposal.name, 'Authorized existing project');
+      expect(
+        proposal.buildings.single.sourceScopeId,
+        'retained-building-scope',
+      );
+      expect(proposal.buildings.single.hasFrpRoom, false);
+      final name = tester.widget<EditableText>(
+        find.descendant(
+          of: find.byKey(const ValueKey('yorks-v1-project-name')),
+          matching: find.byType(EditableText),
+        ),
+      );
+      expect(name.controller.text, known.project.name);
+      expect(
+        fixture.router.routeInformationProvider.value.uri.path,
+        RoutePaths.yorksV1ProjectEditPath(projectId),
+      );
+      expect(fixture.commands.calls, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'deferred load Retry rechecks logout before exposing or claiming any draft',
+    (tester) async {
+      var owner = _owner as String?;
+      var attempts = 0;
+      final release = Completer<void>();
+      Future<void> loader() async {
+        attempts++;
+        if (attempts == 1) throw StateError('Synthetic asset load failure');
+        await release.future;
+        await loadYorksV1ProjectSetupLibrary();
+      }
+
+      late _ReadSpyDraftStorage storage;
+      final fixture = await _pumpWorkspace(
+        tester,
+        setupLoader: loader,
+        currentOwner: () => owner,
+        draftStorageFactory: (preferences) =>
+            storage = _ReadSpyDraftStorage(preferences),
+      );
+      expect(
+        find.byKey(const ValueKey('yorks-v1-project-setup-load-failed')),
+        findsOneWidget,
+      );
+      expect(find.byType(YorksV1ProjectCreateFlowScreen), findsNothing);
+      expect(storage.transactions, 0);
+      final retry = find.byKey(
+        const ValueKey('yorks-v1-project-setup-load-retry'),
+      );
+      expect(tester.getSize(retry).height, greaterThanOrEqualTo(44));
+      await tester.tap(retry);
+      await tester.pump();
+      expect(attempts, 2);
+      expect(
+        find.byKey(const ValueKey('yorks-v1-project-setup-loading')),
+        findsOneWidget,
+      );
+      owner = null;
+      fixture.container.invalidate(yorksV1AuthUserIdProvider);
+      await tester.pump();
+      release.complete();
+      await _settleDeferredSetup(tester);
+      expect(find.byKey(const ValueKey('yorks-v1-project-name')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('project-setup-save-draft')),
+        findsNothing,
+      );
+      expect(storage.transactions, 0);
+      expect(fixture.preferences.getKeys(), isEmpty);
+      expect(fixture.commands.calls, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'canonical same-ID anchor retains the mounted editor and its input controllers',
     (tester) async {
       final fixture = await _pumpWorkspace(tester, settle: false);
+      await _settleDeferredSetup(tester);
       final feature = find.byType(YorksV1ProjectCreateFlowScreen);
       final originalState = tester.state(feature);
       final name = find.byKey(const ValueKey('yorks-v1-project-name'));
@@ -2098,6 +2246,7 @@ Future<void> _openCreateProject(WidgetTester tester) async {
 }
 
 Future<void> _settleFreshAnchor(WidgetTester tester) async {
+  await _settleDeferredSetup(tester);
   // pumpAndSettle does not await an async post-frame storage flush. Let the
   // acknowledged URI anchor finish before reading its selected draft scope.
   for (var frame = 0; frame < 20; frame++) {
@@ -2113,6 +2262,19 @@ Future<void> _settleFreshAnchor(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+Future<void> _settleDeferredSetup(WidgetTester tester) async {
+  for (var frame = 0; frame < 40; frame++) {
+    if (find
+        .byKey(const ValueKey('yorks-v1-project-setup-loading'))
+        .evaluate()
+        .isEmpty) {
+      break;
+    }
+    await tester.pump(const Duration(milliseconds: 25));
+  }
+  await tester.pumpAndSettle();
+}
+
 Future<void> _resizeWorkspace(WidgetTester tester, Size size) async {
   tester.view.physicalSize = size;
   await tester.binding.setSurfaceSize(size);
@@ -2120,9 +2282,14 @@ Future<void> _resizeWorkspace(WidgetTester tester, Size size) async {
 }
 
 Future<void> _openWorkspaceSearch(WidgetTester tester) async {
-  await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
-  await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
-  await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+  // The universal launcher resolves its native deferred asset outside fake
+  // widget time. Preserve the exact no-click Ctrl+K event sequence.
+  await tester.runAsync(() async {
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await Future<void>.delayed(Duration.zero);
+  });
   await tester.pumpAndSettle();
   expect(find.byType(YorksV1WorkspaceSearchDialog), findsOneWidget);
 }
@@ -2202,6 +2369,9 @@ Future<_WorkspaceFixture> _pumpWorkspace(
   bool projectSetup = true,
   AppLanguage language = AppLanguage.english,
   TextScaler textScaler = TextScaler.noScaling,
+  YorksV1ProjectSetupLibraryLoader? setupLoader,
+  String? Function()? currentOwner,
+  List<YorksV1ProjectPortfolioItem> portfolio = const [],
 }) async {
   tester.view.devicePixelRatio = 1;
   tester.view.physicalSize = size;
@@ -2238,7 +2408,13 @@ Future<_WorkspaceFixture> _pumpWorkspace(
           documents: true,
         ),
       ),
-      yorksV1AuthUserIdProvider.overrideWithValue(ownerAuthUserId),
+      if (currentOwner == null)
+        yorksV1AuthUserIdProvider.overrideWithValue(ownerAuthUserId)
+      else
+        yorksV1AuthUserIdProvider.overrideWith((ref) => currentOwner()),
+      yorksV1ProjectSetupLibraryLoaderProvider.overrideWithValue(
+        setupLoader ?? () => loadYorksV1ProjectSetupLibrary(),
+      ),
       yorksV1CurrentRoleProvider.overrideWithValue(role),
       yorksV1ProjectDraftBackendIdentityProvider.overrideWithValue(
         backendIdentity,
@@ -2261,7 +2437,7 @@ Future<_WorkspaceFixture> _pumpWorkspace(
         (ref, query) async => YorksV1ProjectReferenceAdvisory.unavailable,
       ),
       yorksV1ActiveProjectTeamDirectoryProvider.overrideWith((ref) async => []),
-      yorksV1ProjectPortfolioProvider.overrideWith((ref) async => []),
+      yorksV1ProjectPortfolioProvider.overrideWith((ref) async => portfolio),
       yorksV1WorkspaceSearchResultsProvider.overrideWith(
         (ref, query) async => const YorksV1WorkspaceSearchResponse(results: []),
       ),
@@ -2305,11 +2481,35 @@ Future<_WorkspaceFixture> _pumpWorkspace(
             key: prototype.key,
             child: YorksV1WorkspaceShell(
               featureOwnsBackNavigation: true,
-              child: YorksV1ProjectCreateFlowScreen(
+              child: YorksV1ProjectSetupEntryScreen(
                 onProjectCreated: onProjectCreated,
                 resumeDraftId: state.uri.queryParameters['draft'],
                 legacyRecovery:
                     state.uri.queryParameters['recovery'] == 'legacy',
+              ),
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1ProjectEdit,
+        onExit: productionRouter.configuration.routes
+            .whereType<GoRoute>()
+            .singleWhere((route) => route.path == RoutePaths.yorksV1ProjectEdit)
+            .onExit,
+        pageBuilder: (context, state) {
+          final actual = productionRouter.configuration.routes
+              .whereType<GoRoute>()
+              .singleWhere(
+                (route) => route.path == RoutePaths.yorksV1ProjectEdit,
+              );
+          final prototype = actual.pageBuilder!(context, state);
+          return NoTransitionPage<void>(
+            key: prototype.key,
+            child: YorksV1WorkspaceShell(
+              featureOwnsBackNavigation: true,
+              child: YorksV1ProjectSetupEntryScreen(
+                editProjectId: state.pathParameters['projectId']!,
               ),
             ),
           );
@@ -2344,6 +2544,11 @@ Future<_WorkspaceFixture> _pumpWorkspace(
   );
   if (settle) {
     await tester.pumpAndSettle();
+    await _settleDeferredSetup(tester);
+    if (Uri.parse(initialLocation).path == RoutePaths.engineerCreateProject &&
+        find.byType(YorksV1ProjectCreateFlowScreen).evaluate().isNotEmpty) {
+      await _settleFreshAnchor(tester);
+    }
   } else {
     await tester.pump();
   }
