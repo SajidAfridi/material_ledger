@@ -201,6 +201,242 @@ void main() {
   );
 
   test(
+    'explicit Resume acquires the latest saved A and fences every old snapshot without changing B',
+    () async {
+      final storage = _OrderedStorage();
+      final first = _writer(storage, 'direct-resume-a');
+      final b = _writer(storage, 'independent-resume-b');
+      addTearDown(first.dispose);
+      addTearDown(b.dispose);
+      await Future.wait([first.initialized, b.initialized]);
+      await first.save(_richProposal(first.state));
+      await b.save(b.state.copyWith(reference: 'B', name: 'Separate B'));
+      final selected = _writer(storage, first.state.draftId, resume: true);
+      addTearDown(selected.dispose);
+      await selected.initialized;
+      final capturedSelectedSnapshot = selected.state;
+      await first.save(
+        first.state.copyWith(
+          name: 'Latest persisted Alpha',
+          notes: 'Latest exact notes   ',
+        ),
+      );
+      final latest = first.state;
+      final envelope =
+          jsonDecode(storage.read(first.storageKey)!) as Map<String, dynamic>;
+      storage.values[first.storageKey] = jsonEncode({
+        ...envelope,
+        'future_envelope_data': {'keep': true},
+      });
+      final original = _operation(
+        latest,
+        YorksV1ProjectSetupCommandStatus.outcomeUncertain,
+      );
+      final journalKey = '$_scope:journal:${latest.draftId}';
+      storage.values[journalKey] = jsonEncode(original.toJson());
+      final exactJournal = storage.read(journalKey);
+      final exactB = storage.read(b.storageKey);
+      final acquisition = selected.resumeEditing(
+        expectedDraftId: latest.draftId,
+        canAcquire: () => true,
+      );
+      // A callback invoked against the old cached epoch cannot borrow the
+      // explicit Resume grant while its initial await/storage request settles.
+      var staleJournalRan = false;
+      final staleJournal = selected.atomicOwned((tx) {
+        staleJournalRan = true;
+        tx.write(journalKey, 'stale callback overwrite');
+      });
+      final staleRejected = expectLater(
+        staleJournal,
+        throwsA(isA<ProjectDraftStorageException>()),
+      );
+      expect(await acquisition, true);
+      await staleRejected;
+      expect(staleJournalRan, false);
+      expect(selected.writable, true);
+      expect(selected.state.isReadOnly, false);
+      expect(selected.state.writerEpoch, greaterThan(latest.writerEpoch));
+      _expectSameProposal(selected.state, latest);
+      expect(
+        (jsonDecode(storage.read(first.storageKey)!)
+            as Map)['future_envelope_data'],
+        {'keep': true},
+      );
+      expect(storage.read(journalKey), exactJournal);
+      expect(storage.read(b.storageKey), exactB);
+      final exactSelected = storage.read(selected.storageKey);
+      await expectLater(
+        first.save(latest.copyWith(name: 'Former writer stale save')),
+        throwsA(isA<ProjectDraftStorageException>()),
+      );
+      await expectLater(
+        selected.save(
+          capturedSelectedSnapshot.copyWith(name: 'Late callback stale epoch'),
+        ),
+        throwsA(isA<ProjectDraftStorageException>()),
+      );
+      expect(storage.read(selected.storageKey), exactSelected);
+      expect(storage.read(b.storageKey), exactB);
+      expect(storage.read(journalKey), exactJournal);
+      await selected.save(
+        selected.state.copyWith(name: 'Directly edited Alpha'),
+      );
+      expect(selected.state.isAcknowledged, true);
+    },
+  );
+
+  test(
+    'Resume preserves unacknowledged old input instead of replacing the latest acknowledged draft',
+    () async {
+      final storage = _OrderedStorage();
+      final old = _writer(storage, 'buffered-resume');
+      addTearDown(old.dispose);
+      await old.initialized;
+      await old.save(old.state.copyWith(name: 'Original acknowledged'));
+      final current = _writer(storage, old.state.draftId, resume: true);
+      addTearDown(current.dispose);
+      await current.initialized;
+      await current.takeOver();
+      await current.save(
+        current.state.copyWith(name: 'Other tab latest acknowledged'),
+      );
+      final exactLatest = storage.read(current.storageKey);
+      await expectLater(
+        old.save(
+          old.state.copyWith(
+            name: 'Private unsaved old typing',
+            rawEditorState: {'dateStartText': '12/'},
+          ),
+        ),
+        throwsA(isA<ProjectDraftStorageException>()),
+      );
+      expect(old.state.isAcknowledged, false);
+      expect(
+        await old.resumeEditing(
+          expectedDraftId: old.state.draftId,
+          canAcquire: () => true,
+        ),
+        false,
+      );
+      expect(
+        old.state.storageState,
+        YorksV1ProjectDraftStorageState.recoveryRequired,
+      );
+      expect(storage.read(current.storageKey), exactLatest);
+      final preserved = storage.values.entries
+          .where(
+            (entry) => entry.key.startsWith('${old.storageKey}:quarantine:'),
+          )
+          .map((entry) => jsonDecode(entry.value) as Map)
+          .toList();
+      expect(preserved, hasLength(1));
+      final snapshot = jsonDecode(preserved.single['raw'] as String) as Map;
+      expect((snapshot['draft'] as Map)['name'], 'Private unsaved old typing');
+      expect(
+        (snapshot['draft'] as Map)['rawEditorState']['dateStartText'],
+        '12/',
+      );
+    },
+  );
+
+  test(
+    'Resume rechecks authorization after waiting for its storage lock',
+    () async {
+      final storage = _OrderedStorage();
+      final first = _writer(storage, 'guarded-resume');
+      addTearDown(first.dispose);
+      await first.initialized;
+      await first.save(
+        first.state.copyWith(name: 'Retain authorized proposal'),
+      );
+      final selected = _writer(storage, first.state.draftId, resume: true);
+      addTearDown(selected.dispose);
+      await selected.initialized;
+      final exact = Map.of(storage.values);
+      final gate = Completer<void>();
+      storage.blockBeforeNextWork = gate;
+      var authorized = true;
+      final resume = selected.resumeEditing(
+        expectedDraftId: first.state.draftId,
+        canAcquire: () => authorized,
+      );
+      await Future<void>.delayed(Duration.zero);
+      authorized = false;
+      gate.complete();
+      expect(await resume, false);
+      expect(storage.values, exact);
+      expect(selected.state.isReadOnly, true);
+    },
+  );
+
+  for (final competitor in [false, true]) {
+    test(
+      'lost Resume acknowledgement retries only its own lease, competitor=$competitor',
+      () async {
+        final storage = _OrderedStorage();
+        final original = _writer(storage, 'retry-resume');
+        addTearDown(original.dispose);
+        await original.initialized;
+        await original.save(
+          original.state.copyWith(name: 'Latest saved before resume'),
+        );
+        final selected = _writer(storage, original.state.draftId, resume: true);
+        addTearDown(selected.dispose);
+        await selected.initialized;
+        storage.failAfterWriteKey = selected.storageKey;
+        expect(
+          await selected.resumeEditing(
+            expectedDraftId: original.state.draftId,
+            canAcquire: () => true,
+          ),
+          false,
+        );
+        final grantedEnvelope = storage.read(selected.storageKey)!;
+        final grantedEpoch =
+            (jsonDecode(grantedEnvelope) as Map)['writerEpoch'];
+        if (competitor) {
+          final other = _writer(storage, original.state.draftId, resume: true);
+          addTearDown(other.dispose);
+          await other.initialized;
+          await other.takeOver();
+          await other.save(
+            other.state.copyWith(name: 'Competing latest owner'),
+          );
+          final exactOther = storage.read(other.storageKey);
+          expect(
+            await selected.retryResumeOwnership(
+              expectedDraftId: original.state.draftId,
+              canAcquire: () => true,
+            ),
+            false,
+          );
+          expect(storage.read(other.storageKey), exactOther);
+        } else {
+          expect(
+            await selected.retryResumeOwnership(
+              expectedDraftId: original.state.draftId,
+              canAcquire: () => true,
+            ),
+            true,
+          );
+          expect(selected.state.name, 'Latest saved before resume');
+          expect(selected.state.writerEpoch, grantedEpoch);
+          expect(
+            (jsonDecode(storage.read(selected.storageKey)!)
+                as Map)['writerEpoch'],
+            grantedEpoch,
+          );
+          await selected.save(
+            selected.state.copyWith(name: 'Editable after acknowledgement'),
+          );
+          expect(selected.state.isAcknowledged, true);
+        }
+      },
+    );
+  }
+
+  test(
     'same-ID takeover fences A while another proposal remains independently writable',
     () async {
       final storage = _OrderedStorage();
@@ -339,11 +575,64 @@ void main() {
           YorksV1ProjectDraftStorageState.recoveryRequired,
         );
         expect(resumed.writable, false);
+        final retained = Map.of(storage.values);
+        expect(
+          await resumed.resumeEditing(
+            expectedDraftId: 'missing-resume',
+            canAcquire: () => true,
+          ),
+          false,
+        );
+        expect(storage.values, retained);
         expect(storage.read(key), raw);
         expect(storage.read(_catalogue().indexKey), isNull);
       }
     },
   );
+  test(
+    'Resume cannot claim a foreign owner/backend record or a different selected ID',
+    () async {
+      for (final mismatch in [
+        'ownerAuthUserId',
+        'backendIdentity',
+        'draftId',
+      ]) {
+        final storage = _OrderedStorage();
+        final original = _writer(storage, 'private-resume');
+        addTearDown(original.dispose);
+        await original.initialized;
+        await original.save(
+          original.state.copyWith(name: 'Retain private original'),
+        );
+        final envelope =
+            jsonDecode(storage.read(original.storageKey)!)
+                as Map<String, dynamic>;
+        final draft = Map<String, dynamic>.from(envelope['draft'] as Map);
+        draft[mismatch] = mismatch == 'backendIdentity'
+            ? 'production'
+            : 'foreign-value';
+        storage.values[original.storageKey] = jsonEncode({
+          ...envelope,
+          'draft': draft,
+        });
+        final selected = _writer(storage, 'private-resume', resume: true);
+        addTearDown(selected.dispose);
+        await selected.initialized;
+        final retained = Map.of(storage.values);
+        expect(
+          await selected.resumeEditing(
+            expectedDraftId: 'private-resume',
+            canAcquire: () => true,
+          ),
+          false,
+        );
+        expect(selected.writable, false);
+        expect(selected.state.name, isEmpty);
+        expect(storage.values, retained);
+      }
+    },
+  );
+
   for (final failure in ['locator', 'confirmed-journal']) {
     test(
       '$failure partial commit keeps original intent reachable until known project recovery is durable',
@@ -845,6 +1134,8 @@ class _OrderedStorage implements ProjectDraftAtomicStorage {
   final List<String> readKeys = [];
   Future<void> _tail = Future.value();
   String? failWriteKey;
+  String? failAfterWriteKey;
+  Completer<void>? blockBeforeNextWork;
   int nextId = 0;
   @override
   bool get supportsAtomicOwnership => true;
@@ -865,6 +1156,9 @@ class _OrderedStorage implements ProjectDraftAtomicStorage {
     _tail = done.future;
     try {
       await previous;
+      final gate = blockBeforeNextWork;
+      blockBeforeNextWork = null;
+      if (gate != null) await gate.future;
       final tx = _Transaction(values);
       final result = work(tx);
       for (final entry in tx.writes.entries) {
@@ -876,6 +1170,10 @@ class _OrderedStorage implements ProjectDraftAtomicStorage {
           values.remove(entry.key);
         } else {
           values[entry.key] = entry.value!;
+        }
+        if (entry.key == failAfterWriteKey) {
+          failAfterWriteKey = null;
+          throw const ProjectDraftStorageException('write_not_acknowledged');
         }
       }
       return result;

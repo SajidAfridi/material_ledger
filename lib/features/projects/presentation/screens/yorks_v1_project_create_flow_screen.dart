@@ -221,6 +221,12 @@ class _YorksV1ProjectCreateFlowScreenState
   bool _restoredEditor = false;
   bool _editInitialized = false;
   bool _editReady = false;
+  Future<void>? _editSeedInitialization;
+  bool _resumeEntryStarted = false;
+  bool _resumeEntryReady = false;
+  bool _resumeEntryBusy = false;
+  bool _resumeEntryFailed = false;
+  String? _resumeExpectedDraftId;
   final _visitedStages = <YorksV1ProjectCreationStage>{
     YorksV1ProjectCreationStage.projectDetails,
   };
@@ -364,15 +370,19 @@ class _YorksV1ProjectCreateFlowScreenState
         ownerAuthUserId: authUserId,
         projectId: item.project.id,
       );
-      Future.microtask(() async {
-        if (!_isCurrentContext(generation)) return;
-        await ref
-            .read(yorksV1ProjectEditDraftProvider(editContext).notifier)
-            .initializeEdit(initial);
-        if (_isCurrentContext(generation)) {
-          setState(() => _editReady = true);
-        }
-      });
+      _editSeedInitialization =
+          Future.microtask(() async {
+            if (!_isCurrentContext(generation)) return;
+            await ref
+                .read(yorksV1ProjectEditDraftProvider(editContext).notifier)
+                .initializeEdit(initial);
+            if (_isCurrentContext(generation)) {
+              setState(() => _editReady = true);
+            }
+          }).catchError((_) {
+            // The entry gate retains the storage failure and offers a fenced
+            // acknowledgement retry. No seed is exposed as an editable proposal.
+          });
     }
   }
 
@@ -396,6 +406,172 @@ class _YorksV1ProjectCreateFlowScreenState
             _creationContext(owner),
           ).notifier,
         );
+
+  bool get _requiresResumeEntry =>
+      _isEditing ||
+      widget.legacyRecovery ||
+      _selectedCreationContext?.entry ==
+          YorksV1ProjectCreationDraftEntry.resume;
+
+  bool _canAcquireResume(int generation) {
+    if (!_isCurrentContext(generation)) return false;
+    final role = ref.read(yorksV1CurrentRoleProvider);
+    if (role?.canCreateProject != true) return false;
+    final router = GoRouter.maybeOf(context);
+    if (router != null && router.state.uri != GoRouterState.of(context).uri) {
+      // An outgoing scene may still be mounted during a route transition.
+      // It cannot acquire the proposal after the selected entry has changed.
+      return false;
+    }
+    // Ownership only opens the same owner-scoped local input buffer. Match
+    // its existing availability policy during a permission-service outage;
+    // remote commands still require a trusted canWrite decision separately.
+    return yorksV1FeatureActionAccess(
+      ref.read(yorksV1CurrentPermissionSnapshotProvider),
+      _isEditing
+          ? YorksV1CapabilityKeys.projectsEdit
+          : YorksV1CapabilityKeys.projectsCreate,
+      legacyAllowed: true,
+      projectId: widget.editItem?.project.id,
+    ).isVisible;
+  }
+
+  void _startResumeEntry() {
+    if (_resumeEntryStarted) return;
+    _resumeEntryStarted = true;
+    final generation = _contextGeneration;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_isCurrentContext(generation)) {
+        unawaited(_acquireResumeEntry());
+      }
+    });
+  }
+
+  Future<void> _acquireResumeEntry({bool retry = false}) async {
+    final owner = _activeAuthUserId;
+    if (owner == null || _resumeEntryBusy) return;
+    final generation = _contextGeneration;
+    final controller = _draftController(owner);
+    setState(() {
+      _resumeEntryBusy = true;
+      _resumeEntryFailed = false;
+    });
+    try {
+      await controller.initialized;
+      if (_editSeedInitialization != null) await _editSeedInitialization;
+      if (!_isCurrentContext(generation)) return;
+      final expectedId = _resumeExpectedDraftId ??=
+          !_isEditing && !widget.legacyRecovery
+          ? _effectiveCreationDraftId
+          : controller.currentDraftId;
+      final acquired = retry
+          ? await controller.retryResumeOwnership(
+              expectedDraftId: expectedId,
+              canAcquire: () => _canAcquireResume(generation),
+            )
+          : await controller.resumeEditing(
+              expectedDraftId: expectedId,
+              canAcquire: () => _canAcquireResume(generation),
+            );
+      if (!_isCurrentContext(generation)) return;
+      // An unseeded Edit fallback is a display snapshot; read the actual
+      // provider status so a failed seed/acquisition cannot bypass this gate.
+      final acquiredDraft = _isEditing
+          ? ref.read(yorksV1ProjectEditDraftProvider(_editContext(owner)))
+          : _currentDraft();
+      final storageFailed =
+          acquiredDraft.storageState == YorksV1ProjectDraftStorageState.failed;
+      setState(() {
+        // Missing/corrupt/retired records can render their existing guarded
+        // recovery surface. Failed acknowledgement keeps fields unhydrated.
+        _resumeEntryFailed = !acquired && storageFailed;
+        _resumeEntryReady = !_resumeEntryFailed;
+        _restoredEditor = false;
+        _restoredNavigationStage = null;
+        _ownershipCheckFailed = false;
+        if (acquired && _isEditing) _editReady = true;
+      });
+    } catch (_) {
+      if (_isCurrentContext(generation)) {
+        setState(() => _resumeEntryFailed = true);
+      }
+    } finally {
+      if (_isCurrentContext(generation)) {
+        setState(() => _resumeEntryBusy = false);
+      }
+    }
+  }
+
+  Widget _resumeEntryGate(
+    AppLanguage language,
+    YorksV1FeatureActionAccess permission,
+  ) => Scaffold(
+    backgroundColor: AppColors.surface,
+    body: Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: Column(
+            key: const Key('yorks-v1-project-resume-entry'),
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_resumeEntryBusy ||
+                  (permission.isVisible && !_resumeEntryFailed))
+                const CircularProgressIndicator(
+                  key: Key('yorks-v1-project-resume-loading'),
+                ),
+              YorksV1ActionAvailabilityNotice(
+                access: permission,
+                language: language,
+                onRetry: () => ref
+                    .read(yorksV1CurrentPermissionSnapshotProvider.notifier)
+                    .retryVerification(),
+              ),
+              if (_resumeEntryFailed) ...[
+                Text(
+                  YorksV1ProjectStrings.localSaveFailed.active(language),
+                  textAlign: TextAlign.center,
+                ),
+                TextButton(
+                  key: const Key('yorks-v1-project-resume-retry'),
+                  onPressed: _resumeEntryBusy || !permission.isVisible
+                      ? null
+                      : () => _acquireResumeEntry(retry: true),
+                  child: Text(YorksV1ProjectStrings.retry.active(language)),
+                ),
+              ],
+              TextButton(
+                onPressed: () => context.go(RoutePaths.yorksV1Projects),
+                child: Text(
+                  YorksV1ProjectSetupShellStrings.returnToProjects.active(
+                    language,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+
+  Widget _resumedElsewhereNotice(AppLanguage language) => Padding(
+    padding: const EdgeInsets.only(bottom: 16),
+    child: Column(
+      key: const Key('yorks-v1-project-draft-resumed-elsewhere'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(YorksV1ProjectStrings.draftResumedElsewhere.active(language)),
+        TextButton(
+          onPressed: () => context.go(RoutePaths.yorksV1Projects),
+          child: Text(
+            YorksV1ProjectSetupShellStrings.returnToProjects.active(language),
+          ),
+        ),
+      ],
+    ),
+  );
 
   @override
   void initState() {
@@ -610,7 +786,7 @@ class _YorksV1ProjectCreateFlowScreenState
 
   Future<void> _verifyResumedOwnership() async {
     final owner = _activeAuthUserId;
-    if (owner == null || !mounted) return;
+    if (owner == null || !mounted || !_resumeEntryReady) return;
     final generation = _contextGeneration;
     final controller = _draftController(owner);
     setState(() {
@@ -721,6 +897,18 @@ class _YorksV1ProjectCreateFlowScreenState
       _restoredEditor = false;
       _editInitialized = false;
       _editReady = false;
+      _editSeedInitialization = null;
+      _resumeEntryStarted = false;
+      _resumeEntryReady = false;
+      _resumeEntryBusy = false;
+      _resumeEntryFailed = false;
+      _resumeExpectedDraftId = null;
+      _synchronizingEditor = true;
+      for (final controller in _controllers) {
+        controller.clear();
+      }
+      _hasFrpRoom = false;
+      _synchronizingEditor = false;
       _removedBuilding = null;
       _removedBuildingIndex = null;
       _buildingUndoRows = null;
@@ -776,6 +964,14 @@ class _YorksV1ProjectCreateFlowScreenState
     final draft = _isEditing && storedDraft.baseVersion == null
         ? _editDraft!
         : storedDraft;
+    if (!_requiresResumeEntry) {
+      // Anchoring a newly created proposal keeps its immutable new-entry
+      // context and its existing lease through the same-ID URL replacement.
+      _resumeEntryReady = true;
+    } else if (!_resumeEntryReady) {
+      if (permission.isVisible) _startResumeEntry();
+      return _resumeEntryGate(language, permission);
+    }
     _anchorDraftUrl(draft);
     _visitedStages.addAll(draft.visitedStages);
     _restoreRawEditor(draft);
@@ -841,22 +1037,18 @@ class _YorksV1ProjectCreateFlowScreenState
                       children: [
                         Text(
                           (historyOwnedElsewhere
-                                  ? YorksV1ProjectStrings.draftOwnedElsewhere
+                                  ? YorksV1ProjectStrings.draftResumedElsewhere
                                   : YorksV1ProjectStrings.localSaveFailed)
                               .active(language),
                           textAlign: TextAlign.center,
                         ),
-                        TextButton(
-                          onPressed: historyOwnedElsewhere
-                              ? _takeOverConfirmedHistory
-                              : _retryConfirmedHistory,
-                          child: Text(
-                            (historyOwnedElsewhere
-                                    ? YorksV1ProjectStrings.takeOverDraft
-                                    : YorksV1ProjectStrings.retry)
-                                .active(language),
+                        if (!historyOwnedElsewhere)
+                          TextButton(
+                            onPressed: _retryConfirmedHistory,
+                            child: Text(
+                              YorksV1ProjectStrings.retry.active(language),
+                            ),
                           ),
-                        ),
                         TextButton(
                           onPressed: () =>
                               context.go(RoutePaths.yorksV1Projects),
@@ -898,6 +1090,7 @@ class _YorksV1ProjectCreateFlowScreenState
     final recoveryRequired =
         draft.storageState == YorksV1ProjectDraftStorageState.recoveryRequired;
     final readOnly =
+        !_draftController(authUserId).writable ||
         draft.isReadOnly ||
         _checkingOwnership ||
         _ownershipCheckFailed ||
@@ -1092,33 +1285,10 @@ class _YorksV1ProjectCreateFlowScreenState
                                   YorksV1ProjectStrings.retry.active(language),
                                 ),
                               ),
-                            if (ownedElsewhere)
-                              TextButton(
-                                onPressed: () async {
-                                  final generation = _contextGeneration;
-                                  _draftSaveTimer?.cancel();
-                                  _pendingDraft = null;
-                                  await _draftController(authUserId).takeOver();
-                                  if (!_isCurrentContext(generation)) return;
-                                  setState(() {
-                                    _restoredEditor = false;
-                                    _removedBuilding = null;
-                                    _removedBuildingIndex = null;
-                                    _buildingUndoRows = null;
-                                    _removedParty = null;
-                                    _removedPartyIndex = null;
-                                    _restoredNavigationStage = null;
-                                    _ownershipCheckFailed = false;
-                                  });
-                                },
-                                child: Text(
-                                  YorksV1ProjectStrings.takeOverDraft.active(
-                                    language,
-                                  ),
-                                ),
-                              ),
                           ],
                           notices: [
+                            if (ownedElsewhere)
+                              _resumedElsewhereNotice(language),
                             if (_isEditing)
                               YorksV1ProjectSetupPendingRecovery(
                                 project: widget.editItem!.project,
@@ -1291,34 +1461,6 @@ class _YorksV1ProjectCreateFlowScreenState
                                     ),
                                   ),
                                 ),
-                              if (ownedElsewhere)
-                                TextButton(
-                                  onPressed: () async {
-                                    final generation = _contextGeneration;
-                                    _draftSaveTimer?.cancel();
-                                    _pendingDraft = null;
-                                    await _draftController(
-                                      authUserId,
-                                    ).takeOver();
-                                    if (_isCurrentContext(generation)) {
-                                      setState(() {
-                                        _restoredEditor = false;
-                                        _removedBuilding = null;
-                                        _removedBuildingIndex = null;
-                                        _buildingUndoRows = null;
-                                        _removedParty = null;
-                                        _removedPartyIndex = null;
-                                        _restoredNavigationStage = null;
-                                        _ownershipCheckFailed = false;
-                                      });
-                                    }
-                                  },
-                                  child: Text(
-                                    YorksV1ProjectStrings.takeOverDraft.active(
-                                      language,
-                                    ),
-                                  ),
-                                ),
                               OutlinedButton.icon(
                                 onPressed:
                                     saving || readOnly || _manualSavePending
@@ -1405,6 +1547,8 @@ class _YorksV1ProjectCreateFlowScreenState
                                               language: language,
                                             ),
                                             const SizedBox(height: 20),
+                                            if (ownedElsewhere)
+                                              _resumedElsewhereNotice(language),
                                             if (_validationErrors.isNotEmpty &&
                                                 !intentLocked)
                                               Padding(
@@ -1665,6 +1809,7 @@ class _YorksV1ProjectCreateFlowScreenState
       final current = _currentDraft();
       final operation = ref.read(_coordinatorProvider(current)).operation;
       return (bufferOnly ? access.isVisible : access.canWrite) &&
+          _draftController(current.ownerAuthUserId).writable &&
           !current.isReadOnly &&
           current.storageState !=
               YorksV1ProjectDraftStorageState.initializing &&
@@ -1911,7 +2056,19 @@ class _YorksV1ProjectCreateFlowScreenState
       key: ValueKey(
         'project-setup-stage-${draft.ownerAuthUserId}|${draft.backendIdentity}|${draft.draftId}|${stage.name}',
       ),
-      child: stageBody,
+      child: _ProjectSetupReadOnlyScope(
+        readOnly:
+            !_draftController(draft.ownerAuthUserId).writable ||
+            !_resumeEntryReady ||
+            _checkingOwnership ||
+            _ownershipCheckFailed ||
+            _isCreating ||
+            (_isEditing && !_editReady) ||
+            ((setupState.operation?.coreSucceeded == true ||
+                    setupState.outcomeUncertain) &&
+                stage != YorksV1ProjectCreationStage.attachments),
+        child: stageBody,
+      ),
     );
   }
 
@@ -2043,7 +2200,8 @@ class _YorksV1ProjectCreateFlowScreenState
   }
 
   void _queueNavigationContext() {
-    if (_completedOperation?.cleanupComplete == true ||
+    if (!_resumeEntryReady ||
+        _completedOperation?.cleanupComplete == true ||
         _restoringNavigation ||
         _synchronizingEditor ||
         _activeAuthUserId == null ||
@@ -2120,7 +2278,11 @@ class _YorksV1ProjectCreateFlowScreenState
     ],
   );
   void _queueEditorState() {
-    if (_synchronizingEditor || _activeAuthUserId == null) return;
+    if (!_resumeEntryReady ||
+        _synchronizingEditor ||
+        _activeAuthUserId == null) {
+      return;
+    }
     _queueDraft(
       (draft) => draft.copyWith(rawEditorState: _rawEditorState(draft)),
     );
@@ -2561,9 +2723,9 @@ class _YorksV1ProjectCreateFlowScreenState
     );
   }
 
-  YorksV1ProjectCreationDraft _currentDraft() {
+  YorksV1ProjectCreationDraft _currentDraft({bool includePending = true}) {
     if (_isEditing) {
-      if (_pendingDraft != null) return _pendingDraft!;
+      if (includePending && _pendingDraft != null) return _pendingDraft!;
       final owner = _activeAuthUserId;
       if (owner != null) {
         final stored = ref.read(
@@ -2579,7 +2741,7 @@ class _YorksV1ProjectCreateFlowScreenState
         YorksV1DomainErrorCode.unauthenticated,
       );
     }
-    return _pendingDraft ??
+    return (includePending ? _pendingDraft : null) ??
         (widget.legacyRecovery
             ? ref.read(yorksV1ProjectLegacyRecoveryDraftProvider(authUserId))
             : _usesOriginalCreationProvider(authUserId)
@@ -2596,8 +2758,9 @@ class _YorksV1ProjectCreateFlowScreenState
     transform, {
     bool semanticEdit = true,
   }) {
-    if (_activeAuthUserId == null) return;
-    if (_currentDraft().isReadOnly ||
+    if (_activeAuthUserId == null || !_resumeEntryReady) return;
+    if (!_draftController(_activeAuthUserId!).writable ||
+        _currentDraft().isReadOnly ||
         _currentDraft().storageState ==
             YorksV1ProjectDraftStorageState.initializing ||
         _checkingOwnership ||
@@ -2632,7 +2795,14 @@ class _YorksV1ProjectCreateFlowScreenState
     try {
       await _draftController(owner).save(pending);
     } catch (_) {
-      if (_isCurrentContext(generation)) setState(() {});
+      if (_isCurrentContext(generation)) {
+        setState(() {
+          // A fenced writer may be rejected before the controller records
+          // this frontend buffer. Keep it visible without replacing newer
+          // input or granting the stale snapshot a different writer epoch.
+          _pendingDraft ??= pending;
+        });
+      }
     }
   }
 
@@ -2640,6 +2810,9 @@ class _YorksV1ProjectCreateFlowScreenState
     final generation = _contextGeneration;
     final owner = _activeAuthUserId;
     if (owner == null) return true;
+    // No editable fields have been hydrated while Resume acquisition waits.
+    // Leaving this gate must not checkpoint empty controls into the proposal.
+    if (!_resumeEntryReady) return true;
     if (_leaveAuthorizedGeneration == generation) {
       _leaveAuthorizedGeneration = null;
       return true;
@@ -2764,9 +2937,6 @@ class _YorksV1ProjectCreateFlowScreenState
   }) async {
     if (manual && _manualSavePending) return;
     final generation = _contextGeneration;
-    _draftSaveTimer?.cancel();
-    _pendingDraft = null;
-    _leaveAuthorizedGeneration = null;
     final owner = _activeAuthUserId;
     if (owner == null ||
         draft.ownerAuthUserId != owner ||
@@ -2774,15 +2944,19 @@ class _YorksV1ProjectCreateFlowScreenState
         !_isCurrentContext(generation)) {
       return;
     }
+    _draftSaveTimer?.cancel();
+    _pendingDraft = null;
+    _leaveAuthorizedGeneration = null;
     if (manual) {
       setState(() {
         _manualSavePending = true;
         _manuallySavedInput = null;
       });
     }
+    YorksV1ProjectCreationDraft? snapshot;
     try {
       final stableDraft = _withLocalRowIds(draft);
-      final snapshot = stableDraft.copyWith(
+      snapshot = stableDraft.copyWith(
         rawEditorState: _rawEditorState(stableDraft),
       );
       final controller = _draftController(owner);
@@ -2793,11 +2967,17 @@ class _YorksV1ProjectCreateFlowScreenState
       if (!manual || !_isCurrentContext(generation)) return;
       await controller.flush(saveTrigger: 'manual');
       if (!_isCurrentContext(generation)) return;
-      final saved = _currentDraft();
+      final saved = _currentDraft(includePending: false);
+      final current = _currentDraft();
+      final savedInput = _localInputIdentity(saved);
+      final snapshotInput = _localInputIdentity(snapshot);
       if (saved.isAcknowledged &&
-          _pendingDraft == null &&
-          _localInputIdentity(saved) == _localInputIdentity(snapshot)) {
-        _manuallySavedInput = _localInputIdentity(saved);
+          savedInput == snapshotInput &&
+          _localInputIdentity(current) == snapshotInput) {
+        // Scroll/focus checkpoints can be queued while the save completes.
+        // They do not change the acknowledged input; pending typed content
+        // still has to match that exact input before acknowledging this Save.
+        _manuallySavedInput = savedInput;
         _showMessage(
           _isEditing
               ? YorksV1ProjectStrings.editSavedLocally
@@ -2808,7 +2988,9 @@ class _YorksV1ProjectCreateFlowScreenState
       }
     } catch (_) {
       if (_isCurrentContext(generation)) {
-        setState(() {});
+        setState(() {
+          _pendingDraft ??= snapshot ?? draft;
+        });
         if (manual) {
           _showMessage(YorksV1ProjectStrings.localSaveFailed, error: true);
         }
@@ -3723,40 +3905,6 @@ class _YorksV1ProjectCreateFlowScreenState
     }
   }
 
-  Future<void> _takeOverConfirmedHistory() async {
-    final owner = _activeAuthUserId;
-    if (owner == null || _checkingOwnership) return;
-    final generation = _contextGeneration;
-    final controller = _draftController(owner);
-    setState(() {
-      _checkingOwnership = true;
-      _confirmedHistoryReleaseFailed = false;
-    });
-    try {
-      await controller.initialized;
-      if (!_isCurrentContext(generation)) return;
-      await controller.takeOver();
-      if (!_isCurrentContext(generation)) return;
-      _draftSaveTimer?.cancel();
-      _pendingDraft = null;
-      setState(() {
-        _restoredEditor = false;
-        _restoredNavigationStage = null;
-        _ownershipCheckFailed = false;
-        _confirmedHistoryReleaseFailed =
-            _currentDraft().storageState ==
-            YorksV1ProjectDraftStorageState.failed;
-      });
-    } catch (_) {
-      if (!_isCurrentContext(generation)) return;
-      setState(() => _confirmedHistoryReleaseFailed = true);
-    } finally {
-      if (_isCurrentContext(generation)) {
-        setState(() => _checkingOwnership = false);
-      }
-    }
-  }
-
   Future<void> _retryConfirmedHistory() async {
     final generation = _contextGeneration;
     await _verifyResumedOwnership();
@@ -4130,6 +4278,27 @@ class _YorksV1ProjectCreateFlowScreenState
     }
     return YorksV1ProjectCreationStage.reviewAndCreate;
   }
+}
+
+/// Input values may come from a preserved frontend buffer. Editability comes
+/// from the live controller fence, never from that buffer's old storage flags.
+class _ProjectSetupReadOnlyScope extends InheritedWidget {
+  const _ProjectSetupReadOnlyScope({
+    required this.readOnly,
+    required super.child,
+  });
+
+  final bool readOnly;
+
+  static bool of(BuildContext context) =>
+      context
+          .dependOnInheritedWidgetOfExactType<_ProjectSetupReadOnlyScope>()
+          ?.readOnly ??
+      false;
+
+  @override
+  bool updateShouldNotify(_ProjectSetupReadOnlyScope oldWidget) =>
+      readOnly != oldWidget.readOnly;
 }
 
 class _AccessState extends StatelessWidget {
@@ -4594,6 +4763,7 @@ class _DetailsStage extends StatelessWidget {
           final wide = constraints.maxWidth >= 620;
           final fields = [
             LedgerTextField(
+              readOnly: _ProjectSetupReadOnlyScope.of(context),
               key: const ValueKey('yorks-v1-project-reference'),
               controller: referenceController,
               focusNode: focusNodes['reference'],
@@ -4612,6 +4782,7 @@ class _DetailsStage extends StatelessWidget {
                   value == null || value.trim().isEmpty ? required : null,
             ),
             LedgerTextField(
+              readOnly: _ProjectSetupReadOnlyScope.of(context),
               key: const ValueKey('yorks-v1-project-name'),
               controller: nameController,
               focusNode: focusNodes['name'],
@@ -4625,6 +4796,7 @@ class _DetailsStage extends StatelessWidget {
                   value == null || value.trim().isEmpty ? required : null,
             ),
             LedgerTextField(
+              readOnly: _ProjectSetupReadOnlyScope.of(context),
               key: const ValueKey('yorks-v1-project-client'),
               controller: clientController,
               focusNode: focusNodes['client'],
@@ -4634,6 +4806,7 @@ class _DetailsStage extends StatelessWidget {
               onChanged: onClientChanged,
             ),
             LedgerTextField(
+              readOnly: _ProjectSetupReadOnlyScope.of(context),
               key: const ValueKey('yorks-v1-project-job-contract'),
               controller: jobOrContractController,
               focusNode: focusNodes['contract'],
@@ -4648,6 +4821,7 @@ class _DetailsStage extends StatelessWidget {
               onChanged: onJobOrContractChanged,
             ),
             LedgerTextField(
+              readOnly: _ProjectSetupReadOnlyScope.of(context),
               key: const ValueKey('yorks-v1-project-site'),
               controller: siteController,
               focusNode: focusNodes['site'],
@@ -4717,6 +4891,7 @@ class _DetailsStage extends StatelessWidget {
                   ),
                   children: [
                     LedgerTextField(
+                      readOnly: _ProjectSetupReadOnlyScope.of(context),
                       controller: contactNameController,
                       focusNode: focusNodes['contactName'],
                       semanticsLabel: YorksV1ProjectStrings.contactName.active(
@@ -4727,6 +4902,7 @@ class _DetailsStage extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                     LedgerTextField(
+                      readOnly: _ProjectSetupReadOnlyScope.of(context),
                       controller: contactPhoneController,
                       focusNode: focusNodes['contactPhone'],
                       semanticsLabel: YorksV1ProjectStrings.contactPhone.active(
@@ -4739,6 +4915,7 @@ class _DetailsStage extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                     LedgerTextField(
+                      readOnly: _ProjectSetupReadOnlyScope.of(context),
                       controller: contactEmailController,
                       focusNode: focusNodes['contactEmail'],
                       semanticsLabel: YorksV1ProjectStrings.contactEmail.active(
@@ -4751,6 +4928,7 @@ class _DetailsStage extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                     LedgerTextField(
+                      readOnly: _ProjectSetupReadOnlyScope.of(context),
                       controller: contactAddressController,
                       focusNode: focusNodes['contactAddress'],
                       semanticsLabel: YorksV1ProjectStrings.contactAddress
@@ -4765,6 +4943,7 @@ class _DetailsStage extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.lg),
               LedgerTextField(
+                readOnly: _ProjectSetupReadOnlyScope.of(context),
                 key: const ValueKey('yorks-v1-project-notes'),
                 controller: notesController,
                 focusNode: focusNodes['notes'],
@@ -4804,6 +4983,7 @@ class _DateField extends StatelessWidget {
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       TextFormField(
+        readOnly: _ProjectSetupReadOnlyScope.of(context),
         key: ValueKey('yorks-v1-project-date-${copy.en}'),
         controller: controller,
         focusNode: focusNode,
@@ -4956,6 +5136,7 @@ class _PartiesAndAccessStage extends StatelessWidget {
                   final wide = constraints.maxWidth >= 620;
                   final fields = [
                     LedgerTextField(
+                      readOnly: _ProjectSetupReadOnlyScope.of(context),
                       key: const ValueKey('yorks-v1-project-consultant'),
                       controller: consultantController,
                       focusNode: focusNodes['consultant'],
@@ -4969,6 +5150,7 @@ class _PartiesAndAccessStage extends StatelessWidget {
                       onChanged: onConsultantChanged,
                     ),
                     LedgerTextField(
+                      readOnly: _ProjectSetupReadOnlyScope.of(context),
                       key: const ValueKey('yorks-v1-project-main-contractor'),
                       controller: mainContractorController,
                       focusNode: focusNodes['mainContractor'],
@@ -5328,7 +5510,7 @@ class _InitialTeamCardPickerState extends State<_InitialTeamCardPicker> {
         child: CheckboxListTile(
           key: ValueKey('yorks-v1-project-team-picker-${member.authUserId}'),
           value: isSelected,
-          onChanged: enabled
+          onChanged: enabled && !_ProjectSetupReadOnlyScope.of(context)
               ? (_) => isSelected
                     ? widget.onRemove(member.authUserId)
                     : widget.onAdd(member, role)
@@ -5364,6 +5546,7 @@ class _InitialTeamCardPickerState extends State<_InitialTeamCardPicker> {
           const Divider(height: 24),
         ],
         TextField(
+          readOnly: _ProjectSetupReadOnlyScope.of(context),
           key: const ValueKey('yorks-v1-project-team-search'),
           decoration: InputDecoration(
             labelText: YorksV1ProjectStrings.searchTeam.active(widget.language),
@@ -5528,6 +5711,7 @@ class _NamedPartyAdder extends StatelessWidget {
           children: [
             Expanded(
               child: LedgerTextField(
+                readOnly: _ProjectSetupReadOnlyScope.of(context),
                 controller: controller,
                 focusNode: focusNode,
                 // The section heading above is the field label. Repeating it
@@ -5657,6 +5841,7 @@ class _BuildingsStage extends StatelessWidget {
                   final wide = constraints.maxWidth >= 620;
                   final fields = [
                     LedgerTextField(
+                      readOnly: _ProjectSetupReadOnlyScope.of(context),
                       key: const ValueKey('yorks-v1-building-code'),
                       controller: codeController,
                       focusNode: focusNodes['buildingCode'],
@@ -5671,6 +5856,7 @@ class _BuildingsStage extends StatelessWidget {
                       ),
                     ),
                     LedgerTextField(
+                      readOnly: _ProjectSetupReadOnlyScope.of(context),
                       key: const ValueKey('yorks-v1-building-name'),
                       controller: nameController,
                       focusNode: focusNodes['buildingName'],
@@ -5701,6 +5887,7 @@ class _BuildingsStage extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.lg),
               LedgerTextField(
+                readOnly: _ProjectSetupReadOnlyScope.of(context),
                 key: const ValueKey('yorks-v1-building-floors'),
                 controller: floorsController,
                 focusNode: focusNodes['buildingFloors'],
@@ -5714,6 +5901,7 @@ class _BuildingsStage extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.lg),
               LedgerTextField(
+                readOnly: _ProjectSetupReadOnlyScope.of(context),
                 key: const ValueKey('yorks-v1-building-delivery-address'),
                 controller: deliveryAddressController,
                 focusNode: focusNodes['buildingAddress'],
@@ -5732,7 +5920,9 @@ class _BuildingsStage extends StatelessWidget {
                 child: CheckboxListTile(
                   key: const ValueKey('yorks-v1-building-has-frp-room'),
                   value: hasFrpRoom,
-                  onChanged: (value) => onHasFrpRoomChanged(value ?? false),
+                  onChanged: _ProjectSetupReadOnlyScope.of(context)
+                      ? null
+                      : (value) => onHasFrpRoomChanged(value ?? false),
                   contentPadding: EdgeInsets.zero,
                   controlAffinity: ListTileControlAffinity.leading,
                   title: _LocalizedCopy(
@@ -6441,7 +6631,7 @@ class _AttachmentCategoryPicker extends StatelessWidget {
             ),
           ),
       ],
-      onChanged: onChanged == null
+      onChanged: onChanged == null || _ProjectSetupReadOnlyScope.of(context)
           ? null
           : (value) {
               final selected = YorksV1ProjectAttachmentCategory.values

@@ -54,7 +54,9 @@ class YorksV1ProjectCreationDraftController
            requireExistingRecord: requireExistingRecord,
          ),
        ) {
-    _initialization = _claim(legacyRaw: legacyRaw);
+    _initialization = _claim(
+      legacyRaw: legacyRaw,
+    ).whenComplete(() => _initializationComplete = true);
   }
 
   final String _ownerAuthUserId;
@@ -74,18 +76,23 @@ class YorksV1ProjectCreationDraftController
   final String journalScopeKey;
   String get _lockKey => catalogue?.scopeKey ?? storageKey;
   late final Future<void> _initialization;
+  bool _initializationComplete = false;
   YorksV1ProjectCreationDraft? _pending;
   Future<void>? _draining;
   final List<({int revision, Completer<void> completion})> _waiters = [];
   bool _disposed = false;
   bool _reportedSaved = false;
   bool _ownershipClaimed = false;
+  bool _resuming = false;
+  Future<bool>? _resumeAcquisition;
+  int? _attemptedResumeEpoch;
 
   Future<void> get initialized => _initialization;
   String get currentDraftId => state.draftId;
 
   bool get writable =>
       !state.isReadOnly &&
+      !_resuming &&
       state.storageState != YorksV1ProjectDraftStorageState.initializing;
   bool get hasCrossProcessOwnership => _storage.supportsAtomicOwnership;
 
@@ -364,18 +371,31 @@ class YorksV1ProjectCreationDraftController
   Future<T> atomicOwned<T>(
     T Function(ProjectDraftAtomicTransaction tx) work,
   ) async {
+    // Even awaiting an already-completed future yields. A callback invoked
+    // before explicit Resume must retain its old fence through that yield.
+    final invocationEpoch = _initializationComplete ? state.writerEpoch : null;
+    final invocationDraftId = _initializationComplete ? state.draftId : null;
     await _initialization;
+    final expectedEpoch = invocationEpoch ?? state.writerEpoch;
+    final expectedDraftId = invocationDraftId ?? state.draftId;
     return _storage.transaction(_lockKey, (tx) {
+      if (_disposed) {
+        throw const ProjectDraftStorageException('controller_disposed');
+      }
       final raw = tx.read(storageKey);
       if (raw == null) {
         throw const ProjectDraftStorageException('owner_missing');
       }
       final record = _record(raw);
       if (record['ownerWriterId'] != _writerId ||
-          record['writerEpoch'] != state.writerEpoch ||
+          record['writerEpoch'] != expectedEpoch ||
+          state.writerEpoch != expectedEpoch ||
+          state.draftId != expectedDraftId ||
           record['retired'] == true ||
-          _draftFromRecord(record).draftId != state.draftId) {
-        if (!_disposed) {
+          _draftFromRecord(record).draftId != expectedDraftId) {
+        if (!_disposed &&
+            state.writerEpoch == expectedEpoch &&
+            state.draftId == expectedDraftId) {
           state = state.copyWith(
             storageState: YorksV1ProjectDraftStorageState.ownedElsewhere,
           );
@@ -390,6 +410,213 @@ class YorksV1ProjectCreationDraftController
   }
 
   Future<void> verifyOwnership() => atomicOwned((_) {});
+
+  /// A deliberate selected Resume/Edit entry transfers this exact proposal's
+  /// local writer lease. Rebuild, focus and ordinary retries never call this.
+  /// The latest acknowledged snapshot is read under the existing root lock.
+  Future<bool> resumeEditing({
+    required String expectedDraftId,
+    required bool Function() canAcquire,
+  }) => _resume(
+    expectedDraftId: expectedDraftId,
+    canAcquire: canAcquire,
+    transferOwnership: true,
+  );
+
+  /// Retry an uncertain acknowledgement without taking a lease from another
+  /// writer. A partially committed grant can be recognized by its exact epoch.
+  Future<bool> retryResumeOwnership({
+    required String expectedDraftId,
+    required bool Function() canAcquire,
+  }) => _resume(
+    expectedDraftId: expectedDraftId,
+    canAcquire: canAcquire,
+    transferOwnership: false,
+  );
+
+  Future<bool> _resume({
+    required String expectedDraftId,
+    required bool Function() canAcquire,
+    required bool transferOwnership,
+  }) {
+    final current = _resumeAcquisition;
+    if (current != null) return current;
+    _resuming = true;
+    final acquisition =
+        _acquireResume(
+          expectedDraftId: expectedDraftId,
+          canAcquire: canAcquire,
+          transferOwnership: transferOwnership,
+        ).whenComplete(() {
+          _resumeAcquisition = null;
+          _resuming = false;
+        });
+    _resumeAcquisition = acquisition;
+    return acquisition;
+  }
+
+  Future<bool> _acquireResume({
+    required String expectedDraftId,
+    required bool Function() canAcquire,
+    required bool transferOwnership,
+  }) async {
+    await _initialization;
+    // Finish an already queued save under its original fence. No stale buffer
+    // may restart a drain after the selected latest snapshot is acquired.
+    while (_draining != null) {
+      try {
+        await _draining;
+      } catch (_) {
+        // A failed buffer is retained below, never silently overwritten.
+      }
+    }
+    if (_disposed) return false;
+    final prior = state;
+    final unacknowledged = prior.revision > prior.acknowledgedRevision;
+    if (transferOwnership) _attemptedResumeEpoch = null;
+    state = prior.copyWith(
+      storageState: YorksV1ProjectDraftStorageState.initializing,
+    );
+    try {
+      final claim = await _storage.transaction(_lockKey, (tx) {
+        if (_disposed || !canAcquire()) {
+          throw const ProjectDraftStorageException('resume_not_authorized');
+        }
+        void preserveUnacknowledged() {
+          if (!unacknowledged) return;
+          tx.write(
+            '$storageKey:quarantine:${prior.draftId}:$_writerId',
+            jsonEncode({
+              'raw': _encodeRecord(prior),
+              'reason': 'unacknowledged_input_before_explicit_resume',
+              'ownerAuthUserId': _ownerAuthUserId,
+              'backendIdentity': _backendIdentity,
+              'capturedAt': DateTime.now().toUtc().toIso8601String(),
+            }),
+          );
+        }
+
+        final raw = tx.read(storageKey);
+        Map<String, dynamic> record;
+        YorksV1ProjectCreationDraft latest;
+        try {
+          if (raw == null) {
+            throw const FormatException('Selected proposal missing');
+          }
+          record = _record(raw);
+          latest = _draftFromRecord(record);
+          if (!YorksV1ProjectCreationDraftCatalogue.validDraftId(
+                expectedDraftId,
+              ) ||
+              expectedDraftId != prior.draftId ||
+              _selectedDraftId != null && expectedDraftId != _selectedDraftId ||
+              latest.draftId != expectedDraftId ||
+              latest.ownerAuthUserId != _ownerAuthUserId ||
+              latest.backendIdentity != _backendIdentity ||
+              latest.mode != prior.mode ||
+              latest.projectId != prior.projectId ||
+              latest.creationIdempotencyKey.trim().isEmpty ||
+              record['retired'] != false ||
+              record['ownerWriterId'] != null &&
+                  record['ownerWriterId'] is! String ||
+              record['writerEpoch'] is! int ||
+              latest.writerEpoch < 0 ||
+              record['writerEpoch'] != latest.writerEpoch ||
+              latest.revision < 0 ||
+              latest.acknowledgedRevision != latest.revision ||
+              (record['draft'] as Map)['updatedAt'] is! String ||
+              DateTime.tryParse((record['draft'] as Map)['updatedAt']) ==
+                  null) {
+            throw const FormatException('Selected proposal scope mismatch');
+          }
+        } catch (_) {
+          preserveUnacknowledged();
+          return (
+            acquired: false,
+            draft: prior.copyWith(
+              storageState: YorksV1ProjectDraftStorageState.recoveryRequired,
+            ),
+          );
+        }
+        if (unacknowledged && _resumeContent(prior) != _resumeContent(latest)) {
+          preserveUnacknowledged();
+          return (
+            acquired: false,
+            draft: prior.copyWith(
+              storageState: YorksV1ProjectDraftStorageState.recoveryRequired,
+            ),
+          );
+        }
+        final epoch = latest.writerEpoch;
+        if (!transferOwnership &&
+            (record['ownerWriterId'] != _writerId ||
+                epoch != prior.writerEpoch && epoch != _attemptedResumeEpoch)) {
+          return (
+            acquired: false,
+            draft: latest.copyWith(
+              storageState: YorksV1ProjectDraftStorageState.ownedElsewhere,
+            ),
+          );
+        }
+        final nextEpoch = transferOwnership ? epoch + 1 : epoch;
+        if (storageKey != catalogue?.scopeKey) {
+          // Retrying an already-owned grant also validates discoverability.
+          // It cannot acknowledge an unsupported catalogue or leave a missing
+          // index link behind after a partial storage failure.
+          catalogue?.register(tx, latest.draftId);
+        }
+        if (transferOwnership) {
+          _attemptedResumeEpoch = nextEpoch;
+          // Keep schema, saved time, payload and unknown envelope/draft fields
+          // byte-equivalent in meaning; only the fenced ownership changes.
+          tx.write(
+            storageKey,
+            jsonEncode({
+              ...record,
+              'ownerWriterId': _writerId,
+              'writerEpoch': nextEpoch,
+              'draft': {
+                ...Map<String, dynamic>.from(record['draft'] as Map),
+                'writerEpoch': nextEpoch,
+              },
+            }),
+          );
+        }
+        return (
+          acquired: true,
+          draft: latest.copyWith(
+            writerEpoch: nextEpoch,
+            storageState: latest.revision > 0
+                ? YorksV1ProjectDraftStorageState.saved
+                : YorksV1ProjectDraftStorageState.dirty,
+          ),
+        );
+      });
+      if (_disposed) return false;
+      _pending = null;
+      _ownershipClaimed = claim.acquired;
+      state = claim.draft;
+      return claim.acquired;
+    } on ProjectDraftStorageException catch (error) {
+      _ownershipClaimed = false;
+      if (!_disposed) {
+        state = prior.copyWith(
+          storageState: error.reason == 'resume_not_authorized'
+              ? YorksV1ProjectDraftStorageState.ownedElsewhere
+              : YorksV1ProjectDraftStorageState.failed,
+        );
+      }
+      return false;
+    } catch (_) {
+      _ownershipClaimed = false;
+      if (!_disposed) {
+        state = prior.copyWith(
+          storageState: YorksV1ProjectDraftStorageState.failed,
+        );
+      }
+      return false;
+    }
+  }
 
   Future<void> takeOver() async {
     await _initialization;
@@ -469,10 +696,13 @@ class YorksV1ProjectCreationDraftController
     String saveTrigger = 'checkpoint',
   }) {
     if (draft.ownerAuthUserId != _ownerAuthUserId ||
+        draft.draftId != state.draftId ||
+        draft.writerEpoch != state.writerEpoch ||
         draft.creationIdempotencyKey.trim().isEmpty ||
         draft.mode != state.mode ||
         draft.projectId != state.projectId ||
         state.isReadOnly ||
+        _resuming ||
         _disposed) {
       return Future.error(
         const ProjectDraftStorageException('draft_not_writable'),
@@ -809,6 +1039,33 @@ YorksV1ProjectCreationDraft _draftFromRecord(Map<String, dynamic> record) =>
     YorksV1ProjectCreationDraft.fromJson(
       Map<String, dynamic>.from(record['draft'] as Map),
     );
+
+String _resumeContent(YorksV1ProjectCreationDraft draft) {
+  final json = draft.toJson();
+  for (final key in const {
+    'revision',
+    'acknowledgedRevision',
+    'writerEpoch',
+    'updatedAt',
+    'currentStage',
+    'visitedStages',
+  }) {
+    json.remove(key);
+  }
+  json['rawEditorState'] = {
+    for (final entry in draft.rawEditorState.entries)
+      if (!const {
+            'sectionContext',
+            'contactsExpanded',
+            'buildingLocalId',
+          }.contains(entry.key) &&
+          entry.value != null &&
+          entry.value != '' &&
+          entry.value != false)
+        entry.key: entry.value,
+  };
+  return yorksV1CanonicalSetupJson(json);
+}
 
 String _stepName(YorksV1ProjectCreationStage stage) => switch (stage) {
   YorksV1ProjectCreationStage.projectDetails => 'project_details',

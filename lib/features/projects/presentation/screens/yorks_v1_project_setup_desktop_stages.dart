@@ -107,6 +107,7 @@ class _DesktopField extends StatelessWidget {
     final input = Semantics(
       label: label.active(language),
       child: TextFormField(
+        readOnly: _ProjectSetupReadOnlyScope.of(context),
         controller: controller,
         focusNode: focusNode,
         onChanged: onChanged,
@@ -410,7 +411,7 @@ class _DesktopDateField extends StatelessWidget {
           style: IconButton.styleFrom(
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
-          onPressed: onPick,
+          onPressed: _ProjectSetupReadOnlyScope.of(context) ? null : onPick,
           tooltip: YorksV1ProjectStrings.selectDate.active(language),
           icon: const Icon(Icons.calendar_month_outlined, size: 19),
         ),
@@ -420,7 +421,9 @@ class _DesktopDateField extends StatelessWidget {
           style: IconButton.styleFrom(
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
-          onPressed: controller.clear,
+          onPressed: _ProjectSetupReadOnlyScope.of(context)
+              ? null
+              : controller.clear,
           tooltip: YorksV1ProjectSetupDesktopStrings.clearDate.active(language),
           icon: const Icon(Icons.close, size: 18),
         ),
@@ -446,7 +449,7 @@ class _DesktopDateField extends StatelessWidget {
             ),
           ),
           TextButton(
-            onPressed: onToday,
+            onPressed: _ProjectSetupReadOnlyScope.of(context) ? null : onToday,
             style: TextButton.styleFrom(
               padding: EdgeInsets.zero,
               minimumSize: const Size(44, 24),
@@ -871,6 +874,7 @@ class _DesktopTeamDirectoryState extends State<_DesktopTeamDirectory> {
                   children: [
                     Expanded(
                       child: TextField(
+                        readOnly: _ProjectSetupReadOnlyScope.of(context),
                         key: const ValueKey('yorks-v1-project-team-search'),
                         style: YorksProjectSetupDesktopTheme.body,
                         decoration:
@@ -939,7 +943,9 @@ class _DesktopTeamDirectoryState extends State<_DesktopTeamDirectory> {
                               ),
                             ),
                         ],
-                        onChanged: (value) => setState(() => _role = value),
+                        onChanged: _ProjectSetupReadOnlyScope.of(context)
+                            ? null
+                            : (value) => setState(() => _role = value),
                       ),
                     ),
                   ],
@@ -1389,6 +1395,7 @@ class _DesktopBuildingsStageState extends State<_DesktopBuildingsStage> {
                           SizedBox(
                             width: 210,
                             child: TextField(
+                              readOnly: _ProjectSetupReadOnlyScope.of(context),
                               key: const ValueKey(
                                 'yorks-v1-desktop-building-search',
                               ),
@@ -1798,7 +1805,9 @@ class _DesktopBuildingsStageState extends State<_DesktopBuildingsStage> {
                 CheckboxListTile(
                   key: const ValueKey('yorks-v1-desktop-building-frp'),
                   value: c.hasFrpRoom,
-                  onChanged: (value) => c.onHasFrpRoomChanged(value ?? false),
+                  onChanged: _ProjectSetupReadOnlyScope.of(context)
+                      ? null
+                      : (value) => c.onHasFrpRoomChanged(value ?? false),
                   contentPadding: EdgeInsets.zero,
                   dense: true,
                   visualDensity: VisualDensity.compact,
@@ -1939,6 +1948,7 @@ class _DesktopAttachmentsStageState extends State<_DesktopAttachmentsStage> {
                   SizedBox(
                     width: 243,
                     child: TextField(
+                      readOnly: _ProjectSetupReadOnlyScope.of(context),
                       key: const ValueKey('yorks-v1-desktop-file-search'),
                       style: YorksProjectSetupDesktopTheme.body,
                       decoration:
@@ -1998,8 +2008,10 @@ class _DesktopAttachmentsStageState extends State<_DesktopAttachmentsStage> {
                             ),
                           ),
                       ],
-                      onChanged: (value) =>
-                          setState(() => _category = value ?? 'all'),
+                      onChanged: _ProjectSetupReadOnlyScope.of(context)
+                          ? null
+                          : (value) =>
+                                setState(() => _category = value ?? 'all'),
                     ),
                   ),
                 ],
@@ -2411,7 +2423,7 @@ class _DesktopDropzoneContents extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         FilledButton(
-          onPressed: onPick,
+          onPressed: _ProjectSetupReadOnlyScope.of(context) ? null : onPick,
           style: YorksProjectSetupDesktopTheme.blueButton,
           child: Text(YorksV1ProjectStrings.addAttachment.active(language)),
         ),

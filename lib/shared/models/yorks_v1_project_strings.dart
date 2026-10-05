@@ -44,6 +44,12 @@ abstract final class YorksV1ProjectStrings {
     ur: "یہ ڈرافٹ دوسرے ٹیب میں تبدیل ہو رہا ہے۔",
     hi: "यह ड्राफ़्ट दूसरे टैब में संपादित हो रहा है।",
   );
+  static const draftResumedElsewhere = TranslatableString(
+    en: 'This draft was resumed elsewhere. Return to Projects and resume it to continue.',
+    ar: 'تم استئناف هذه المسودة في مكان آخر. ارجع إلى المشاريع واستأنفها للمتابعة.',
+    ur: 'یہ ڈرافٹ کسی اور جگہ دوبارہ کھولا گیا ہے۔ جاری رکھنے کے لیے پروجیکٹس میں واپس جائیں اور اسے دوبارہ کھولیں۔',
+    hi: 'यह ड्राफ़्ट दूसरी जगह फिर से खोला गया है। जारी रखने के लिए प्रोजेक्ट्स पर लौटें और इसे फिर से खोलें।',
+  );
   static const takeOverDraft = TranslatableString(
     en: "Take over draft",
     ar: "متابعة تحرير المسودة هنا",

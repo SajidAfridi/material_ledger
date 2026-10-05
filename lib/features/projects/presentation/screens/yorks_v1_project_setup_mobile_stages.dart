@@ -147,6 +147,7 @@ class _MobileSetupField extends StatelessWidget {
       Semantics(
         label: label.active(language),
         child: TextFormField(
+          readOnly: _ProjectSetupReadOnlyScope.of(context),
           controller: controller,
           focusNode: focusNode,
           onChanged: onChanged,
@@ -432,14 +433,16 @@ class _MobileSetupDateField extends StatelessWidget {
         horizontalPadding: 0,
         keyboardType: TextInputType.datetime,
         prefix: IconButton(
-          onPressed: onPick,
+          onPressed: _ProjectSetupReadOnlyScope.of(context) ? null : onPick,
           tooltip: YorksV1ProjectStrings.selectDate.active(language),
           constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
           padding: EdgeInsets.zero,
           icon: const Icon(Icons.calendar_month_outlined, size: 19),
         ),
         suffix: IconButton(
-          onPressed: controller.clear,
+          onPressed: _ProjectSetupReadOnlyScope.of(context)
+              ? null
+              : controller.clear,
           tooltip: YorksV1ProjectSetupDesktopStrings.clearDate.active(language),
           constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
           padding: EdgeInsets.zero,
@@ -466,7 +469,7 @@ class _MobileSetupDateField extends StatelessWidget {
             ),
           ),
           TextButton(
-            onPressed: onToday,
+            onPressed: _ProjectSetupReadOnlyScope.of(context) ? null : onToday,
             style: TextButton.styleFrom(
               minimumSize: const Size(44, 44),
               padding: EdgeInsets.zero,
@@ -1023,6 +1026,7 @@ class _MobileSetupTeamDirectoryState extends State<_MobileSetupTeamDirectory> {
           children: [
             Expanded(
               child: TextField(
+                readOnly: _ProjectSetupReadOnlyScope.of(context),
                 key: const ValueKey('yorks-v1-project-team-search'),
                 style: YorksProjectSetupMobileTheme.body,
                 decoration:
@@ -1072,7 +1076,9 @@ class _MobileSetupTeamDirectoryState extends State<_MobileSetupTeamDirectory> {
                       ),
                     ),
                 ],
-                onChanged: (value) => setState(() => _role = value),
+                onChanged: _ProjectSetupReadOnlyScope.of(context)
+                    ? null
+                    : (value) => setState(() => _role = value),
               ),
             ),
           ],
@@ -1400,6 +1406,7 @@ class _MobileBuildingsStageState extends State<_MobileBuildingsStage> {
               LayoutBuilder(
                 builder: (context, constraints) {
                   final search = TextField(
+                    readOnly: _ProjectSetupReadOnlyScope.of(context),
                     key: const ValueKey('yorks-v1-mobile-building-search'),
                     style: YorksProjectSetupMobileTheme.body,
                     decoration:
@@ -1528,7 +1535,9 @@ class _MobileBuildingsStageState extends State<_MobileBuildingsStage> {
                 child: CheckboxListTile(
                   key: const ValueKey('yorks-v1-mobile-building-frp'),
                   value: c.hasFrpRoom,
-                  onChanged: (value) => c.onHasFrpRoomChanged(value ?? false),
+                  onChanged: _ProjectSetupReadOnlyScope.of(context)
+                      ? null
+                      : (value) => c.onHasFrpRoomChanged(value ?? false),
                   contentPadding: EdgeInsets.zero,
                   controlAffinity: ListTileControlAffinity.leading,
                   visualDensity: VisualDensity.standard,
@@ -1694,6 +1703,7 @@ class _MobileAttachmentsStageState extends State<_MobileAttachmentsStage> {
           const SizedBox(height: 8),
           _MobileFieldPair(
             first: TextField(
+              readOnly: _ProjectSetupReadOnlyScope.of(context),
               key: const ValueKey('yorks-v1-mobile-file-search'),
               style: YorksProjectSetupMobileTheme.body,
               decoration:
@@ -1736,7 +1746,9 @@ class _MobileAttachmentsStageState extends State<_MobileAttachmentsStage> {
                     ),
                   ),
               ],
-              onChanged: (value) => setState(() => _category = value ?? 'all'),
+              onChanged: _ProjectSetupReadOnlyScope.of(context)
+                  ? null
+                  : (value) => setState(() => _category = value ?? 'all'),
             ),
           ),
           const SizedBox(height: 8),
@@ -2047,7 +2059,7 @@ class _MobileDropzoneContents extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         FilledButton(
-          onPressed: onPick,
+          onPressed: _ProjectSetupReadOnlyScope.of(context) ? null : onPick,
           style: YorksProjectSetupMobileTheme.blueButton,
           child: Text(YorksV1ProjectStrings.addAttachment.active(language)),
         ),

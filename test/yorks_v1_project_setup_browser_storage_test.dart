@@ -56,7 +56,7 @@ void main() {
   });
 
   test(
-    'independent browser adapters retain concurrent draft IDs and fence only the selected proposal',
+    'explicit browser Resume acquires only selected A and fences it while B stays writable',
     () async {
       final root = '$prefix-multiple-create';
       final catalogue = YorksV1ProjectCreationDraftCatalogue(
@@ -99,7 +99,15 @@ void main() {
         secondA.state.storageState,
         YorksV1ProjectDraftStorageState.ownedElsewhere,
       );
-      await secondA.takeOver();
+      expect(
+        await secondA.resumeEditing(
+          expectedDraftId: 'proposal-0',
+          canAcquire: () => true,
+        ),
+        true,
+      );
+      expect(secondA.writable, true);
+      expect(secondA.state.name, 'Original A');
       await secondA.save(secondA.state.copyWith(name: 'Selected A newest'));
       await expectLater(
         writers[0].save(writers[0].state.copyWith(name: 'Stale A')),

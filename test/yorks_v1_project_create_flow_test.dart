@@ -2530,45 +2530,46 @@ void main() {
     },
   );
 
-  testWidgets('resuming rechecks the writer fence before accepting edits', (
-    tester,
-  ) async {
-    final container = await createContainer(
-      role: YorksV1Role.projectEngineer,
-      repository: _FakeProjectRepository(),
-    );
-    final provider = yorksV1ProjectSetupCreationDraftProvider(_authUserId);
-    final controller = container.read(provider.notifier);
-    await controller.initialized;
-    await controller.save(
-      container
-          .read(provider)
-          .copyWith(reference: 'OWNER-A', name: 'Saved proposal'),
-    );
-    await _pumpScreen(tester, container);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-    await tester.pumpAndSettle();
-    final preferences = container.read(sharedPreferencesProvider);
-    final record =
-        jsonDecode(preferences.getString(controller.storageKey)!)
-            as Map<String, dynamic>;
-    record['ownerWriterId'] = 'another-tab-writer';
-    await preferences.setString(controller.storageKey, jsonEncode(record));
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-    await tester.pumpAndSettle();
-    expect(
-      container.read(provider).storageState,
-      YorksV1ProjectDraftStorageState.ownedElsewhere,
-    );
-    expect(
-      find.text(YorksV1ProjectStrings.takeOverDraft.primary),
-      findsOneWidget,
-    );
-    expect(
-      find.text(YorksV1ProjectStrings.draftOwnedElsewhere.primary),
-      findsOneWidget,
-    );
-  });
+  testWidgets(
+    'lifecycle refresh stays fenced and requires returning to selected Resume',
+    (tester) async {
+      final container = await createContainer(
+        role: YorksV1Role.projectEngineer,
+        repository: _FakeProjectRepository(),
+      );
+      final provider = yorksV1ProjectSetupCreationDraftProvider(_authUserId);
+      final controller = container.read(provider.notifier);
+      await controller.initialized;
+      await controller.save(
+        container
+            .read(provider)
+            .copyWith(reference: 'OWNER-A', name: 'Saved proposal'),
+      );
+      await _pumpScreen(tester, container);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await tester.pumpAndSettle();
+      final preferences = container.read(sharedPreferencesProvider);
+      final record =
+          jsonDecode(preferences.getString(controller.storageKey)!)
+              as Map<String, dynamic>;
+      record['ownerWriterId'] = 'another-tab-writer';
+      await preferences.setString(controller.storageKey, jsonEncode(record));
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(
+        container.read(provider).storageState,
+        YorksV1ProjectDraftStorageState.ownedElsewhere,
+      );
+      expect(
+        find.text(YorksV1ProjectStrings.takeOverDraft.primary),
+        findsNothing,
+      );
+      expect(
+        find.text(YorksV1ProjectStrings.draftResumedElsewhere.primary),
+        findsWidgets,
+      );
+    },
+  );
 
   testWidgets(
     'step arrows and Home End move focus before Enter activates the step',
