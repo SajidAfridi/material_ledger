@@ -1,6 +1,67 @@
 import 'app_strings.dart';
 
 abstract final class YorksCalculatorStrings {
+  static const start = TranslatableString(
+    en: 'Start a calculation',
+    ar: 'ابدأ حسابًا',
+    ur: 'حساب شروع کریں',
+    hi: 'गणना शुरू करें',
+  );
+  static const ductHelp = TranslatableString(
+    en: 'Size a duct, check airflow and review pressure loss.',
+    ar: 'حدد مقاس مجرى الهواء وافحص التدفق وفقد الضغط.',
+    ur: 'ڈکٹ کا سائز، ہوا کا بہاؤ اور دباؤ کا نقصان جانچیں۔',
+    hi: 'डक्ट का आकार, वायु प्रवाह और दबाव हानि जाँचें।',
+  );
+  static const espHelp = TranslatableString(
+    en: 'Build a system calculation with ducts and fittings.',
+    ar: 'أنشئ حساب النظام باستخدام مجاري الهواء والوصلات.',
+    ur: 'ڈکٹس اور فٹنگز کے ساتھ نظام کا حساب بنائیں۔',
+    hi: 'डक्ट और फिटिंग के साथ सिस्टम गणना बनाएँ।',
+  );
+  static const allScopes = TranslatableString(
+    en: 'All scopes',
+    ar: 'كل النطاقات',
+    ur: 'تمام دائرے',
+    hi: 'सभी दायरे',
+  );
+  static const active = TranslatableString(
+    en: 'Active',
+    ar: 'نشط',
+    ur: 'فعال',
+    hi: 'सक्रिय',
+  );
+  static const actions = TranslatableString(
+    en: 'Calculation actions',
+    ar: 'إجراءات الحساب',
+    ur: 'حساب کے اعمال',
+    hi: 'गणना कार्रवाइयाँ',
+  );
+  static const clearFilters = TranslatableString(
+    en: 'Clear filters',
+    ar: 'مسح عوامل التصفية',
+    ur: 'فلٹرز صاف کریں',
+    hi: 'फ़िल्टर साफ़ करें',
+  );
+  static const filteredHelp = TranslatableString(
+    en: 'Try a different name or change the filters.',
+    ar: 'جرّب اسمًا آخر أو غيّر عوامل التصفية.',
+    ur: 'دوسرا نام آزمائیں یا فلٹرز تبدیل کریں۔',
+    hi: 'दूसरा नाम आज़माएँ या फ़िल्टर बदलें।',
+  );
+  static const systemDetails = TranslatableString(
+    en: 'System details',
+    ar: 'تفاصيل النظام',
+    ur: 'نظام کی تفصیلات',
+    hi: 'सिस्टम विवरण',
+  );
+  static const pressureLoss = TranslatableString(
+    en: 'Pressure loss',
+    ar: 'فقد الضغط',
+    ur: 'دباؤ کا نقصان',
+    hi: 'दबाव हानि',
+  );
+
   static const invalidInputs = TranslatableString(
     en: 'Enter valid non-negative numbers before saving.',
     ar: 'أدخل أرقامًا صحيحة غير سالبة قبل الحفظ.',

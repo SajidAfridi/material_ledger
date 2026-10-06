@@ -500,7 +500,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('مساحة تحديد مقاس مجاري الهواء'), findsOneWidget);
+      expect(find.text('معايير التصميم'), findsOneWidget);
       expect(
         find.byWidgetPredicate(
           (w) => w is TextField && w.decoration?.labelText == 'معدل التدفق',
@@ -512,6 +512,141 @@ void main() {
       c.dispose();
     },
   );
+
+  testWidgets(
+    'compact record menu keeps viewer outputs and edit permissions distinct',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final rpc = FakeCalculatorRpc()
+        ..record['can_edit'] = false
+        ..record['can_manage'] = false;
+      final c = YorksCalculatorController(
+        YorksCalculatorRepository(rpc),
+        identity: 'viewer',
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(prefs),
+            yorksCalculatorControllerProvider('one').overrideWithValue(c),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.light,
+            home: const Scaffold(
+              body: YorksCalculatorWorkspace(recordId: 'one'),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Calculation actions'));
+      await tester.pumpAndSettle();
+      expect(find.text('Print / PDF'), findsOneWidget);
+      expect(find.text('Export JSON'), findsOneWidget);
+      expect(
+        tester
+            .widget<PopupMenuItem<String>>(
+              find.widgetWithText(PopupMenuItem<String>, 'Import JSON'),
+            )
+            .enabled,
+        isFalse,
+      );
+      expect(find.text('Archive'), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      c.dispose();
+    },
+  );
+
+  testWidgets(
+    'saved record enables Save only after a change and resets after undo',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final c = YorksCalculatorController(
+        YorksCalculatorRepository(FakeCalculatorRpc()),
+        identity: 'save',
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(prefs),
+            yorksCalculatorControllerProvider('one').overrideWithValue(c),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.light,
+            home: const Scaffold(
+              body: YorksCalculatorWorkspace(recordId: 'one'),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final save = find.widgetWithText(FilledButton, 'Save');
+      expect(tester.widget<FilledButton>(save).onPressed, isNull);
+      await tester.enterText(find.byType(TextField).first, 'Changed');
+      await tester.pumpAndSettle();
+      expect(tester.widget<FilledButton>(save).onPressed, isNotNull);
+      await tester.enterText(
+        find.byType(TextField).first,
+        'AHU-01 · Supply air',
+      );
+      await tester.pumpAndSettle();
+      expect(tester.widget<FilledButton>(save).onPressed, isNull);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      c.dispose();
+    },
+  );
+
+  testWidgets('collapsible design basis preserves edits and selected method', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final session = YorksCalculatorEditorSession(
+      initialData: {
+        ...YorksCalculatorFiles.fresh('duct'),
+        'flow': '1000',
+        'width': '500',
+        'height': '300',
+      },
+      onChanged: () {},
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+        child: MaterialApp(
+          theme: AppTheme.light,
+          home: Scaffold(body: YorksV1DuctSizerScreen(session: session)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final flow = find.byWidgetPredicate(
+      (w) => w is TextField && w.decoration?.labelText == 'Flow Rate',
+    );
+    await tester.enterText(flow, '1234');
+    await tester.pumpAndSettle();
+    final before = session.snapshot!();
+    await tester.ensureVisible(find.text('Design basis'));
+    await tester.tap(find.text('Design basis'));
+    await tester.pumpAndSettle();
+    expect(
+      YorksCalculatorFiles.fingerprint(
+        Map<String, dynamic>.from(session.snapshot!()),
+      ),
+      YorksCalculatorFiles.fingerprint(Map<String, dynamic>.from(before)),
+    );
+    expect(find.text('DENSITY'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
 
   testWidgets(
     'print handles Unicode metadata and a full 1000-row ESP calculation',

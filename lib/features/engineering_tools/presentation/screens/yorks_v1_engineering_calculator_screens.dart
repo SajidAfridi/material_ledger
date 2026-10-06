@@ -64,9 +64,14 @@ Widget _calculatorPage({
   }
   return SingleChildScrollView(
     padding: const EdgeInsets.all(AppSpacing.lg),
-    child: ExcludeFocus(
-      excluding: session.readOnly,
-      child: AbsorbPointer(absorbing: session.readOnly, child: child),
+    child: Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1280),
+        child: ExcludeFocus(
+          excluding: session.readOnly,
+          child: AbsorbPointer(absorbing: session.readOnly, child: child),
+        ),
+      ),
     ),
   );
 }
@@ -167,7 +172,8 @@ class _YorksV1DuctSizerScreenState
     widget.session?.changed();
     final air = _air[_condition] ?? _air['20°C Air STP']!;
     final result = _result ?? _calculate(notify: false);
-    if (widget.session == null && YorksMobileUi.isActive(context)) {
+    if (widget.session != null) return _buildWorkspace(context, result, air);
+    if (YorksMobileUi.isActive(context)) {
       return _buildMobile(context, result);
     }
     return _calculatorPage(
@@ -343,6 +349,178 @@ class _YorksV1DuctSizerScreenState
       ),
     );
   }
+
+  Widget _buildWorkspace(
+    BuildContext context,
+    YorksV1DuctCalculationResult result,
+    (double, double, double, double) air,
+  ) => _calculatorPage(
+    session: widget.session,
+    eyebrow: '',
+    title: '',
+    actions: const [],
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < AppSpacing.compactBreakpoint;
+        final labels = [
+          YorksCalculatorStrings.checkSize,
+          YorksCalculatorStrings.byVelocity,
+          YorksCalculatorStrings.byFriction,
+          YorksCalculatorStrings.equivalent,
+        ];
+        final method = DropdownButtonFormField<YorksV1DuctSolveMode>(
+          initialValue: _mode,
+          isExpanded: true,
+          decoration: InputDecoration(
+            labelText: YorksCalculatorStrings.method.active(
+              ref.watch(languageProvider),
+            ),
+          ),
+          items: [
+            for (final mode in YorksV1DuctSolveMode.values)
+              DropdownMenuItem(
+                value: mode,
+                child: Text(
+                  labels[mode.index].active(ref.watch(languageProvider)),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+          ],
+          onChanged: (mode) {
+            if (mode != null) {
+              setState(() {
+                _mode = mode;
+                _calculate();
+              });
+            }
+          },
+        );
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _CalculatorPanel(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.xl),
+                child: LayoutBuilder(
+                  builder: (context, box) {
+                    final units = _SelectBox(
+                      value: _unitSystem == 'SI'
+                          ? 'SI Units'
+                          : 'Imperial Units',
+                      items: const ['SI Units', 'Imperial Units'],
+                      onChanged: _switchUnitSystem,
+                    );
+                    return box.maxWidth < 560
+                        ? Column(
+                            children: [
+                              method,
+                              const SizedBox(height: AppSpacing.lg),
+                              units,
+                            ],
+                          )
+                        : Row(
+                            children: [
+                              Expanded(child: method),
+                              const SizedBox(width: AppSpacing.lg),
+                              SizedBox(width: 190, child: units),
+                            ],
+                          );
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            LayoutBuilder(
+              builder: (context, box) {
+                final input = _CalculatorPanel(child: _ductInputs(quiet: true));
+                final output = _CalculatorPanel(
+                  fill: AppColors.surfaceContainerLow,
+                  child: _DuctResults(
+                    result: result,
+                    shape: _shape,
+                    condition: _condition,
+                    material: _material,
+                    unitSystem: _unitSystem,
+                    valid: result.valid,
+                    quiet: true,
+                  ),
+                );
+                return box.maxWidth < 840
+                    ? Column(
+                        children: [
+                          input,
+                          const SizedBox(height: AppSpacing.lg),
+                          output,
+                        ],
+                      )
+                    : Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: input),
+                          const SizedBox(width: AppSpacing.lg),
+                          Expanded(child: output),
+                        ],
+                      );
+              },
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            _CalculatorPanel(
+              child: ExpansionTile(
+                key: const PageStorageKey('calculator-design-basis'),
+                shape: const Border(),
+                collapsedShape: const Border(),
+                tilePadding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.xl,
+                ),
+                title: Text(
+                  YorksCalculatorStrings.designBasis.active(
+                    ref.watch(languageProvider),
+                  ),
+                  style: AppTypography.titleSmall,
+                ),
+                subtitle: Text(_condition, style: AppTypography.bodySmall),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.xl,
+                    ),
+                    child: _SelectBox(
+                      value: _condition,
+                      items: _air.keys.toList(),
+                      onChanged: (value) => setState(() {
+                        _condition = value;
+                        _calculate();
+                      }),
+                    ),
+                  ),
+                  _DuctBasisStrip(
+                    condition: _condition,
+                    density: air.$1,
+                    viscosity: air.$2,
+                    specificHeat: air.$3,
+                    energyFactor: air.$4,
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: EdgeInsets.only(
+                top: AppSpacing.lg,
+                bottom: compact ? AppSpacing.lg : AppSpacing.xxxl,
+              ),
+              child: Text(
+                _editorText(
+                  context,
+                  'Confirm final dimensions, allowable velocity, pressure drop, acoustic criteria and project specifications with the responsible HVAC Engineer.',
+                ),
+                style: AppTypography.bodySmall,
+              ),
+            ),
+          ],
+        );
+      },
+    ),
+  );
 
   Widget _buildMobile(
     BuildContext context,
@@ -637,16 +815,22 @@ class _YorksV1DuctSizerScreenState
     YorksV1DuctSolveMode.equivalentDiameter => 'Equivalent Ø',
   };
 
-  Widget _ductInputs() => Padding(
+  Widget _ductInputs({bool quiet = false}) => Padding(
     padding: const EdgeInsets.all(AppSpacing.xl),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _PanelHeading(
-          kicker: 'Inputs',
-          title: 'Design Parameters',
-          trailing: _Badge(_modeLabel, AppColors.blueContainer),
-        ),
+        if (quiet)
+          Text(
+            _editorText(context, 'Design Parameters'),
+            style: AppTypography.titleMedium,
+          )
+        else
+          _PanelHeading(
+            kicker: 'Inputs',
+            title: 'Design Parameters',
+            trailing: _Badge(_modeLabel, AppColors.blueContainer),
+          ),
         const SizedBox(height: AppSpacing.lg),
         _R35FormGrid(
           children: [
@@ -734,9 +918,10 @@ class _YorksV1DuctSizerScreenState
           ],
         ),
         const SizedBox(height: AppSpacing.lg),
-        _InfoNote(
-          'Confirm final dimensions, allowable velocity, pressure drop, acoustic criteria and project specifications with the responsible HVAC Engineer.',
-        ),
+        if (!quiet)
+          _InfoNote(
+            'Confirm final dimensions, allowable velocity, pressure drop, acoustic criteria and project specifications with the responsible HVAC Engineer.',
+          ),
       ],
     ),
   );
@@ -1050,7 +1235,8 @@ class _YorksV1EspCalculatorScreenState
       _rows,
       _number(_safety.text),
     );
-    if (widget.session == null && YorksMobileUi.isActive(context)) {
+    if (widget.session != null) return _buildWorkspace(context, totals);
+    if (YorksMobileUi.isActive(context)) {
       return _buildMobile(context, totals);
     }
     return _calculatorPage(
@@ -1187,6 +1373,131 @@ class _YorksV1EspCalculatorScreenState
       ),
     );
   }
+
+  Widget _buildWorkspace(
+    BuildContext context,
+    ({double subtotalPa, double finalPa, int incompleteRows}) totals,
+  ) => _calculatorPage(
+    session: widget.session,
+    eyebrow: '',
+    title: '',
+    actions: const [],
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _CalculatorPanel(
+          child: ExpansionTile(
+            key: const PageStorageKey('calculator-system-details'),
+            initiallyExpanded:
+                MediaQuery.sizeOf(context).width >=
+                AppSpacing.compactBreakpoint,
+            shape: const Border(),
+            collapsedShape: const Border(),
+            tilePadding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+            title: Text(
+              YorksCalculatorStrings.systemDetails.active(
+                ref.watch(languageProvider),
+              ),
+              style: AppTypography.titleMedium,
+            ),
+            children: [
+              _EspHeader(
+                controllers: [
+                  _projectName,
+                  _projectNo,
+                  _systemNo,
+                  _revision,
+                  _date,
+                  _equipment,
+                ],
+                onChanged: (_) => setState(() {}),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        _CalculatorPanel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(AppSpacing.xl),
+                child: Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.sm,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    _ToolbarButton(
+                      label: 'Add Row',
+                      icon: Icons.add,
+                      onPressed: _addRow,
+                      primary: true,
+                    ),
+                    _ToolbarButton(
+                      label: 'Duplicate Last',
+                      onPressed: _duplicateLast,
+                    ),
+                    _ToolbarButton(label: 'Clear', onPressed: _clear),
+                    TextButton.icon(
+                      onPressed: _showFittings,
+                      icon: const Icon(Icons.list_alt_outlined, size: 18),
+                      label: Text(
+                        YorksCalculatorStrings.fittings.active(
+                          ref.watch(languageProvider),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              if (totals.incompleteRows > 0)
+                Padding(
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  child: _Warning(
+                    '${totals.incompleteRows} incomplete row${totals.incompleteRows == 1 ? '' : 's'}. Enter the required duct data or a manufacturer/manual ESP value before issuing the final calculation.',
+                  ),
+                ),
+              LayoutBuilder(
+                builder: (context, box) =>
+                    box.maxWidth < AppSpacing.compactBreakpoint
+                    ? _FocusedEspRows(
+                        rows: _rows,
+                        onChanged: _updateRow,
+                        onDelete: _deleteRow,
+                      )
+                    : _EspRows(
+                        rows: _rows,
+                        onChanged: _updateRow,
+                        onDelete: _deleteRow,
+                      ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: Text(
+                  _editorText(
+                    context,
+                    'Width/Height and Diameter are mutually exclusive. Manual ESP overrides the calculated value.',
+                  ),
+                  style: AppTypography.bodySmall,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        _CalculatorPanel(
+          fill: AppColors.surfaceContainerLow,
+          child: _EspSummary(
+            safety: _safety,
+            totals: totals,
+            onChanged: (_) => setState(() {}),
+            quiet: true,
+          ),
+        ),
+      ],
+    ),
+  );
 
   Widget _buildMobile(
     BuildContext context,
@@ -2025,7 +2336,9 @@ class _DuctResults extends StatelessWidget {
     required this.material,
     required this.unitSystem,
     required this.valid,
+    this.quiet = false,
   });
+  final bool quiet;
   final YorksV1DuctCalculationResult result;
   final YorksV1DuctShape shape;
   final String condition;
@@ -2059,6 +2372,7 @@ class _DuctResults extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _HeroResult(
+            quiet: quiet,
             title: valid
                 ? (shape == YorksV1DuctShape.circular
                       ? 'Checked duct size'
@@ -2072,13 +2386,20 @@ class _DuctResults extends StatelessWidget {
             note: '$condition · $material · Darcy-Weisbach',
           ),
           const SizedBox(height: AppSpacing.xl),
-          _PanelHeading(
-            kicker: 'Calculated results',
-            title: 'Hydraulic Performance',
-            trailing: _Badge(condition, AppColors.surfaceContainerHigh),
-          ),
+          if (quiet)
+            Text(
+              _editorText(context, 'Hydraulic Performance'),
+              style: AppTypography.titleSmall,
+            )
+          else
+            _PanelHeading(
+              kicker: 'Calculated results',
+              title: 'Hydraulic Performance',
+              trailing: _Badge(condition, AppColors.surfaceContainerHigh),
+            ),
           const SizedBox(height: AppSpacing.sm),
           _MetricGrid(
+            quiet: quiet,
             entries: [
               (
                 'Equivalent diameter',
@@ -2337,7 +2658,9 @@ class _EspSummary extends StatelessWidget {
     required this.safety,
     required this.totals,
     required this.onChanged,
+    this.quiet = false,
   });
+  final bool quiet;
   final TextEditingController safety;
   final ({double subtotalPa, double finalPa, int incompleteRows}) totals;
   final ValueChanged<String> onChanged;
@@ -2345,45 +2668,93 @@ class _EspSummary extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.all(AppSpacing.xl),
     child: LayoutBuilder(
-      builder: (context, constraints) => Wrap(
-        alignment: WrapAlignment.spaceBetween,
-        runSpacing: AppSpacing.lg,
-        children: [
-          SizedBox(
-            width: constraints.maxWidth < 620 ? constraints.maxWidth : 300,
-            child: _NumberField(
-              label: 'Safety Factor (%)',
-              controller: safety,
-              onChanged: onChanged,
+      builder: (context, constraints) => quiet
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: _TotalCard(
+                        label: 'Total external static pressure',
+                        pa: totals.subtotalPa,
+                        quiet: true,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.lg),
+                    Expanded(
+                      child: _TotalCard(
+                        label: 'Final ESP with safety factor',
+                        pa: totals.finalPa,
+                        quiet: true,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                SizedBox(
+                  width: 240,
+                  child: _NumberField(
+                    label: 'Safety Factor (%)',
+                    controller: safety,
+                    onChanged: onChanged,
+                  ),
+                ),
+              ],
+            )
+          : Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              runSpacing: AppSpacing.lg,
+              children: [
+                SizedBox(
+                  width: constraints.maxWidth < 620
+                      ? constraints.maxWidth
+                      : 300,
+                  child: _NumberField(
+                    label: 'Safety Factor (%)',
+                    controller: safety,
+                    onChanged: onChanged,
+                  ),
+                ),
+                _TotalCard(
+                  label: 'Total external static pressure',
+                  pa: totals.subtotalPa,
+                ),
+                _TotalCard(
+                  label: 'Final ESP with safety factor',
+                  pa: totals.finalPa,
+                  dark: true,
+                ),
+              ],
             ),
-          ),
-          _TotalCard(
-            label: 'Total external static pressure',
-            pa: totals.subtotalPa,
-          ),
-          _TotalCard(
-            label: 'Final ESP with safety factor',
-            pa: totals.finalPa,
-            dark: true,
-          ),
-        ],
-      ),
     ),
   );
 }
 
 class _TotalCard extends StatelessWidget {
-  const _TotalCard({required this.label, required this.pa, this.dark = false});
+  const _TotalCard({
+    required this.label,
+    required this.pa,
+    this.dark = false,
+    this.quiet = false,
+  });
   final String label;
   final double pa;
   final bool dark;
+  final bool quiet;
   @override
   Widget build(BuildContext context) => Container(
-    width: 230,
-    padding: const EdgeInsets.all(AppSpacing.lg),
+    width: quiet ? null : 230,
+    padding: quiet ? EdgeInsets.zero : const EdgeInsets.all(AppSpacing.lg),
     decoration: BoxDecoration(
-      color: dark ? AppColors.navy : AppColors.surfaceContainerLowest,
-      border: Border.all(color: dark ? AppColors.navy : AppColors.line),
+      color: quiet
+          ? AppColors.surfaceContainerLow
+          : dark
+          ? AppColors.navy
+          : AppColors.surfaceContainerLowest,
+      border: quiet
+          ? null
+          : Border.all(color: dark ? AppColors.navy : AppColors.line),
       borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
     ),
     child: Column(
@@ -2734,6 +3105,25 @@ class _ToolbarButton extends StatelessWidget {
         );
 }
 
+class _CalculatorPanel extends StatelessWidget {
+  const _CalculatorPanel({
+    required this.child,
+    this.fill = AppColors.surfaceContainerLowest,
+  });
+  final Widget child;
+  final Color fill;
+  @override
+  Widget build(BuildContext context) => Container(
+    decoration: BoxDecoration(
+      color: fill,
+      border: Border.all(color: AppColors.line),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+    ),
+    clipBehavior: Clip.antiAlias,
+    child: child,
+  );
+}
+
 class _R35Card extends StatelessWidget {
   const _R35Card({required this.child});
   final Widget child;
@@ -2778,16 +3168,18 @@ class _HeroResult extends StatelessWidget {
     required this.title,
     required this.value,
     required this.note,
+    this.quiet = false,
   });
+  final bool quiet;
   final String title;
   final String value;
   final String note;
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(AppSpacing.xl),
+    padding: quiet ? EdgeInsets.zero : const EdgeInsets.all(AppSpacing.xl),
     decoration: BoxDecoration(
-      color: AppColors.blueContainer,
-      border: Border.all(color: AppColors.blueContainerStrong),
+      color: quiet ? AppColors.surfaceContainerLow : AppColors.blueContainer,
+      border: quiet ? null : Border.all(color: AppColors.blueContainerStrong),
       borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
     ),
     child: Column(
@@ -2795,12 +3187,16 @@ class _HeroResult extends StatelessWidget {
       children: [
         Text(
           _editorText(context, title).toUpperCase(),
-          style: AppTypography.labelSmall.copyWith(color: AppColors.blue),
+          style: AppTypography.bodySmall.copyWith(
+            color: quiet ? AppColors.muted : AppColors.blue,
+          ),
         ),
-        const SizedBox(height: 5),
+        const SizedBox(height: AppSpacing.sm),
         Text(
           value,
-          style: AppTypography.displaySmall.copyWith(color: AppColors.navy),
+          style: AppTypography.displaySmall.copyWith(
+            color: quiet ? AppColors.ink : AppColors.navy,
+          ),
         ),
         Text(_editorText(context, note), style: AppTypography.bodySmall),
       ],
@@ -2809,7 +3205,8 @@ class _HeroResult extends StatelessWidget {
 }
 
 class _MetricGrid extends StatelessWidget {
-  const _MetricGrid({required this.entries});
+  const _MetricGrid({required this.entries, this.quiet = false});
+  final bool quiet;
   final List<(String, String, bool)> entries;
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -2819,17 +3216,25 @@ class _MetricGrid extends StatelessWidget {
       children: [
         for (final entry in entries)
           SizedBox(
-            width: constraints.maxWidth >= 620
+            width: constraints.maxWidth >= (quiet ? 280 : 620)
                 ? (constraints.maxWidth - AppSpacing.sm) / 2
                 : constraints.maxWidth,
             child: Container(
-              padding: const EdgeInsets.all(AppSpacing.lg),
+              padding: quiet
+                  ? const EdgeInsets.symmetric(vertical: AppSpacing.lg)
+                  : const EdgeInsets.all(AppSpacing.lg),
               decoration: BoxDecoration(
-                color: entry.$3
+                color: quiet
+                    ? AppColors.surfaceContainerLow
+                    : entry.$3
                     ? AppColors.blueContainer
                     : AppColors.surfaceContainerLowest,
-                border: Border.all(color: AppColors.line),
-                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                border: quiet
+                    ? const Border(bottom: BorderSide(color: AppColors.line))
+                    : Border.all(color: AppColors.line),
+                borderRadius: quiet
+                    ? null
+                    : BorderRadius.circular(AppSpacing.radiusMd),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
