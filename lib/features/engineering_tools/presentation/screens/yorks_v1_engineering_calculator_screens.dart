@@ -37,9 +37,11 @@ class YorksCalculatorEditorSession {
     required this.initialData,
     required this.onChanged,
     this.onAction,
+    this.beforeStructuralEdit,
   });
   final Map<String, dynamic> initialData;
   final VoidCallback onChanged;
+  final VoidCallback? beforeStructuralEdit;
   bool readOnly = false;
   bool ready = false;
   String title = '', scope = '', revision = '';
@@ -1769,19 +1771,32 @@ class _YorksV1EspCalculatorScreenState
     });
   }
 
-  void _deleteRow(String id) => setState(() {
-    if (widget.session != null || _rows.length > 1) {
+  void _deleteRow(String id) {
+    if (widget.session?.readOnly == true ||
+        !_rows.any((row) => row.id == id) ||
+        (widget.session == null && _rows.length <= 1)) {
+      return;
+    }
+    widget.session?.beforeStructuralEdit?.call();
+    setState(() {
       _rows.removeWhere((row) => row.id == id);
-    }
+    });
     widget.session?.onAction?.call('row_delete');
-  });
-  void _clear() => setState(() {
-    _rows.clear();
-    if (widget.session == null) {
-      _rows.add(const YorksV1EspRow(id: 'esp-row-1', fitting: 'Straight Duct'));
-    }
+  }
+
+  void _clear() {
+    if (widget.session?.readOnly == true || _rows.isEmpty) return;
+    widget.session?.beforeStructuralEdit?.call();
+    setState(() {
+      _rows.clear();
+      if (widget.session == null) {
+        _rows.add(
+          const YorksV1EspRow(id: 'esp-row-1', fitting: 'Straight Duct'),
+        );
+      }
+    });
     widget.session?.onAction?.call('row_clear');
-  });
+  }
 
   Map<String, Object?> _json() => {
     ...?widget.session?.initialData,

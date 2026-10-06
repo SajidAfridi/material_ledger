@@ -27,9 +27,12 @@ import 'package:material_ledger/shared/providers/yorks_v1_calculator_provider.da
 import 'package:material_ledger/shared/providers/language_provider.dart';
 import 'package:material_ledger/features/engineering_tools/presentation/screens/yorks_calculator_workspace.dart';
 import 'package:material_ledger/features/engineering_tools/presentation/screens/yorks_v1_engineering_calculator_screens.dart';
+import 'package:material_ledger/features/engineering_tools/presentation/widgets/yorks_calculator_controls.dart';
 
 class FakeCalculatorRpc implements YorksV1ProjectRpcClient {
   Completer<void>? saveGate;
+  Completer<void>? manageGate;
+  Object? manageFailure;
   Object? fail;
   final calls = <Map<String, dynamic>>[];
   Map<String, dynamic> record = {
@@ -87,6 +90,22 @@ class FakeCalculatorRpc implements YorksV1ProjectRpcClient {
         'kind': intent['kind'],
         'payload': intent['payload'],
         'record_version': (intent['expected_version'] as int) + 1,
+      };
+    }
+    if (functionName == 'v1_manage_calculator') {
+      await manageGate?.future;
+      if (manageFailure != null) throw manageFailure!;
+      final intent = parameters['p_payload'] as Map;
+      record = {
+        ...record,
+        'record_version': (intent['expected_version'] as int) + 1,
+        'grants': [
+          for (final grant in record['grants'] as List)
+            if (grant['user_id'] != intent['user_id'])
+              grant
+            else if (intent['access'] != 'none')
+              {...grant as Map, 'access': intent['access']},
+        ],
       };
     }
     return {...record};
@@ -914,6 +933,192 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     c.dispose();
   });
+
+  for (final width in [1366.0, 360.0]) {
+    for (final confirmed in ['edit', 'view']) {
+      testWidgets(
+        'rejected access change restores confirmed $confirmed and permits retry at $width',
+        (tester) async {
+          tester.view.physicalSize = Size(width, 900);
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          final rpc = FakeCalculatorRpc()
+            ..record['grants'] = [
+              {
+                'user_id': 'shared',
+                'name': 'Shared engineer',
+                'access': confirmed,
+              },
+            ];
+          final c = await pumpPolishRecord(tester, rpc);
+          await tester.tap(
+            width < 720
+                ? find.widgetWithText(TextButton, 'Manage access')
+                : find.byTooltip('Manage access'),
+          );
+          await tester.pumpAndSettle();
+          final grantPicker = find
+              .descendant(
+                of: find.byType(Dialog),
+                matching: find.byType(YorksCalculatorSelect<String>),
+              )
+              .first;
+          final grantField = find.descendant(
+            of: grantPicker,
+            matching: find.byType(TextField),
+          );
+          final desired = confirmed == 'edit' ? 'view' : 'edit';
+          final desiredLabel = desired == 'view' ? 'Can view' : 'Can edit';
+          final confirmedLabel = confirmed == 'edit' ? 'Can edit' : 'Can view';
+          Future<void> selectDesired() async {
+            await tester.tap(
+              find
+                  .descendant(
+                    of: grantPicker,
+                    matching: find.byType(IconButton),
+                  )
+                  .first,
+            );
+            await tester.pumpAndSettle();
+            await tester.tap(
+              find.widgetWithText(MenuItemButton, desiredLabel).hitTestable(),
+            );
+          }
+
+          rpc.manageGate = Completer<void>();
+          rpc.manageFailure = StateError('CALCULATOR_VERSION_CONFLICT');
+          await selectDesired();
+          await tester.pump();
+          await tester.pump();
+          expect(c.busy, isTrue);
+          expect(
+            tester
+                .widget<YorksCalculatorSelect<String>>(grantPicker)
+                .onSelected,
+            isNull,
+          );
+          rpc.manageGate!.complete();
+          await tester.pumpAndSettle();
+          expect(c.record!.grants.single['access'], confirmed);
+          expect(c.record!.version, 2);
+          expect(
+            tester.widget<TextField>(grantField).controller!.text,
+            confirmedLabel,
+          );
+          expect(find.text('Access updated'), findsNothing);
+          expect(c.error, isNotNull);
+          if (confirmed == 'edit') {
+            await expectLater(
+              find.byType(MaterialApp),
+              matchesGoldenFile(
+                'goldens/calculators/access_rejected_${width.toInt()}.png',
+              ),
+            );
+          }
+
+          rpc.manageGate = null;
+          rpc.manageFailure = null;
+          await selectDesired();
+          await tester.pumpAndSettle();
+          expect(c.record!.grants.single['access'], desired);
+          expect(c.record!.version, 3);
+          expect(
+            tester.widget<TextField>(grantField).controller!.text,
+            desiredLabel,
+          );
+          expect(
+            rpc.calls.where(
+              (call) => call['function'] == 'v1_manage_calculator',
+            ),
+            hasLength(2),
+          );
+          expect(c.error, isNull);
+          expect(tester.takeException(), isNull);
+          await tester.pumpWidget(const SizedBox());
+          c.dispose();
+        },
+      );
+    }
+  }
+
+  testWidgets(
+    'rapid delete and clear each preserve a separate undo and redo step',
+    (tester) async {
+      tester.view.physicalSize = const Size(1366, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final original = [
+        for (final id in ['first', 'second', 'third'])
+          {
+            'id': id,
+            'fitting': 'Straight Duct',
+            'flow': '1100',
+            'future': {'retained': id},
+          },
+      ];
+      final rpc = FakeCalculatorRpc()
+        ..record['kind'] = 'esp'
+        ..record['payload'] = {
+          ...YorksCalculatorFiles.fresh('esp'),
+          'rows': original,
+        };
+      final c = await pumpPolishRecord(tester, rpc);
+      final session = tester
+          .widget<YorksV1EspCalculatorScreen>(
+            find.byType(YorksV1EspCalculatorScreen),
+          )
+          .session!;
+      List rows() => session.snapshot!()['rows'] as List;
+      void expectRows(List<String> ids) {
+        expect(rows().map((r) => r['id']), ids);
+        for (final row in rows()) {
+          expect(row['future'], {'retained': row['id']});
+        }
+      }
+
+      Future<void> deleteFirst() async {
+        final button = find.byTooltip('Delete row').first;
+        await tester.ensureVisible(button);
+        await tester.tap(button);
+        await tester.pump();
+      }
+
+      await deleteFirst();
+      expectRows(['second', 'third']);
+      await deleteFirst();
+      expectRows(['third']);
+      await tester.ensureVisible(find.text('Clear'));
+      await tester.tap(find.text('Clear'));
+      await tester.pump();
+      expectRows([]);
+      Future<void> history({bool redo = false}) async {
+        final button = find.byTooltip(
+          redo ? 'Redo (Ctrl+Shift+Z)' : 'Undo (Ctrl+Z)',
+        );
+        await tester.ensureVisible(button);
+        await tester.tap(button);
+        await tester.pumpAndSettle();
+      }
+
+      await history();
+      expectRows(['third']);
+      await history();
+      expectRows(['second', 'third']);
+      await history();
+      expectRows(['first', 'second', 'third']);
+      await history(redo: true);
+      expectRows(['second', 'third']);
+      await history(redo: true);
+      expectRows(['third']);
+      await history(redo: true);
+      expectRows([]);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      c.dispose();
+    },
+  );
 
   testWidgets(
     'missing device calculations explain the browser boundary instead of invalid file',

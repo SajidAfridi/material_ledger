@@ -155,7 +155,11 @@ class _WorkspaceState extends ConsumerState<_Workspace> {
     editor = YorksCalculatorEditorSession(
       initialData: data,
       onChanged: _changed,
-      onAction: (action) => _track(action),
+      beforeStructuralEdit: _beginAtomicEdit,
+      onAction: (action) {
+        if (action == 'row_delete' || action == 'row_clear') _changed();
+        _track(action);
+      },
     );
     baseline = '';
     lastFingerprint = '';
@@ -243,11 +247,15 @@ class _WorkspaceState extends ConsumerState<_Workspace> {
 
   void _rowAction({required bool duplicate, String source = 'button'}) {
     if (!_editable || kind != 'esp') return;
+    _beginAtomicEdit();
+    (duplicate ? editor!.duplicateRow : editor!.addRow)?.call();
+    _track(duplicate ? 'row_duplicate' : 'row_add', source: source);
+  }
+
+  void _beginAtomicEdit() {
     _changed();
     editHistory.checkpoint();
     atomicEdit = true;
-    (duplicate ? editor!.duplicateRow : editor!.addRow)?.call();
-    _track(duplicate ? 'row_duplicate' : 'row_add', source: source);
   }
 
   bool _keyboard(KeyEvent event) {
@@ -1949,6 +1957,7 @@ class _WorkspaceState extends ConsumerState<_Workspace> {
     var access = 'view';
     var saving = false;
     var updated = false;
+    var accessGeneration = 0;
     var personValid = false;
     await showDialog<void>(
       context: context,
@@ -1966,6 +1975,9 @@ class _WorkspaceState extends ConsumerState<_Workspace> {
             setDialog(() {
               saving = false;
               updated = ok;
+              // Recreate grant pickers from the confirmed record even when
+              // a rejected command leaves its permission/version unchanged.
+              accessGeneration++;
               if (ok) person = null;
             });
           }
@@ -2031,6 +2043,10 @@ class _WorkspaceState extends ConsumerState<_Workspace> {
                           SizedBox(
                             width: 130,
                             child: YorksCalculatorSelect<String>(
+                              key: ValueKey((
+                                grant['user_id'],
+                                accessGeneration,
+                              )),
                               label: t(S.accessLevel),
                               value: grant['access'] as String,
                               entries: [
