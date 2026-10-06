@@ -84,3 +84,46 @@ back the interface, revert the menu/client patch or disable the calculator
 workspace flag; keep the server protection. Do not restore the unsafe save
 function. Production deployment and applying the reviewed migration to
 production remain a later approved release action.
+
+### Hosted client candidate
+
+Application source: `90899fb4e9d4511af81983b6fba95491253d22c9`.
+Final preview deployment: `dpl_5js8CGhUHMrXPebNtX6yk9iUZZQk`,
+`https://yorks-r35-6t7icvw3i-sajid-alis-projects-0ec775a2.vercel.app`.
+The staging alias is updated only after immutable artifact verification.
+Main bundle: 9,929,668 bytes; SHA-256
+`df8519049300510e6752dfa85121a4a1593f9dc0543fee1bf12b378345bb72fd`.
+The isolated artifact contains the clean source revision once, the staging
+backend, and no production backend, CI URL or service-role JWT. PostHog stays
+opted in for staging with its existing privacy bounds.
+
+The final build explicitly preserves the accepted calculator and project-setup
+rollouts, in addition to the operator file's Accounts, Company Requests,
+Workforce and Analytics flags:
+
+```bash
+YORKS_V1_CALCULATOR_WORKSPACE=true YORKS_V1_PROJECT_SETUP=true \
+R35_CONFIG_FILE=/tmp/calculator-guard/staging.env ./tool/r35.sh build-web
+```
+
+Two deployment setup errors were caught and recovered during verification.
+A command issued from the source checkout created an unused `material_ledger`
+Vercel project; upload was rejected, no deployment existed, and that newly
+created project was removed and its absence verified. Upload was then repeated
+from the explicitly linked isolated web artifact. Browser verification caught
+that the first artifact inherited default-off calculator/project-setup flags
+from an older staging config. The previous known-good staging alias was restored
+while the final artifact was rebuilt with both flags explicitly enabled. The
+superseded preview `dpl_6xxYraDG2dXj5nWw5hjrUc1HnjEC` is not the accepted
+candidate. Production was untouched throughout.
+
+Final immutable preview and public staging each pass 26 route/asset byte checks.
+The staging alias resolves to the final deployment above. The signed-in Admin
+browser opened Calculators from the universal sidebar and confirmed both tools,
+Import/New controls and a completed authorized library load. See the
+[browser screenshot](evidence/calculator-access-hardening-20261007/staging-home.jpg)
+and [machine-readable evidence](CALCULATOR_ACCESS_HARDENING_20261007.json).
+This does not substitute for a live Accountant browser session; that role is
+covered by the widget visual/route tests and the staging trusted-RPC witness.
+Production still resolves to `dpl_5N1eU8yvGGi9gGaRX4bBoa3ZW2yr`, with unchanged
+save-function hash `b2e6e5e4fd91acbfc804133afdccf706` and no archive guard yet.

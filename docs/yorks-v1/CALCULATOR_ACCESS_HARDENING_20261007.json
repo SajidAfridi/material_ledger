@@ -1,0 +1,63 @@
+{
+  "source": "90899fb4e9d4511af81983b6fba95491253d22c9",
+  "main_bytes": 9929668,
+  "main_sha256": "df8519049300510e6752dfa85121a4a1593f9dc0543fee1bf12b378345bb72fd",
+  "backend": "iqltcyimlqtcwyzlemwx",
+  "telemetry_environment": "staging",
+  "calculator_workspace_enabled": true,
+  "project_setup_enabled": true,
+  "deployment": "dpl_5js8CGhUHMrXPebNtX6yk9iUZZQk",
+  "staging_url": "https://yorks-r35-staging.vercel.app/#/tools/calculators",
+  "preview_url": "https://yorks-r35-6t7icvw3i-sajid-alis-projects-0ec775a2.vercel.app",
+  "routes_and_assets_verified": {
+    "immutable_preview": 26,
+    "public_staging": 26
+  },
+  "local_gates": {
+    "flutter_passed": 2498,
+    "retained_skips": 4,
+    "database_files": 124,
+    "database_assertions": 3625,
+    "calculator_database_assertions": 78,
+    "accountant_flag_enabled_navigation_cases": 4,
+    "archive_save_race_orders": 2,
+    "analyze": "passed",
+    "ci_web": "passed",
+    "ci_apk": "passed_ephemeral_signing"
+  },
+  "staging_server": {
+    "project": "iqltcyimlqtcwyzlemwx",
+    "migration_version": "20261006205512",
+    "migration_name": "calculator_archived_project_guard",
+    "witness": "passed_and_rolled_back",
+    "calculator_count_before_after": [
+      6,
+      6
+    ],
+    "advisor_findings_before_after": [
+      510,
+      510
+    ],
+    "anonymous_save_execute": false,
+    "authenticated_save_execute": true,
+    "authenticated_internal_projection_execute": false
+  },
+  "browser": {
+    "signed_in_admin_home": "passed_from_universal_sidebar",
+    "accountant_live_browser_session": "not_performed",
+    "accountant_widgets_and_staging_rpc": "passed",
+    "screenshot": "evidence/calculator-access-hardening-20261007/staging-home.jpg"
+  },
+  "production": {
+    "deployment_unchanged": "dpl_5N1eU8yvGGi9gGaRX4bBoa3ZW2yr",
+    "save_hash_unchanged": "b2e6e5e4fd91acbfc804133afdccf706",
+    "mutation_performed": false,
+    "archive_guard_not_yet_applied": true
+  },
+  "publication_gate": "Astra review before production",
+  "deployment_recovery": {
+    "unused_empty_project_removed": true,
+    "superseded_flag_disabled_preview": "dpl_6xxYraDG2dXj5nWw5hjrUc1HnjEC",
+    "known_good_staging_restored_during_rebuild": true
+  }
+}
