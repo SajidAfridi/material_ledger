@@ -116,3 +116,36 @@ The feature flag stays off in unconfigured/CI builds. The accepted staging and
 production artifacts explicitly enable it alongside the existing project setup,
 Accounts, Company Requests, Workforce and Analytics release flags. Native CI
 APK validation is separate from this web publication and is not a store release.
+
+## Calculator interface refinement — 6 October 2026
+
+The product owner requested a cleaner Codex-style experience after the saved
+workspace release. This is a presentation-only refinement of the accepted
+calculator workspace, inside the unchanged universal Yorks navigation.
+
+- One compact workspace header replaces the duplicate calculator sidebar.
+  Duct and ESP launch cards explain their purpose; saved calculations use calm
+  rows showing type, scope, owner, date and effective edit/view state.
+- Search and type/scope/archive filters use the existing paged authorized read.
+  Filtered empty results offer Clear filters; a genuinely empty library explains
+  how to start. Import and previous-device import stay available in the header.
+- Calculation records have one editable title, scope, save/revision/actor state,
+  visible Save and sharing, and a single secondary-actions menu. Desktop keeps
+  Print/PDF visible; narrower content areas include it in the menu. The layout
+  decision uses available content width, including the universal office sidebar.
+- Save is enabled for changed inputs or an uncertain saved intent. Returning to
+  the saved values disables redundant saves without changing server semantics.
+- Duct sizing separates method/units, editable parameters and neutral results.
+  Design basis is collapsible and retains edited inputs and selected values.
+- ESP system details are collapsible, initially open on desktop and closed on
+  phones. Row actions, focused phone editing and pressure totals stay separate.
+- Colors, spacing and type use existing Yorks tokens. A scoped theme adds quiet
+  solid actions, rounded controls and minimum 44px input/action targets. The
+  existing shell, retained formulas, file formats, PDF engines, authorization,
+  server revisions, recovery and legacy storage remain the reuse boundary.
+
+Changed source is limited to the calculator workspace, managed editor views,
+localized calculator copy and their tests/goldens. No repository, RPC, RLS,
+route, feature flag, migration or production data change is part of this slice.
+The web artifact can be rolled back to the prior verified deployment while all
+saved calculations and grants remain intact.
