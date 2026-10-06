@@ -231,6 +231,9 @@ class YorksCalculatorController extends ChangeNotifier {
         _pending = null;
         await preferences?.remove(_key);
         if (message.contains('ACCESS_DENIED')) denied = true;
+        if (message.contains('CALCULATOR_PROJECT_ARCHIVED') && record != null) {
+          record = YorksCalculatorRecord({...record!.json, 'can_edit': false});
+        }
       }
       operation.fail(e);
       track(

@@ -285,6 +285,41 @@ void main() {
       c.dispose();
     },
   );
+  test(
+    'project archive rejects save without retaining a retry or changing inputs',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final rpc = FakeCalculatorRpc();
+      rpc.record['project_id'] = '00000000-0000-4000-8000-000000000002';
+      final c = YorksCalculatorController(
+        YorksCalculatorRepository(rpc),
+        preferences: prefs,
+        identity: 'archive-regression',
+      );
+      await c.open('one');
+      rpc.fail = StateError('CALCULATOR_PROJECT_ARCHIVED');
+      expect(
+        await c.save({
+          'id': c.record!.id,
+          'project_id': c.record!.projectId,
+          'expected_version': 2,
+          'title': 'Unsaved change',
+          'kind': 'duct',
+          'payload': {...c.record!.payload, 'flow': '3000'},
+        }),
+        isNull,
+      );
+      expect(c.hasPending, isFalse);
+      expect(c.recoverPending(), isNull);
+      expect(c.denied, isFalse); // Read/export access is retained.
+      expect(c.record!.canEdit, isFalse);
+      expect(c.record!.version, 2);
+      expect(c.record!.payload['flow'], '2753');
+      expect(c.error.toString(), contains('CALCULATOR_PROJECT_ARCHIVED'));
+      c.dispose();
+    },
+  );
 
   test(
     'save and reopen preserve inputs and names while new inputs stay empty',

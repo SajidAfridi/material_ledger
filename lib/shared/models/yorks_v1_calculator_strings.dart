@@ -538,6 +538,12 @@ abstract final class YorksCalculatorStrings {
     ur: 'محفوظات',
     hi: 'संग्रहीत',
   );
+  static const projectArchived = TranslatableString(
+    en: 'This project is archived. You can view, export or print saved calculations, but cannot save changes to this project.',
+    ar: 'هذا المشروع مؤرشف. يمكنك عرض الحسابات المحفوظة أو تصديرها أو طباعتها، لكن لا يمكنك حفظ تغييرات في هذا المشروع.',
+    ur: 'یہ پروجیکٹ محفوظات میں ہے۔ آپ محفوظ حساب دیکھ، برآمد یا پرنٹ کر سکتے ہیں، لیکن اس پروجیکٹ میں تبدیلیاں محفوظ نہیں کر سکتے۔',
+    hi: 'यह परियोजना संग्रहीत है। आप सहेजी गई गणनाएँ देख, निर्यात या प्रिंट कर सकते हैं, लेकिन इस परियोजना में बदलाव सहेज नहीं सकते।',
+  );
   static const restore = TranslatableString(
     en: 'Restore',
     ar: 'استعادة',

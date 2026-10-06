@@ -840,6 +840,7 @@ List<_YorksDestination> _destinationsFor(
         !(companyRequestsEnabled &&
             path == RoutePaths.yorksV1MaterialRequests) &&
         path != RoutePaths.yorksV1Accounts &&
+        path != RoutePaths.yorksV1Calculators &&
         path != RoutePaths.yorksV1Workforce &&
         (path == null || !path.startsWith('${RoutePaths.yorksV1Accounts}/'))) {
       return false;

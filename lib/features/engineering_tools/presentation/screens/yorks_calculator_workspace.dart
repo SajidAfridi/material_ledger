@@ -1863,6 +1863,8 @@ class _WorkspaceState extends ConsumerState<_Workspace> {
         ? S.denied
         : message.contains('VERSION_CONFLICT')
         ? S.conflict
+        : message.contains('CALCULATOR_PROJECT_ARCHIVED')
+        ? S.projectArchived
         : c.hasPending
         ? S.pending
         : S.error;
