@@ -148,9 +148,8 @@ class _CalculatorSelectState<T> extends State<YorksCalculatorSelect<T>> {
   }
 
   @override
-  Widget build(BuildContext context) => CalculatorQueryUndoScope(
-    query: widget.searchable,
-    child: LayoutBuilder(
+  Widget build(BuildContext context) {
+    final field = LayoutBuilder(
       builder: (context, box) => DropdownMenu<T>(
         key: PageStorageKey(
           'calculator-select:${widget.label}:${widget.value}',
@@ -200,8 +199,19 @@ class _CalculatorSelectState<T> extends State<YorksCalculatorSelect<T>> {
         dropdownMenuEntries: widget.entries,
         onSelected: widget.onSelected,
       ),
-    ),
-  );
+    );
+    return CalculatorQueryUndoScope(
+      query: widget.searchable,
+      child: widget.searchable
+          ? field
+          : MergeSemantics(
+              child: Semantics(
+                label: '${widget.label}: ${labelFor(widget)}',
+                child: field,
+              ),
+            ),
+    );
+  }
 }
 
 /// Search inside a picker is text editing, not an edit to calculator inputs.

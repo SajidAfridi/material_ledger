@@ -89,6 +89,31 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     debugDefaultTargetPlatformOverride = null;
   });
+  testWidgets('select-only dropdown exposes its label and selected value', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 400,
+            child: YorksCalculatorSelect<String>(
+              label: 'Sizing method',
+              value: 'check',
+              entries: const [
+                DropdownMenuEntry(value: 'check', label: 'Check size'),
+              ],
+              onSelected: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.bySemanticsLabel('Sizing method: Check size'), findsOneWidget);
+    semantics.dispose();
+  });
   test('shortcut hints follow Mac and Windows modifier conventions', () {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
     expect(YorksCalculatorShortcuts.addRow, '⇧⌘↵');
