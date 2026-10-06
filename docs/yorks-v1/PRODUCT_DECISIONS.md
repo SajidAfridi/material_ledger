@@ -1794,3 +1794,14 @@ Accountant when the Company flag is on. Project-scoped request routes remain
 denied. Company publication keeps its existing private drafts, selected approval,
 supply revision/reapproval, dispatch, receipt, handover, return and immutable
 evidence rules, and uses the existing Material Request visual hierarchy.
+
+
+### 31. Combined calculator workspace — 6 October 2026
+
+The product owner approved one home for Duct Sizer and ESP Calculator, with
+named saved records, general/project scope, import/export/print and explicit
+view/edit sharing. Admin, Senior Mechanical Engineer and Project Manager
+manage calculator access. Grants affect only the selected calculation and never
+grant project membership, commercial access or operational mutations. See
+[CALCULATOR_WORKSPACE.md](CALCULATOR_WORKSPACE.md). The new interface remains
+behind `YORKS_V1_CALCULATOR_WORKSPACE` pending rollout acceptance.
