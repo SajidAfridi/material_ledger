@@ -27,14 +27,22 @@ alter table public.v1_calculator_grants enable row level security;
 revoke all on public.v1_calculators,public.v1_calculator_grants from public,anon,authenticated;
 grant all on public.v1_calculators,public.v1_calculator_grants to service_role;
 
+create or replace function public.v1_calculator_active_actor() returns boolean
+language sql stable security definer set search_path='' as $$
+ select public.v1_current_actor_is_active() and exists (
+  select 1 from auth.users u where u.id=auth.uid() and u.deleted_at is null
+ );
+$$;
+revoke all on function public.v1_calculator_active_actor() from public,anon,authenticated;
+
 create or replace function public.v1_calculator_manager() returns boolean
 language sql stable security definer set search_path='' as $$
- select public.v1_current_actor_is_active() and public.v1_current_exact_role() in
+ select public.v1_calculator_active_actor() and public.v1_current_exact_role() in
  ('admin','senior_mechanical_engineer','project_manager');
 $$;
 create or replace function public.v1_calculator_access(p_id uuid,p_edit boolean default false)
 returns boolean language sql stable security definer set search_path='' as $$
- select public.v1_current_actor_is_active() and exists(select 1 from auth.users where id=auth.uid() and deleted_at is null) and exists (
+ select public.v1_calculator_active_actor() and exists(select 1 from auth.users where id=auth.uid() and deleted_at is null) and exists (
  select 1 from public.v1_calculators c where c.id=p_id
  and (c.project_id is null or public.v1_project_readable(c.project_id))
  and (public.v1_calculator_manager() or
@@ -64,7 +72,7 @@ create or replace function public.v1_list_calculators(p_search text default '',p
 returns jsonb language plpgsql stable security definer set search_path='' as $$
 declare v_result jsonb;
 begin
- if not public.v1_current_actor_is_active() then raise exception 'CALCULATOR_ACCESS_DENIED' using errcode='42501'; end if;
+ if not public.v1_calculator_active_actor() then raise exception 'CALCULATOR_ACCESS_DENIED' using errcode='42501'; end if;
  select coalesce(jsonb_agg(item order by updated_at desc,id),'[]'::jsonb) into v_result from (
  select c.id,c.updated_at,public.v1_calculator_json(c.id,false) item from public.v1_calculators c
  where public.v1_calculator_access(c.id,false) and c.archived=p_archived
@@ -84,7 +92,7 @@ end; $$;
 create or replace function public.v1_calculator_options() returns jsonb
 language plpgsql stable security definer set search_path='' as $$
 begin
- if not public.v1_current_actor_is_active() then raise exception 'CALCULATOR_ACCESS_DENIED' using errcode='42501'; end if;
+ if not public.v1_calculator_active_actor() then raise exception 'CALCULATOR_ACCESS_DENIED' using errcode='42501'; end if;
  return jsonb_build_object('projects',coalesce((select jsonb_agg(jsonb_build_object('id',p.id,'name',p.name) order by p.name)
  from public.v1_projects p where public.v1_project_readable(p.id) and p.state <> 'archived'),'[]'::jsonb),
  'people',case when public.v1_calculator_manager() then coalesce((select jsonb_agg(jsonb_build_object('id',p.auth_user_id,'name',p.display_name) order by p.display_name)
@@ -156,7 +164,7 @@ declare
  v_data jsonb := p_payload->'payload';
  v_kind text := p_payload->>'kind';
 begin
- if not public.v1_current_actor_is_active() then raise exception 'CALCULATOR_ACCESS_DENIED' using errcode='42501'; end if;
+ if not public.v1_calculator_active_actor() then raise exception 'CALCULATOR_ACCESS_DENIED' using errcode='42501'; end if;
  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('calculator:'||v_id::text,0));
  select * into v_old from public.v1_calculators where id=v_id for update;
  v_existing:=found;
@@ -201,7 +209,7 @@ create or replace function public.v1_manage_calculator(p_payload jsonb,p_idempot
 language plpgsql security definer set search_path='' as $$
 declare v_id uuid:=(p_payload->>'id')::uuid; v_old public.v1_calculators%rowtype; v_response jsonb; v_user uuid; v_before jsonb;
 begin
- if not public.v1_current_actor_is_active() then raise exception 'CALCULATOR_ACCESS_DENIED' using errcode='42501'; end if;
+ if not public.v1_calculator_active_actor() then raise exception 'CALCULATOR_ACCESS_DENIED' using errcode='42501'; end if;
  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('calculator:'||v_id::text,0));
  select * into v_old from public.v1_calculators where id=v_id for update;
  if not public.v1_calculator_manager() or not public.v1_calculator_access(v_id,false) then

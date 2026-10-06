@@ -1,6 +1,12 @@
 import 'app_strings.dart';
 
 abstract final class YorksCalculatorStrings {
+  static const invalidInputs = TranslatableString(
+    en: 'Enter valid non-negative numbers before saving.',
+    ar: 'أدخل أرقامًا صحيحة غير سالبة قبل الحفظ.',
+    ur: 'محفوظ کرنے سے پہلے درست غیر منفی اعداد درج کریں۔',
+    hi: 'सहेजने से पहले मान्य गैर ऋणात्मक संख्याएँ दर्ज करें।',
+  );
   static const fittings = TranslatableString(
     en: 'Fitting library',
     ar: 'مكتبة الوصلات',

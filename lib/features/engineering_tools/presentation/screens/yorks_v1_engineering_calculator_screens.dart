@@ -14,11 +14,18 @@ import 'package:uuid/uuid.dart';
 import '../../../../app/router.dart';
 import '../../../../shared/models/yorks_v1_calculator_workspace.dart';
 import '../../../../shared/models/yorks_v1_calculator_strings.dart';
+import '../../../../shared/models/yorks_v1_calculator_editor_strings.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/yorks_v1_engineering_tools.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/services/yorks_v1_engineering_calculator_service.dart';
+
+String _editorText(BuildContext context, String text) =>
+    YorksCalculatorEditorStrings.translate(
+      text,
+      ProviderScope.containerOf(context, listen: false).read(languageProvider),
+    );
 
 /// Managed sessions never hydrate or overwrite the legacy one-slot device draft.
 /// The workspace owns identity, saving, permissions and navigation.
@@ -156,6 +163,7 @@ class _YorksV1DuctSizerScreenState
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(languageProvider);
     widget.session?.changed();
     final air = _air[_condition] ?? _air['20°C Air STP']!;
     final result = _result ?? _calculate(notify: false);
@@ -930,9 +938,14 @@ class _YorksV1DuctSizerScreenState
             .setString(_ductPrefsKey, jsonEncode(data));
       }
       await _restore();
-      if (mounted) _snack('Calculation imported.');
+      if (mounted) _snack(_editorText(context, 'Calculation imported.'));
     } catch (_) {
-      if (mounted) _snack('Could not import this JSON file.', error: true);
+      if (mounted) {
+        _snack(
+          _editorText(context, 'Could not import this JSON file.'),
+          error: true,
+        );
+      }
     }
   }
 
@@ -953,7 +966,7 @@ class _YorksV1DuctSizerScreenState
     if (!await downloadCalculatorFile(utf8.decode(bytes), filename: name)) {
       return;
     }
-    if (mounted) _snack('File exported.');
+    if (mounted) _snack(_editorText(context, 'File exported.'));
   }
 
   void _snack(String message, {bool error = false}) =>
@@ -1031,6 +1044,7 @@ class _YorksV1EspCalculatorScreenState
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(languageProvider);
     widget.session?.changed();
     final totals = YorksV1EngineeringCalculatorService.espTotals(
       _rows,
@@ -1107,7 +1121,10 @@ class _YorksV1EspCalculatorScreenState
                         ],
                       );
                       final note = Text(
-                        'Width/Height and Diameter are mutually exclusive. Manual ESP overrides the calculated value.',
+                        _editorText(
+                          context,
+                          'Width/Height and Diameter are mutually exclusive. Manual ESP overrides the calculated value.',
+                        ),
                         style: AppTypography.bodySmall,
                       );
                       if (constraints.maxWidth < 720) {
@@ -1465,9 +1482,14 @@ class _YorksV1EspCalculatorScreenState
             .setString(_espPrefsKey, jsonEncode(data));
       }
       await _restore();
-      if (mounted) _snack('Calculation imported.');
+      if (mounted) _snack(_editorText(context, 'Calculation imported.'));
     } catch (_) {
-      if (mounted) _snack('Could not import this JSON file.', error: true);
+      if (mounted) {
+        _snack(
+          _editorText(context, 'Could not import this JSON file.'),
+          error: true,
+        );
+      }
     }
   }
 
@@ -1479,7 +1501,7 @@ class _YorksV1EspCalculatorScreenState
     if (!await downloadCalculatorFile(utf8.decode(bytes), filename: name)) {
       return;
     }
-    if (mounted) _snack('File exported.');
+    if (mounted) _snack(_editorText(context, 'File exported.'));
   }
 
   Future<void> _print() => Printing.layoutPdf(
@@ -1495,7 +1517,7 @@ class _YorksV1EspCalculatorScreenState
     context: context,
     animationStyle: AnimationStyle.noAnimation,
     builder: (context) => AlertDialog(
-      title: const Text('ESP Fitting Library'),
+      title: Text(_editorText(context, 'ESP Fitting Library')),
       content: SizedBox(
         width: 420,
         child: ListView(
@@ -1505,7 +1527,7 @@ class _YorksV1EspCalculatorScreenState
               .entries
               .map(
                 (entry) => ListTile(
-                  title: Text(entry.key),
+                  title: Text(_editorText(context, entry.key)),
                   trailing: Text('K ${entry.value.toStringAsFixed(2)}'),
                 ),
               )
@@ -1515,7 +1537,7 @@ class _YorksV1EspCalculatorScreenState
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Close'),
+          child: Text(_editorText(context, 'Close')),
         ),
       ],
     ),
@@ -1563,33 +1585,40 @@ class _EspRows extends StatelessWidget {
                   AppColors.surfaceContainerHigh,
                 ),
                 columnSpacing: 14,
-                columns: const [
-                  DataColumn(label: Text('No.')),
-                  DataColumn(label: Text('Fitting Type')),
-                  DataColumn(label: Text('Flow L/s')),
-                  DataColumn(label: Text('Width mm')),
-                  DataColumn(label: Text('Height mm')),
-                  DataColumn(label: Text('Length m')),
-                  DataColumn(label: Text('Diameter mm')),
-                  DataColumn(label: Text('Manual ESP Pa')),
-                  DataColumn(label: Text('ESP')),
-                  DataColumn(label: Text('')),
+                columns: [
+                  DataColumn(label: Text(_editorText(context, "No."))),
+                  DataColumn(label: Text(_editorText(context, "Fitting Type"))),
+                  DataColumn(label: Text(_editorText(context, "Flow L/s"))),
+                  DataColumn(label: Text(_editorText(context, "Width mm"))),
+                  DataColumn(label: Text(_editorText(context, "Height mm"))),
+                  DataColumn(label: Text(_editorText(context, "Length m"))),
+                  DataColumn(label: Text(_editorText(context, "Diameter mm"))),
+                  DataColumn(
+                    label: Text(_editorText(context, "Manual ESP Pa")),
+                  ),
+                  DataColumn(label: Text(_editorText(context, "ESP"))),
+                  DataColumn(label: Text(_editorText(context, ""))),
                 ],
                 rows: [
-                  for (var i = 0; i < rows.length; i++) _desktopRow(i, rows[i]),
+                  for (var i = 0; i < rows.length; i++)
+                    _desktopRow(context, i, rows[i]),
                 ],
               ),
             ),
           ),
   );
 
-  DataRow _desktopRow(int index, YorksV1EspRow row) {
+  DataRow _desktopRow(BuildContext context, int index, YorksV1EspRow row) {
     final result = YorksV1EngineeringCalculatorService.espRow(row);
     return DataRow(
       cells: [
         DataCell(Text('${index + 1}')),
         DataCell(
-          _rowSelect(row, (value) => onChanged(row.copyWith(fitting: value))),
+          _rowSelect(
+            context,
+            row,
+            (value) => onChanged(row.copyWith(fitting: value)),
+          ),
         ),
         DataCell(
           _cell(
@@ -1652,7 +1681,10 @@ class _EspRows extends StatelessWidget {
                     ? '${result.lossPa.toStringAsFixed(2)} Pa'
                     : '—',
               ),
-              Text(result.source, style: AppTypography.labelSmall),
+              Text(
+                _editorText(context, result.source),
+                style: AppTypography.labelSmall,
+              ),
             ],
           ),
         ),
@@ -1660,28 +1692,36 @@ class _EspRows extends StatelessWidget {
           IconButton(
             onPressed: () => onDelete(row.id),
             icon: const Icon(Icons.close),
-            tooltip: 'Delete row',
+            tooltip: _editorText(context, 'Delete row'),
           ),
         ),
       ],
     );
   }
 
-  Widget _rowSelect(YorksV1EspRow row, ValueChanged<String> changed) =>
-      DropdownButton<String>(
-        value:
-            YorksV1EngineeringCalculatorService.fittingCoefficients.containsKey(
-              row.fitting,
-            )
-            ? row.fitting
-            : 'Other',
-        items: YorksV1EngineeringCalculatorService.fittingCoefficients.keys
-            .map((key) => DropdownMenuItem(value: key, child: Text(key)))
-            .toList(),
-        onChanged: (value) {
-          if (value != null) changed(value);
-        },
-      );
+  Widget _rowSelect(
+    BuildContext context,
+    YorksV1EspRow row,
+    ValueChanged<String> changed,
+  ) => DropdownButton<String>(
+    value:
+        YorksV1EngineeringCalculatorService.fittingCoefficients.containsKey(
+          row.fitting,
+        )
+        ? row.fitting
+        : 'Other',
+    items: YorksV1EngineeringCalculatorService.fittingCoefficients.keys
+        .map(
+          (key) => DropdownMenuItem(
+            value: key,
+            child: Text(_editorText(context, key)),
+          ),
+        )
+        .toList(),
+    onChanged: (value) {
+      if (value != null) changed(value);
+    },
+  );
 
   Widget _cell(
     YorksV1EspRow row,
@@ -1795,12 +1835,15 @@ class _EspMobileRow extends StatelessWidget {
           children: [
             Row(
               children: [
-                Text('Line ${index + 1}', style: AppTypography.labelMedium),
+                Text(
+                  _editorText(context, 'Line ${index + 1}'),
+                  style: AppTypography.labelMedium,
+                ),
                 const Spacer(),
                 IconButton(
                   onPressed: () => onDelete(row.id),
                   icon: const Icon(Icons.close),
-                  tooltip: 'Delete row',
+                  tooltip: _editorText(context, 'Delete row'),
                 ),
               ],
             ),
@@ -1809,24 +1852,28 @@ class _EspMobileRow extends StatelessWidget {
             _R35FormGrid(
               children: [
                 _mini(
+                  context,
                   'Flow L/s',
                   row.flowLitresPerSecond,
                   (value) =>
                       onChanged(row.copyWith(flowLitresPerSecond: value)),
                 ),
                 _mini(
+                  context,
                   'Width mm',
                   row.widthMillimetres,
                   (value) => onChanged(row.copyWith(widthMillimetres: value)),
                   enabled: row.diameterMillimetres.isEmpty,
                 ),
                 _mini(
+                  context,
                   'Height mm',
                   row.heightMillimetres,
                   (value) => onChanged(row.copyWith(heightMillimetres: value)),
                   enabled: row.diameterMillimetres.isEmpty,
                 ),
                 _mini(
+                  context,
                   'Length m',
                   row.lengthMetres,
                   (value) => onChanged(row.copyWith(lengthMetres: value)),
@@ -1837,6 +1884,7 @@ class _EspMobileRow extends StatelessWidget {
                   }.contains(row.fitting),
                 ),
                 _mini(
+                  context,
                   'Diameter mm',
                   row.diameterMillimetres,
                   (value) =>
@@ -1846,6 +1894,7 @@ class _EspMobileRow extends StatelessWidget {
                       row.heightMillimetres.isEmpty,
                 ),
                 _mini(
+                  context,
                   'Manual ESP Pa',
                   row.manualEspPa,
                   (value) => onChanged(row.copyWith(manualEspPa: value)),
@@ -1857,7 +1906,10 @@ class _EspMobileRow extends StatelessWidget {
               result.complete ? '${result.lossPa.toStringAsFixed(2)} Pa' : '—',
               style: AppTypography.titleMedium,
             ),
-            Text(result.source, style: AppTypography.labelSmall),
+            Text(
+              _editorText(context, result.source),
+              style: AppTypography.labelSmall,
+            ),
           ],
         ),
       ),
@@ -1872,18 +1924,24 @@ class _EspMobileRow extends StatelessWidget {
         ? row.fitting
         : 'Other',
     isExpanded: true,
-    decoration: const InputDecoration(
-      labelText: 'Fitting Type',
+    decoration: InputDecoration(
+      labelText: _editorText(context, 'Fitting Type'),
       border: OutlineInputBorder(),
     ),
     items: YorksV1EngineeringCalculatorService.fittingCoefficients.keys
-        .map((key) => DropdownMenuItem(value: key, child: Text(key)))
+        .map(
+          (key) => DropdownMenuItem(
+            value: key,
+            child: Text(_editorText(context, key)),
+          ),
+        )
         .toList(),
     onChanged: (value) {
       if (value != null) onChanged(row.copyWith(fitting: value));
     },
   );
   Widget _mini(
+    BuildContext context,
     String label,
     String value,
     ValueChanged<String> changed, {
@@ -1893,7 +1951,7 @@ class _EspMobileRow extends StatelessWidget {
     value: value,
     enabled: enabled,
     decoration: InputDecoration(
-      labelText: label,
+      labelText: _editorText(context, label),
       border: const OutlineInputBorder(),
     ),
     onChanged: changed,
@@ -2110,7 +2168,7 @@ class _DuctBasisStrip extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      entry.$1.toUpperCase(),
+                      _editorText(context, entry.$1).toUpperCase(),
                       style: AppTypography.labelSmall,
                     ),
                     const SizedBox(height: 4),
@@ -2141,24 +2199,28 @@ class _DuctModeStrip extends StatelessWidget {
         children:
             [
                   _mode(
+                    context,
                     YorksV1DuctSolveMode.checkSize,
                     'Check Size',
                     'Known duct dimensions',
                     '01',
                   ),
                   _mode(
+                    context,
                     YorksV1DuctSolveMode.velocity,
                     'Size by Velocity',
                     'Target design velocity',
                     '02',
                   ),
                   _mode(
+                    context,
                     YorksV1DuctSolveMode.friction,
                     'Size by Friction',
                     'Target pressure loss',
                     '03',
                   ),
                   _mode(
+                    context,
                     YorksV1DuctSolveMode.equivalentDiameter,
                     'Equivalent Diameter',
                     'Known equivalent diameter',
@@ -2178,6 +2240,7 @@ class _DuctModeStrip extends StatelessWidget {
     ),
   );
   Widget _mode(
+    BuildContext context,
     YorksV1DuctSolveMode mode,
     String title,
     String caption,
@@ -2222,8 +2285,14 @@ class _DuctModeStrip extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(title, style: AppTypography.labelLarge),
-                Text(caption, style: AppTypography.labelSmall),
+                Text(
+                  _editorText(context, title),
+                  style: AppTypography.labelLarge,
+                ),
+                Text(
+                  _editorText(context, caption),
+                  style: AppTypography.labelSmall,
+                ),
               ],
             ),
           ),
@@ -2321,7 +2390,7 @@ class _TotalCard extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          label.toUpperCase(),
+          _editorText(context, label).toUpperCase(),
           style: AppTypography.labelSmall.copyWith(
             color: dark ? Colors.white70 : AppColors.muted,
           ),
@@ -2410,11 +2479,20 @@ class _WorkspaceHeading extends StatelessWidget {
         final copy = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(kicker.toUpperCase(), style: AppTypography.eyebrow),
+            Text(
+              _editorText(context, kicker).toUpperCase(),
+              style: AppTypography.eyebrow,
+            ),
             const SizedBox(height: 6),
-            Text(title, style: AppTypography.headlineSmall),
+            Text(
+              _editorText(context, title),
+              style: AppTypography.headlineSmall,
+            ),
             const SizedBox(height: 6),
-            Text(description, style: AppTypography.bodyMedium),
+            Text(
+              _editorText(context, description),
+              style: AppTypography.bodyMedium,
+            ),
           ],
         );
         return constraints.maxWidth < 680
@@ -2460,8 +2538,11 @@ class _PanelHeading extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(kicker.toUpperCase(), style: AppTypography.labelSmall),
-            Text(title, style: AppTypography.titleLarge),
+            Text(
+              _editorText(context, kicker).toUpperCase(),
+              style: AppTypography.labelSmall,
+            ),
+            Text(_editorText(context, title), style: AppTypography.titleLarge),
           ],
         ),
       ),
@@ -2511,7 +2592,7 @@ class _NumberField extends StatelessWidget {
     keyboardType:
         keyboard ?? const TextInputType.numberWithOptions(decimal: true),
     decoration: InputDecoration(
-      labelText: label,
+      labelText: _editorText(context, label),
       suffixText: suffix,
       border: const OutlineInputBorder(),
     ),
@@ -2534,11 +2615,16 @@ class _SelectField extends StatelessWidget {
     initialValue: value,
     isExpanded: true,
     decoration: InputDecoration(
-      labelText: label,
+      labelText: _editorText(context, label),
       border: const OutlineInputBorder(),
     ),
     items: items
-        .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+        .map(
+          (item) => DropdownMenuItem(
+            value: item,
+            child: Text(_editorText(context, item)),
+          ),
+        )
         .toList(),
     onChanged: (value) {
       if (value != null) onChanged(value);
@@ -2560,7 +2646,7 @@ class _ToggleField extends StatelessWidget {
   @override
   Widget build(BuildContext context) => InputDecorator(
     decoration: InputDecoration(
-      labelText: label,
+      labelText: _editorText(context, label),
       border: const OutlineInputBorder(),
     ),
     child: Row(
@@ -2577,7 +2663,7 @@ class _ToggleField extends StatelessWidget {
                   borderRadius: BorderRadius.circular(7),
                 ),
                 child: Text(
-                  item,
+                  _editorText(context, item),
                   style: AppTypography.labelLarge.copyWith(
                     color: item == selected ? AppColors.blue : AppColors.ink,
                   ),
@@ -2608,7 +2694,12 @@ class _SelectBox extends StatelessWidget {
       isDense: true,
     ),
     items: items
-        .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+        .map(
+          (item) => DropdownMenuItem(
+            value: item,
+            child: Text(_editorText(context, item)),
+          ),
+        )
         .toList(),
     onChanged: (value) {
       if (value != null) onChanged(value);
@@ -2630,13 +2721,13 @@ class _ToolbarButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) => primary
       ? PrimaryButton(
-          label: label,
+          label: _editorText(context, label),
           icon: icon,
           isExpanded: false,
           onPressed: onPressed,
         )
       : SecondaryButton(
-          label: label,
+          label: _editorText(context, label),
           icon: icon,
           isExpanded: false,
           onPressed: onPressed,
@@ -2676,7 +2767,7 @@ class _Badge extends StatelessWidget {
       borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
     ),
     child: Text(
-      label,
+      _editorText(context, label),
       style: AppTypography.labelLarge.copyWith(color: AppColors.blue),
     ),
   );
@@ -2703,7 +2794,7 @@ class _HeroResult extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          title.toUpperCase(),
+          _editorText(context, title).toUpperCase(),
           style: AppTypography.labelSmall.copyWith(color: AppColors.blue),
         ),
         const SizedBox(height: 5),
@@ -2711,7 +2802,7 @@ class _HeroResult extends StatelessWidget {
           value,
           style: AppTypography.displaySmall.copyWith(color: AppColors.navy),
         ),
-        Text(note, style: AppTypography.bodySmall),
+        Text(_editorText(context, note), style: AppTypography.bodySmall),
       ],
     ),
   );
@@ -2743,7 +2834,10 @@ class _MetricGrid extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(entry.$1.toUpperCase(), style: AppTypography.labelSmall),
+                  Text(
+                    _editorText(context, entry.$1).toUpperCase(),
+                    style: AppTypography.labelSmall,
+                  ),
                   const SizedBox(height: 5),
                   Text(entry.$2, style: AppTypography.titleMedium),
                 ],
@@ -2766,7 +2860,7 @@ class _InfoNote extends StatelessWidget {
       border: Border.all(color: AppColors.line),
       borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
     ),
-    child: Text(text, style: AppTypography.bodySmall),
+    child: Text(_editorText(context, text), style: AppTypography.bodySmall),
   );
 }
 
@@ -2882,6 +2976,20 @@ Future<Uint8List> _buildEspPdf(
   document.addPage(
     pw.MultiPage(
       pageFormat: format,
+      maxPages: 100,
+      header: (context) => context.pageNumber > 1
+          ? pw.Text(
+              '${session?.title ?? 'ESP calculation'} · ${session?.scope ?? ''} · ${session?.revision ?? ''}',
+              style: const pw.TextStyle(fontSize: 9),
+            )
+          : pw.SizedBox.shrink(),
+      footer: (context) => pw.Align(
+        alignment: pw.Alignment.centerRight,
+        child: pw.Text(
+          '${context.pageNumber} / ${context.pagesCount}',
+          style: const pw.TextStyle(fontSize: 8),
+        ),
+      ),
       build: (_) => [
         pw.Text(
           'YORKS AC. & REF. · EXTERNAL STATIC PRESSURE',
@@ -2890,7 +2998,36 @@ Future<Uint8List> _buildEspPdf(
         if (session != null)
           pw.Text('${session.title} · ${session.scope} · ${session.revision}'),
         pw.SizedBox(height: 16),
+        if (session?.snapshot != null)
+          pw.TableHelper.fromTextArray(
+            data: [
+              for (final pair in const {
+                'projectName': 'Project',
+                'projectNo': 'Project No.',
+                'systemNo': 'System No.',
+                'equipment': 'Equipment',
+                'revision': 'Engineering revision',
+                'date': 'Date',
+              }.entries)
+                if ((session!.snapshot!()['header'] as Map?)?[pair.key]
+                        ?.toString()
+                        .isNotEmpty ==
+                    true)
+                  [
+                    pair.value,
+                    (session.snapshot!()['header'] as Map)[pair.key].toString(),
+                  ],
+            ],
+          ),
+        pw.SizedBox(height: 12),
         pw.TableHelper.fromTextArray(
+          cellStyle: const pw.TextStyle(fontSize: 9),
+          headerStyle: pw.TextStyle(
+            fontSize: 9,
+            fontWeight: pw.FontWeight.bold,
+          ),
+          cellPadding: const pw.EdgeInsets.all(4),
+          columnWidths: {0: const pw.FixedColumnWidth(32)},
           data: [
             [
               'No.',

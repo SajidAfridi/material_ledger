@@ -76,5 +76,25 @@ select is(jsonb_array_length(public.v1_list_calculators(p_kind=>'esp')->'items')
 select is((select count(*)::integer from jsonb_array_elements(public.v1_list_calculators(p_scope=>'general')->'items') r where r->>'id' like '47000000-%'),1,'General filter excludes project scope');
 select throws_ok($test$select public.v1_save_calculator('{"id":"47000000-0000-4000-8000-000000000099","title":"Invalid","kind":"duct","expected_version":0,"payload":{"app":"duct-calc","version":1,"flow":"1e9999"}}'::jsonb,'48000000-0000-4000-8000-000000000099')$test$,'22023','CALCULATOR_INVALID_INPUT','Overflow cannot create an unreadable record');
 select throws_ok($test$select public.v1_save_calculator('{"id":"47000000-0000-4000-8000-000000000099","title":"Invalid","kind":"esp","expected_version":0,"payload":{"app":"esp-calc","version":1,"rows":[{"id":"x","flow":"NaN"}]}}'::jsonb,'48000000-0000-4000-8000-000000000098')$test$,'22023','CALCULATOR_INVALID_INPUT','ESP malformed input rejected on server');
+
+set local role authenticated;
+select set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000004","role":"authenticated","app_metadata":{"role":"admin"}}',true);
+select lives_ok($test$select public.v1_manage_calculator(jsonb_build_object('id','47000000-0000-4000-8000-000000000001','expected_version',(public.v1_get_calculator('47000000-0000-4000-8000-000000000001')->>'record_version')::int,'action','access','user_id','10000000-0000-4000-8000-000000000013','access','edit'),'49000000-0000-4000-8000-000000000099')$test$,'Admin can explicitly grant a general calculator to Accountant');
+select set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000013","role":"authenticated","app_metadata":{"role":"accountant"}}',true);
+select lives_ok($test$select public.v1_get_calculator('47000000-0000-4000-8000-000000000001')$test$,'Explicitly granted Accountant reads this calculator');
+select lives_ok($test$select public.v1_save_calculator(jsonb_build_object('id','47000000-0000-4000-8000-000000000001','expected_version',(public.v1_get_calculator('47000000-0000-4000-8000-000000000001')->>'record_version')::int,'title','Accountant scoped edit','kind','duct','payload',jsonb_build_object('app','duct-calc','version',1,'flow','1500')),'48000000-0000-4000-8000-000000000097')$test$,'Explicit edit grant allows input changes without technical role promotion');
+select is(public.v1_list_calculators()->>'can_create','false','Calculator grant does not grant creation authority');
+select is(public.v1_list_calculators()->>'can_manage','false','Calculator grant does not grant sharing authority');
+set local role postgres;
+update public.v1_profiles set is_active=false where auth_user_id='10000000-0000-4000-8000-000000000002';
+set local role authenticated;
+select set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000002","role":"authenticated","app_metadata":{"role":"site_engineer"}}',true);
+select throws_ok($test$select public.v1_list_calculators()$test$,'42501','CALCULATOR_ACCESS_DENIED','Inactive actor cannot list calculators');
+select throws_ok($test$select public.v1_save_calculator('{"id":"47000000-0000-4000-8000-000000000095","title":"Inactive","kind":"duct","expected_version":0,"payload":{"app":"duct-calc","version":1,"flow":"1000"}}'::jsonb,'48000000-0000-4000-8000-000000000095')$test$,'42501','CALCULATOR_ACCESS_DENIED','Inactive actor cannot create calculators');
+set local role postgres;
+update public.v1_profiles set is_active=true where auth_user_id='10000000-0000-4000-8000-000000000002';
+update auth.users set deleted_at=now() where id='10000000-0000-4000-8000-000000000002';
+set local role authenticated;
+select throws_ok($test$select public.v1_save_calculator('{"id":"47000000-0000-4000-8000-000000000095","title":"Deleted","kind":"duct","expected_version":0,"payload":{"app":"duct-calc","version":1,"flow":"1000"}}'::jsonb,'48000000-0000-4000-8000-000000000096')$test$,'42501','CALCULATOR_ACCESS_DENIED','Soft deleted actor with retained JWT cannot create calculators');
 select * from finish();
 rollback;

@@ -958,7 +958,7 @@ class _WorkspaceState extends ConsumerState<_Workspace> {
     final message = c.error.toString();
     final text =
         message.contains('INVALID_INPUT') || message.contains('FILE_TOO_LARGE')
-        ? S.invalidFile
+        ? S.invalidInputs
         : c.denied
         ? S.denied
         : message.contains('VERSION_CONFLICT')

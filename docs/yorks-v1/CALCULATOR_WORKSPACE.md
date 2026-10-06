@@ -66,50 +66,51 @@ Apply only this reviewed additive migration to an explicitly verified target,
 then enable the feature in a tested artifact. Staging browser/persona acceptance
 must precede production promotion.
 
-## Verification record and required stop
+## Acceptance and release preparation — 6 October 2026
 
-Status: **implementation candidate; release gate blocked**. The feature remains
-OFF by default. No staging or production database/deployment was changed.
+The product owner authorized completing the work and publishing it to production
+after the earlier release gate stopped. That authority includes investigating
+and repairing the unrelated test fixture that had blocked acceptance.
 
-Completed local evidence:
+The MR scope-filter test used two unordered `LIMIT 1` selections over a fixture
+with both Common and physical scopes. It now selects the fixture's `main`
+physical scope explicitly and checks that Common returns no matching requests.
+The MR server implementation is unchanged. The focused register test passes
+69 assertions.
 
-- `flutter pub get` succeeded; changed Dart formatting and `git diff --check`
-  passed. The analyzer reported no issues before the final library-refresh
-  change; that change compiled in the feature-enabled builds and focused tests.
-- Complete Flutter suite: 2,466 passed, four skipped. The final focused suite
-  has 19 passing tests, including a subsequently added routed create/save/back
-  test proving the home refreshes with the new calculation.
-- Nine rendered goldens: home, Duct and ESP at 1366, 768 and 360 pixels, under
-  `test/goldens/calculators/`. New workspace labels are localized in English,
-  Arabic, Urdu and Hindi; a localized Arabic home is covered. Retained engineering
-  editor terminology has not received a complete secondary-language audit.
-- Local Supabase reset succeeded. Calculator database suite: **42 passed**.
-  The earlier complete database run passed 3,584 assertions; the extended latest
-  run executed 3,588 assertions and failed one unrelated existing MR assertion.
-- Both default-off and feature-enabled release web/APK builds succeeded using
-  CI placeholder backend configuration. Web startup budget passed. APK signing
-  used the repository's ephemeral CI signing lane, not production signing.
-- Real browser against the local backend: Admin sign-in, integrated Yorks shell,
-  named Duct creation, input edit, save/reopen, view sharing to a Site Engineer,
-  exact JSON export values and PDF generation (`%PDF-1.5`, 11,668 bytes) worked.
-  The observed shell breadcrumb mismatch was fixed afterward; final shell
-  browser revalidation remains outstanding. Responsive widget evidence covers
-  the final mobile layout and focused ESP row editor.
-- Local debug startup stalled; a compiled profile build was used for local HTTP
-  backend browser checks. The production release's HTTPS requirement remains
-  intact. Profile-size budget failure is not a release-size pass; actual release
-  artifacts passed the startup budget independently.
+Local acceptance:
 
-The latest full database failure is in the unchanged
-`supabase/tests/database/yorks_v1_unified_material_request_register.test.sql`,
-assertion 14: **Scope filter keeps Project requests and excludes Company
-requests**, actual **0**, expected **2**. No MR source or test was modified.
-The supplied `AGENTS.md` says to stop and report when tests expose an unrelated
-existing failure, so further implementation/release work stops here. Diagnosis
-of that separate failure, a final all-green gate, final browser revalidation,
-staging persona acceptance and deployment remain outstanding. An earlier green
-run does not supersede this latest failed result.
+- Dependencies resolved; complete Flutter suite: 2,469 passed, four retained
+  skips. Latest focused calculator suite: 21 passed, including Unicode PDF,
+  1,000-row ESP printing, Arabic RTL editing at 360px, input preservation and
+  routed new/save/back library refresh.
+- Clean local database reset and full suite: 123 files, 3,597 passed. Calculator
+  permission/idempotency suite: 50 passed. Inactive/deleted users fail closed;
+  explicit Accountant grants provide calculator access without role promotion.
+- Real competing database sessions: one writer commits, the other conflicts,
+  a replay adds no revision/audit duplicate. The local fixture is archived;
+  audit and data remain recoverable.
+- Home, Duct and ESP goldens at 1366, 768 and 360 pixels are under
+  `test/goldens/calculators/`. Workspace and shared editor labels use the four
+  existing languages. Stable material/fitting identifiers and units remain
+  unchanged in saved/imported JSON.
+- PDF inspection includes first/last pages of a 1,000-row ESP calculation.
+  Four-digit row numbers remain intact; headers repeat, page numbers and record
+  context remain visible, and totals include all rows. Technical report labels
+  retain the existing English document convention; names support Unicode fonts.
+- The earlier local browser witness covered Admin sign-in, the universal shell,
+  Duct creation/edit/save/reopen, sharing, JSON values and PDF generation.
+  Final staging/production witnesses and artifact identities are recorded in
+  the release evidence file once publication is verified.
 
-The local browser verification records are deliberate local-only test data.
-Database assertions were adjusted to identify their own fixtures so authorized
-browser-created calculator records do not change their expected totals.
+Both production schema and data backups were captured before DDL. This additive
+migration creates only calculator relations/functions and its migration ledger
+entry. Existing workflow/audit tables receive no migration DML. Remote ledger
+versions may differ from the canonical file because MCP records its application
+version; compare exact function bodies/ACLs and record that mapping. Do not use a
+generic `db push` across the existing production ledger divergence.
+
+The feature flag stays off in unconfigured/CI builds. The accepted staging and
+production artifacts explicitly enable it alongside the existing project setup,
+Accounts, Company Requests, Workforce and Analytics release flags. Native CI
+APK validation is separate from this web publication and is not a store release.

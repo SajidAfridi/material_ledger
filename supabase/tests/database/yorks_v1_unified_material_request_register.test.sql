@@ -58,7 +58,7 @@ select set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-00000000
 select public.v1_create_project('{"project_ref":"UNIFIED-REGISTER-PROOF","name":"Unified register proof","parties":{},"initial_members":[{"auth_user_id":"10000000-0000-4000-8000-000000000002","project_role":"site_engineer","reason":"Test"}],"buildings":[{"code":"main","name":"Main"}],"attachments":[]}'::jsonb,'aa932000-0000-4000-8000-000000000001');
 set local role postgres;
 insert into public.v1_material_requests(id,project_id,scope_id,request_number,title,timing,state,record_version,created_by_auth_user_id,requester_display_name,requester_project_role,requester_exact_role,current_action_owner_role,current_action_code,submitted_at,updated_at)
-select ('aa931000-0000-4000-8000-'||lpad(i::text,12,'0'))::uuid,p.id,(select id from public.v1_project_scopes where project_id=p.id limit 1),
+select ('aa931000-0000-4000-8000-'||lpad(i::text,12,'0'))::uuid,p.id,(select id from public.v1_project_scopes where project_id=p.id and scope_kind='building' and scope_code='main'),
  'UNIFIED-REGISTER-PROOF-P'||i,'Project proof','normal','awaiting_request_approval',2,'10000000-0000-4000-8000-000000000002','Register Site Engineer','site_engineer','site_engineer','project_engineer','request_approval_required',now()-interval '1 day',now()-(i*2-0.5)*interval '1 second'
 from public.v1_projects p cross join generate_series(1,2) i where p.project_ref='UNIFIED-REGISTER-PROOF';
 -- Deliberately shared UUIDs across the independent tables exercise the discriminator.
@@ -88,8 +88,14 @@ select is((public.v1_list_unified_material_request_summaries(
   p_search=>'UNIFIED-REGISTER-PROOF',p_scope_id=>(
     select id from public.v1_project_scopes
     where project_id=(select id from public.v1_projects
-      where project_ref='UNIFIED-REGISTER-PROOF') limit 1
+      where project_ref='UNIFIED-REGISTER-PROOF') and scope_kind='building' and scope_code='main'
   ))->>'total_count')::int,2,'Scope filter keeps Project requests and excludes Company requests');
+select is((public.v1_list_unified_material_request_summaries(
+  p_search=>'UNIFIED-REGISTER-PROOF',p_scope_id=>(
+    select id from public.v1_project_scopes
+    where project_id=(select id from public.v1_projects
+      where project_ref='UNIFIED-REGISTER-PROOF') and scope_kind='common'
+  ))->>'total_count')::int,0,'A different scope returns no Project or Company requests');
 select is((public.v1_list_unified_material_request_summaries(
   p_search=>'UNIFIED-REGISTER-PROOF',p_updated_after=>now()+interval '1 minute'
 )->>'total_count')::int,0,'Updated-after filter can return a trusted empty page');

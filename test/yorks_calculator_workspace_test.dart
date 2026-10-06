@@ -1,4 +1,8 @@
 import 'dart:async';
+import 'package:pdf/pdf.dart';
+import 'package:printing/printing.dart';
+// ignore: implementation_imports
+import 'package:printing/src/interface.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:io';
 import 'package:flutter/services.dart';
@@ -79,6 +83,28 @@ class FakeCalculatorRpc implements YorksV1ProjectRpcClient {
     }
     return {...record};
   }
+}
+
+class CaptureCalculatorPrinting extends PrintingPlatform {
+  Uint8List? bytes;
+  @override
+  Future<bool> layoutPdf(
+    Printer? printer,
+    LayoutCallback onLayout,
+    String name,
+    PdfPageFormat format,
+    bool dynamicLayout,
+    bool usePrinterSettings,
+    OutputType outputType,
+    bool forceCustomPrintPaper,
+    bool windowsModernDialog,
+  ) async {
+    bytes = await onLayout(format);
+    return true;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 void main() {
@@ -443,6 +469,129 @@ void main() {
       router.dispose();
     },
   );
+  testWidgets(
+    'Arabic calculator editor preserves RTL and translated input labels at 360px',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      SharedPreferences.setMockInitialValues({
+        'selected_language': AppLanguage.arabic.code,
+      });
+      final prefs = await SharedPreferences.getInstance();
+      final c = YorksCalculatorController(
+        YorksCalculatorRepository(FakeCalculatorRpc()),
+        identity: 'rtl',
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(prefs),
+            yorksCalculatorControllerProvider('one').overrideWithValue(c),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.light,
+            home: const Directionality(
+              textDirection: TextDirection.rtl,
+              child: Scaffold(body: YorksCalculatorWorkspace(recordId: 'one')),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('مساحة تحديد مقاس مجاري الهواء'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (w) => w is TextField && w.decoration?.labelText == 'معدل التدفق',
+        ),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      c.dispose();
+    },
+  );
+
+  testWidgets(
+    'print handles Unicode metadata and a full 1000-row ESP calculation',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final previous = PrintingPlatform.instance;
+      final printer = CaptureCalculatorPrinting();
+      PrintingPlatform.instance = printer;
+      addTearDown(() => PrintingPlatform.instance = previous);
+      for (final kind in ['duct', 'esp']) {
+        final data = kind == 'duct'
+            ? {
+                ...YorksCalculatorFiles.fresh(kind),
+                'flow': '1000',
+                'width': '500',
+                'height': '300',
+              }
+            : {
+                ...YorksCalculatorFiles.fresh(kind),
+                'header': {
+                  'systemNo': 'AHU-02',
+                  'equipment': 'Fan 1',
+                  'projectName': 'NEXUS',
+                },
+                'rows': [
+                  for (var i = 0; i < 1000; i++)
+                    {
+                      'id': 'pdf-$i',
+                      'fitting': 'Straight Duct',
+                      'flow': '1000',
+                      'width': '500',
+                      'height': '300',
+                      'length': '2',
+                    },
+                ],
+              };
+        final session =
+            YorksCalculatorEditorSession(initialData: data, onChanged: () {})
+              ..title = 'AHU-01 · اختبار'
+              ..scope = 'NEXUS'
+              ..revision = 'Revision 1';
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+            child: MaterialApp(
+              theme: AppTheme.light,
+              home: Scaffold(
+                body: kind == 'duct'
+                    ? YorksV1DuctSizerScreen(session: session)
+                    : YorksV1EspCalculatorScreen(session: session),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.runAsync(() => session.printFile!.call());
+        expect(printer.bytes, isNotNull);
+        expect(ascii.decode(printer.bytes!.take(5).toList()), '%PDF-');
+        expect(
+          printer.bytes!.length,
+          greaterThan(kind == 'esp' ? 50000 : 5000),
+        );
+        const directory = String.fromEnvironment('CALCULATOR_PDF_EVIDENCE');
+        if (directory.isNotEmpty) {
+          await tester.runAsync(() async {
+            await Directory(directory).create(recursive: true);
+            await File('$directory/$kind.pdf').writeAsBytes(printer.bytes!);
+          });
+        }
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+      }
+    },
+  );
+
   for (final size in [
     const Size(1366, 900),
     const Size(768, 1024),
