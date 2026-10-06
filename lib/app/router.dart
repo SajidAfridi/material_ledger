@@ -1,4 +1,6 @@
+import '../shared/providers/yorks_v1_calculator_provider.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' show ProviderScope;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -21,6 +23,7 @@ import '../features/accounts/domain/accounts_office_models.dart';
 import '../features/dashboard/presentation/screens/dashboard_screen.dart';
 import '../features/engineer/presentation/screens/engineer_browse_screen.dart';
 import '../features/engineering_tools/presentation/screens/yorks_v1_engineering_calculator_screens.dart';
+import '../features/engineering_tools/presentation/screens/yorks_calculator_workspace.dart';
 import '../features/engineer/presentation/screens/engineer_create_project_screen.dart';
 import '../features/engineer/presentation/screens/engineer_home_screen.dart';
 import '../features/engineer/presentation/screens/engineer_new_request_screen.dart';
@@ -220,6 +223,7 @@ abstract final class RoutePaths {
   static const String planDiff = '/plan-diff/:id';
   static const String confirmReceipt = '/receipt/:id';
   static const String returnStore = '/return';
+  static const String yorksV1Calculators = '/tools/calculators';
   static const String yorksV1DuctSizer = '/tools/duct-sizer';
   static const String yorksV1EspCalculator = '/tools/esp-calculator';
 
@@ -742,6 +746,11 @@ bool? _isYorksV1RouteAllowedForRole(
   bool companyMaterialRequestsEnabled = false,
 }) {
   final path = uri.path;
+  if (path == RoutePaths.yorksV1Calculators ||
+      path.startsWith('${RoutePaths.yorksV1Calculators}/')) {
+    return const bool.fromEnvironment('YORKS_V1_CALCULATOR_WORKSPACE') &&
+        role != null;
+  }
   // Engineering calculators deliberately live outside the `/yorks/` prefix,
   // so evaluate their exact role boundary before the generic V1-path fast
   // path below. Otherwise a Procurement deep link reaches an Engineer-only
@@ -2152,12 +2161,45 @@ GoRouter createAppRouter({
         ),
       ),
       GoRoute(
+        path: RoutePaths.yorksV1Calculators,
+        pageBuilder: (context, state) =>
+            _yorksV1Slide(state.pageKey, const YorksCalculatorWorkspace()),
+        routes: [
+          GoRoute(
+            path: ':calculatorId',
+            onExit: (context, state) async =>
+                await ProviderScope.containerOf(
+                  context,
+                  listen: false,
+                ).read(yorksCalculatorExitGuardProvider).check?.call() ??
+                true,
+            pageBuilder: (context, state) => _yorksV1Slide(
+              state.pageKey,
+              YorksCalculatorWorkspace(
+                recordId: state.pathParameters['calculatorId'],
+                initial: state.extra is Map<String, dynamic>
+                    ? state.extra as Map<String, dynamic>
+                    : null,
+              ),
+            ),
+          ),
+        ],
+      ),
+      GoRoute(
         path: RoutePaths.yorksV1DuctSizer,
+        redirect: (context, state) =>
+            const bool.fromEnvironment('YORKS_V1_CALCULATOR_WORKSPACE')
+            ? RoutePaths.yorksV1Calculators
+            : null,
         pageBuilder: (context, state) =>
             _yorksV1Slide(state.pageKey, const YorksV1DuctSizerScreen()),
       ),
       GoRoute(
         path: RoutePaths.yorksV1EspCalculator,
+        redirect: (context, state) =>
+            const bool.fromEnvironment('YORKS_V1_CALCULATOR_WORKSPACE')
+            ? RoutePaths.yorksV1Calculators
+            : null,
         pageBuilder: (context, state) =>
             _yorksV1Slide(state.pageKey, const YorksV1EspCalculatorScreen()),
       ),

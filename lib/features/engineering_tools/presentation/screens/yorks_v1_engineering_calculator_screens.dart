@@ -1,24 +1,71 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../../../../shared/services/calculator_file_download.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../../app/router.dart';
+import '../../../../shared/models/yorks_v1_calculator_workspace.dart';
+import '../../../../shared/models/yorks_v1_calculator_strings.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/yorks_v1_engineering_tools.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/services/yorks_v1_engineering_calculator_service.dart';
 
+/// Managed sessions never hydrate or overwrite the legacy one-slot device draft.
+/// The workspace owns identity, saving, permissions and navigation.
+class YorksCalculatorEditorSession {
+  YorksCalculatorEditorSession({
+    required this.initialData,
+    required this.onChanged,
+  });
+  final Map<String, dynamic> initialData;
+  final VoidCallback onChanged;
+  bool readOnly = false;
+  bool ready = false;
+  String title = '', scope = '', revision = '';
+  Map<String, Object?> Function()? snapshot;
+  Future<void> Function()? importFile, exportFile, printFile, showFittings;
+  void changed() =>
+      WidgetsBinding.instance.addPostFrameCallback((_) => onChanged());
+}
+
+Widget _calculatorPage({
+  required String eyebrow,
+  required String title,
+  String? description,
+  required List<Widget> actions,
+  required Widget child,
+  YorksCalculatorEditorSession? session,
+}) {
+  if (session == null) {
+    return NexusPageShell(
+      eyebrow: eyebrow,
+      title: title,
+      description: description,
+      actions: actions,
+      child: child,
+    );
+  }
+  return SingleChildScrollView(
+    padding: const EdgeInsets.all(AppSpacing.lg),
+    child: ExcludeFocus(
+      excluding: session.readOnly,
+      child: AbsorbPointer(absorbing: session.readOnly, child: child),
+    ),
+  );
+}
+
 const _ductPrefsKey = 'yorks_r35_duct_calculation';
 const _espPrefsKey = 'yorks_r35_esp_calculation';
-const _jsonMime = 'application/json';
 
 /// A calculator can be reached through a pushed record route or directly from
 /// a saved deep link. A root deep link therefore falls back to the mobile More
@@ -37,7 +84,8 @@ void _leaveMobileEngineeringTool(BuildContext context) {
 }
 
 class YorksV1DuctSizerScreen extends ConsumerStatefulWidget {
-  const YorksV1DuctSizerScreen({super.key});
+  const YorksV1DuctSizerScreen({super.key, this.session});
+  final YorksCalculatorEditorSession? session;
 
   @override
   ConsumerState<YorksV1DuctSizerScreen> createState() =>
@@ -79,6 +127,13 @@ class _YorksV1DuctSizerScreenState
   @override
   void initState() {
     super.initState();
+    final session = widget.session;
+    if (session != null) {
+      session.snapshot = _json;
+      session.importFile = _import;
+      session.exportFile = _export;
+      session.printFile = _print;
+    }
     Future<void>.microtask(_restore);
   }
 
@@ -101,12 +156,14 @@ class _YorksV1DuctSizerScreenState
 
   @override
   Widget build(BuildContext context) {
+    widget.session?.changed();
     final air = _air[_condition] ?? _air['20°C Air STP']!;
     final result = _result ?? _calculate(notify: false);
-    if (YorksMobileUi.isActive(context)) {
+    if (widget.session == null && YorksMobileUi.isActive(context)) {
       return _buildMobile(context, result);
     }
-    return NexusPageShell(
+    return _calculatorPage(
+      session: widget.session,
       eyebrow: 'Engineering tools',
       title: 'Duct Sizer',
       description: 'A focused airflow, duct-size and pressure-loss workspace.',
@@ -120,7 +177,8 @@ class _YorksV1DuctSizerScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _ProjectBanner(onChanged: (_) {}, value: 'Independent calculation'),
+          if (widget.session == null)
+            _ProjectBanner(onChanged: (_) {}, value: 'Independent calculation'),
           const SizedBox(height: AppSpacing.lg),
           _R35Card(
             child: Column(
@@ -170,20 +228,79 @@ class _YorksV1DuctSizerScreenState
                   ),
                 ),
                 const Divider(height: 1),
-                _DuctBasisStrip(
-                  condition: _condition,
-                  density: air.$1,
-                  viscosity: air.$2,
-                  specificHeat: air.$3,
-                  energyFactor: air.$4,
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final basis = _DuctBasisStrip(
+                      condition: _condition,
+                      density: air.$1,
+                      viscosity: air.$2,
+                      specificHeat: air.$3,
+                      energyFactor: air.$4,
+                    );
+                    return widget.session != null && constraints.maxWidth < 600
+                        ? Material(
+                            color: AppColors.surfaceContainerLowest,
+                            child: ExpansionTile(
+                              title: Text(
+                                YorksCalculatorStrings.designBasis.active(
+                                  ref.watch(languageProvider),
+                                ),
+                              ),
+                              children: [basis],
+                            ),
+                          )
+                        : basis;
+                  },
                 ),
                 const Divider(height: 1),
-                _DuctModeStrip(
-                  selected: _mode,
-                  onChanged: (mode) => setState(() {
-                    _mode = mode;
-                    _calculate();
-                  }),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    if (widget.session == null || constraints.maxWidth >= 600) {
+                      return _DuctModeStrip(
+                        selected: _mode,
+                        onChanged: (mode) => setState(() {
+                          _mode = mode;
+                          _calculate();
+                        }),
+                      );
+                    }
+                    final labels = [
+                      YorksCalculatorStrings.checkSize,
+                      YorksCalculatorStrings.byVelocity,
+                      YorksCalculatorStrings.byFriction,
+                      YorksCalculatorStrings.equivalent,
+                    ];
+                    return Padding(
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      child: DropdownButtonFormField<YorksV1DuctSolveMode>(
+                        initialValue: _mode,
+                        decoration: InputDecoration(
+                          labelText: YorksCalculatorStrings.method.active(
+                            ref.watch(languageProvider),
+                          ),
+                        ),
+                        items: [
+                          for (final mode in YorksV1DuctSolveMode.values)
+                            DropdownMenuItem(
+                              value: mode,
+                              child: Text(
+                                labels[mode.index].active(
+                                  ref.watch(languageProvider),
+                                ),
+                              ),
+                            ),
+                        ],
+                        onChanged: (mode) {
+                          if (mode != null) {
+                            setState(() {
+                              _mode = mode;
+                              _calculate();
+                            });
+                          }
+                        },
+                      ),
+                    );
+                  },
                 ),
                 const Divider(height: 1),
                 LayoutBuilder(
@@ -712,7 +829,9 @@ class _YorksV1DuctSizerScreenState
   }
 
   Future<void> _restore() async {
-    final raw = ref.read(sharedPreferencesProvider).getString(_ductPrefsKey);
+    final raw = widget.session == null
+        ? ref.read(sharedPreferencesProvider).getString(_ductPrefsKey)
+        : jsonEncode(widget.session!.initialData);
     if (raw != null) {
       try {
         final data = jsonDecode(raw) as Map<String, dynamic>;
@@ -745,6 +864,7 @@ class _YorksV1DuctSizerScreenState
       }
     }
     if (mounted) {
+      widget.session?.ready = true;
       setState(() {
         _restoring = false;
         _result = _calculate(notify: false);
@@ -753,6 +873,7 @@ class _YorksV1DuctSizerScreenState
   }
 
   Map<String, Object?> _json() => {
+    ...?widget.session?.initialData,
     'app': 'duct-calc',
     'version': 1,
     'savedAt': DateTime.now().toIso8601String(),
@@ -791,12 +912,23 @@ class _YorksV1DuctSizerScreenState
         ],
       );
       if (file == null) return;
+      if (await file.length() > YorksCalculatorFiles.maximumBytes) {
+        throw const FormatException();
+      }
       final data =
           jsonDecode(utf8.decode(await file.readAsBytes()))
               as Map<String, dynamic>;
-      await ref
-          .read(sharedPreferencesProvider)
-          .setString(_ductPrefsKey, jsonEncode(data));
+      YorksCalculatorFiles.validate(data, expectedKind: 'duct');
+      if (widget.session != null) {
+        if (widget.session!.readOnly) return;
+        widget.session!.initialData
+          ..clear()
+          ..addAll(data);
+      } else {
+        await ref
+            .read(sharedPreferencesProvider)
+            .setString(_ductPrefsKey, jsonEncode(data));
+      }
       await _restore();
       if (mounted) _snack('Calculation imported.');
     } catch (_) {
@@ -812,23 +944,15 @@ class _YorksV1DuctSizerScreenState
   Future<void> _print() async {
     final result = _result ?? _calculate(notify: false);
     await Printing.layoutPdf(
-      onLayout: (format) async => _buildDuctPdf(result, format),
+      onLayout: (format) async =>
+          _buildDuctPdf(result, format, session: widget.session),
     );
   }
 
   Future<void> _saveFile(String name, List<int> bytes) async {
-    final location = await getSaveLocation(
-      suggestedName: name,
-      acceptedTypeGroups: const [
-        XTypeGroup(label: 'JSON', extensions: ['json']),
-      ],
-    );
-    if (location == null) return;
-    await XFile.fromData(
-      Uint8List.fromList(bytes),
-      name: name,
-      mimeType: _jsonMime,
-    ).saveTo(location.path);
+    if (!await downloadCalculatorFile(utf8.decode(bytes), filename: name)) {
+      return;
+    }
     if (mounted) _snack('File exported.');
   }
 
@@ -842,7 +966,8 @@ class _YorksV1DuctSizerScreenState
 }
 
 class YorksV1EspCalculatorScreen extends ConsumerStatefulWidget {
-  const YorksV1EspCalculatorScreen({super.key, this.initialDate});
+  const YorksV1EspCalculatorScreen({super.key, this.initialDate, this.session});
+  final YorksCalculatorEditorSession? session;
 
   /// Used when reopening a controlled calculation or restoring a draft. A new
   /// calculation continues to default to the current date.
@@ -877,6 +1002,14 @@ class _YorksV1EspCalculatorScreenState
     _date = TextEditingController(
       text: _dateText(widget.initialDate ?? DateTime.now()),
     );
+    final session = widget.session;
+    if (session != null) {
+      session.snapshot = _json;
+      session.importFile = _import;
+      session.exportFile = _export;
+      session.printFile = _print;
+      session.showFittings = _showFittings;
+    }
     Future<void>.microtask(_restore);
   }
 
@@ -898,14 +1031,16 @@ class _YorksV1EspCalculatorScreenState
 
   @override
   Widget build(BuildContext context) {
+    widget.session?.changed();
     final totals = YorksV1EngineeringCalculatorService.espTotals(
       _rows,
       _number(_safety.text),
     );
-    if (YorksMobileUi.isActive(context)) {
+    if (widget.session == null && YorksMobileUi.isActive(context)) {
       return _buildMobile(context, totals);
     }
-    return NexusPageShell(
+    return _calculatorPage(
+      session: widget.session,
       eyebrow: 'Engineering tools',
       title: 'ESP Calculator',
       description:
@@ -921,7 +1056,8 @@ class _YorksV1EspCalculatorScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _ProjectBanner(onChanged: (_) {}, value: 'Independent calculation'),
+          if (widget.session == null)
+            _ProjectBanner(onChanged: (_) {}, value: 'Independent calculation'),
           const SizedBox(height: AppSpacing.lg),
           _R35Card(
             child: Column(
@@ -1007,10 +1143,19 @@ class _YorksV1EspCalculatorScreenState
                       '${totals.incompleteRows} incomplete row${totals.incompleteRows == 1 ? '' : 's'}. Enter the required duct data or a manufacturer/manual ESP value before issuing the final calculation.',
                     ),
                   ),
-                _EspRows(
-                  rows: _rows,
-                  onChanged: _updateRow,
-                  onDelete: _deleteRow,
+                LayoutBuilder(
+                  builder: (context, constraints) =>
+                      widget.session != null && constraints.maxWidth < 600
+                      ? _FocusedEspRows(
+                          rows: _rows,
+                          onChanged: _updateRow,
+                          onDelete: _deleteRow,
+                        )
+                      : _EspRows(
+                          rows: _rows,
+                          onChanged: _updateRow,
+                          onDelete: _deleteRow,
+                        ),
                 ),
                 _EspSummary(
                   safety: _safety,
@@ -1182,6 +1327,15 @@ class _YorksV1EspCalculatorScreenState
     ),
   );
   void _duplicateLast() => setState(() {
+    if (_rows.isEmpty) {
+      _rows.add(
+        YorksV1EspRow(
+          id: 'esp-row-${DateTime.now().microsecondsSinceEpoch}',
+          fitting: 'Straight Duct',
+        ),
+      );
+      return;
+    }
     final last = _rows.last;
     _rows.add(
       last.copyWith(id: 'esp-row-${DateTime.now().microsecondsSinceEpoch}'),
@@ -1197,10 +1351,13 @@ class _YorksV1EspCalculatorScreenState
   });
 
   Map<String, Object?> _json() => {
+    ...?widget.session?.initialData,
     'app': 'esp-calc',
     'version': 1,
     'savedAt': DateTime.now().toIso8601String(),
     'header': {
+      ...?(widget.session?.initialData['header'] as Map?)
+          ?.cast<String, Object?>(),
       'projectName': _projectName.text,
       'projectNo': _projectNo.text,
       'systemNo': _systemNo.text,
@@ -1209,11 +1366,24 @@ class _YorksV1EspCalculatorScreenState
       'equipment': _equipment.text,
     },
     'safetyFactor': _safety.text,
-    'rows': _rows.map((row) => row.toJson()).toList(),
+    'rows': _rows
+        .map(
+          (row) => <String, Object?>{
+            ...?((widget.session?.initialData['rows'] as List?)
+                    ?.whereType<Map>()
+                    .where((e) => e['id'] == row.id)
+                    .firstOrNull)
+                ?.cast<String, Object?>(),
+            ...row.toJson(),
+          },
+        )
+        .toList(),
   };
 
   Future<void> _restore() async {
-    final raw = ref.read(sharedPreferencesProvider).getString(_espPrefsKey);
+    final raw = widget.session == null
+        ? ref.read(sharedPreferencesProvider).getString(_espPrefsKey)
+        : jsonEncode(widget.session!.initialData);
     if (raw != null) {
       try {
         final data = jsonDecode(raw) as Map<String, dynamic>;
@@ -1227,7 +1397,17 @@ class _YorksV1EspCalculatorScreenState
         _equipment.text = '${header['equipment'] ?? ''}';
         _safety.text = '${data['safetyFactor'] ?? '10'}';
         final rows = data['rows'];
-        if (rows is List && rows.isNotEmpty) {
+        if (rows is List) {
+          // Legacy imports may omit row identities. Assign them once while
+          // retaining the complete row so later edits/reordering keep extensions.
+          if (widget.session != null) {
+            for (var index = 0; index < rows.length; index++) {
+              final row = Map<String, dynamic>.from(rows[index] as Map);
+              row['id'] ??= const Uuid().v4();
+              rows[index] = row;
+            }
+            widget.session!.initialData['rows'] = rows;
+          }
           _rows
             ..clear()
             ..addAll(
@@ -1241,7 +1421,10 @@ class _YorksV1EspCalculatorScreenState
         }
       } catch (_) {}
     }
-    if (mounted) setState(() => _restoring = false);
+    if (mounted) {
+      widget.session?.ready = true;
+      setState(() => _restoring = false);
+    }
   }
 
   Future<void> _save() async {
@@ -1264,12 +1447,23 @@ class _YorksV1EspCalculatorScreenState
         ],
       );
       if (file == null) return;
+      if (await file.length() > YorksCalculatorFiles.maximumBytes) {
+        throw const FormatException();
+      }
       final data =
           jsonDecode(utf8.decode(await file.readAsBytes()))
               as Map<String, dynamic>;
-      await ref
-          .read(sharedPreferencesProvider)
-          .setString(_espPrefsKey, jsonEncode(data));
+      YorksCalculatorFiles.validate(data, expectedKind: 'esp');
+      if (widget.session != null) {
+        if (widget.session!.readOnly) return;
+        widget.session!.initialData
+          ..clear()
+          ..addAll(data);
+      } else {
+        await ref
+            .read(sharedPreferencesProvider)
+            .setString(_espPrefsKey, jsonEncode(data));
+      }
       await _restore();
       if (mounted) _snack('Calculation imported.');
     } catch (_) {
@@ -1282,23 +1476,19 @@ class _YorksV1EspCalculatorScreenState
     utf8.encode(jsonEncode(_json())),
   );
   Future<void> _saveFile(String name, List<int> bytes) async {
-    final location = await getSaveLocation(
-      suggestedName: name,
-      acceptedTypeGroups: const [
-        XTypeGroup(label: 'JSON', extensions: ['json']),
-      ],
-    );
-    if (location == null) return;
-    await XFile.fromData(
-      Uint8List.fromList(bytes),
-      name: name,
-      mimeType: _jsonMime,
-    ).saveTo(location.path);
+    if (!await downloadCalculatorFile(utf8.decode(bytes), filename: name)) {
+      return;
+    }
     if (mounted) _snack('File exported.');
   }
 
   Future<void> _print() => Printing.layoutPdf(
-    onLayout: (format) => _buildEspPdf(_rows, _number(_safety.text), format),
+    onLayout: (format) => _buildEspPdf(
+      _rows,
+      _number(_safety.text),
+      format,
+      session: widget.session,
+    ),
   );
 
   Future<void> _showFittings() => showDialog<void>(
@@ -1516,8 +1706,69 @@ class _EspRows extends StatelessWidget {
       const {'Straight Duct', 'Reducer', 'Expansion'}.contains(row.fitting);
 }
 
+class _FocusedEspRows extends ConsumerStatefulWidget {
+  const _FocusedEspRows({
+    required this.rows,
+    required this.onChanged,
+    required this.onDelete,
+  });
+  final List<YorksV1EspRow> rows;
+  final ValueChanged<YorksV1EspRow> onChanged;
+  final ValueChanged<String> onDelete;
+  @override
+  ConsumerState<_FocusedEspRows> createState() => _FocusedEspRowsState();
+}
+
+class _FocusedEspRowsState extends ConsumerState<_FocusedEspRows> {
+  String? selected;
+  int previousCount = 0;
+  @override
+  Widget build(BuildContext context) {
+    if (widget.rows.isEmpty) return const SizedBox.shrink();
+    if (widget.rows.length > previousCount ||
+        !widget.rows.any((r) => r.id == selected)) {
+      selected = widget.rows.last.id;
+    }
+    previousCount = widget.rows.length;
+    final index = widget.rows.indexWhere((r) => r.id == selected);
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+          child: DropdownButtonFormField<String>(
+            key: ValueKey(selected),
+            initialValue: selected,
+            isExpanded: true,
+            decoration: InputDecoration(
+              labelText: YorksCalculatorStrings.row.active(
+                ref.watch(languageProvider),
+              ),
+            ),
+            items: [
+              for (var i = 0; i < widget.rows.length; i++)
+                DropdownMenuItem(
+                  value: widget.rows[i].id,
+                  child: Text('${i + 1}. ${widget.rows[i].fitting}'),
+                ),
+            ],
+            onChanged: (value) => setState(() => selected = value),
+          ),
+        ),
+        _EspMobileRow(
+          key: ValueKey(selected),
+          index: index,
+          row: widget.rows[index],
+          onChanged: widget.onChanged,
+          onDelete: widget.onDelete,
+        ),
+      ],
+    );
+  }
+}
+
 class _EspMobileRow extends StatelessWidget {
   const _EspMobileRow({
+    super.key,
     required this.index,
     required this.row,
     required this.onChanged,
@@ -2543,11 +2794,22 @@ class _Warning extends StatelessWidget {
 double _number(String value) =>
     double.tryParse(value.trim().replaceAll(',', '.')) ?? 0;
 
+Future<pw.ThemeData> _calculatorPdfTheme() async => pw.ThemeData.withFont(
+  base: pw.Font.ttf(await rootBundle.load('assets/fonts/NotoSans-Regular.ttf')),
+  bold: pw.Font.ttf(await rootBundle.load('assets/fonts/NotoSans-Bold.ttf')),
+  fontFallback: [
+    pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSansArabic-Regular.ttf'),
+    ),
+  ],
+);
+
 Future<Uint8List> _buildDuctPdf(
   YorksV1DuctCalculationResult result,
-  PdfPageFormat format,
-) async {
-  final document = pw.Document();
+  PdfPageFormat format, {
+  YorksCalculatorEditorSession? session,
+}) async {
+  final document = pw.Document(theme: await _calculatorPdfTheme());
   document.addPage(
     pw.Page(
       pageFormat: format,
@@ -2558,7 +2820,19 @@ Future<Uint8List> _buildDuctPdf(
             'YORKS AC. & REF. · DUCT SIZER',
             style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
           ),
+          if (session != null)
+            pw.Text(
+              '${session.title} · ${session.scope} · ${session.revision}',
+            ),
           pw.SizedBox(height: 16),
+          if (!result.valid)
+            pw.Text(
+              'Incomplete calculation: complete the required inputs before using these results.',
+            ),
+          if (session?.snapshot != null)
+            pw.Text(
+              'Inputs: ${session!.snapshot!()['flow']} ${session.snapshot!()['unitSystem'] == 'SI' ? 'L/s' : 'CFM'}; ${session.snapshot!()['material']}; ${session.snapshot!()['condition']}',
+            ),
           pw.Text(
             'Checked duct size: ${result.widthMillimetres.toStringAsFixed(0)} × ${result.heightMillimetres.toStringAsFixed(0)} mm',
           ),
@@ -2600,10 +2874,11 @@ Future<Uint8List> _buildDuctPdf(
 Future<Uint8List> _buildEspPdf(
   List<YorksV1EspRow> rows,
   double safety,
-  PdfPageFormat format,
-) async {
+  PdfPageFormat format, {
+  YorksCalculatorEditorSession? session,
+}) async {
   final totals = YorksV1EngineeringCalculatorService.espTotals(rows, safety);
-  final document = pw.Document();
+  final document = pw.Document(theme: await _calculatorPdfTheme());
   document.addPage(
     pw.MultiPage(
       pageFormat: format,
@@ -2612,6 +2887,8 @@ Future<Uint8List> _buildEspPdf(
           'YORKS AC. & REF. · EXTERNAL STATIC PRESSURE',
           style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
         ),
+        if (session != null)
+          pw.Text('${session.title} · ${session.scope} · ${session.revision}'),
         pw.SizedBox(height: 16),
         pw.TableHelper.fromTextArray(
           data: [
@@ -2622,6 +2899,7 @@ Future<Uint8List> _buildEspPdf(
               'Width mm',
               'Height mm',
               'Length m',
+              'Diameter mm',
               'Manual ESP',
               'Loss Pa',
             ],
@@ -2633,6 +2911,7 @@ Future<Uint8List> _buildEspPdf(
                 rows[i].widthMillimetres,
                 rows[i].heightMillimetres,
                 rows[i].lengthMetres,
+                rows[i].diameterMillimetres,
                 rows[i].manualEspPa,
                 YorksV1EngineeringCalculatorService.espRow(
                   rows[i],
@@ -2646,6 +2925,10 @@ Future<Uint8List> _buildEspPdf(
         ),
         pw.Text('Safety factor: ${safety.toStringAsFixed(1)}%'),
         pw.Text('Final ESP: ${totals.finalPa.toStringAsFixed(2)} Pa'),
+        if (totals.incompleteRows > 0)
+          pw.Text(
+            '${totals.incompleteRows} incomplete rows - complete inputs before using these results.',
+          ),
       ],
     ),
   );

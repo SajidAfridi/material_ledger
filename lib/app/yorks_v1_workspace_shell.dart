@@ -1,3 +1,4 @@
+import '../shared/models/yorks_v1_calculator_strings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -479,6 +480,8 @@ class _YorksV1WorkspaceShellState extends ConsumerState<YorksV1WorkspaceShell> {
       final path = destination.path;
       if (path == null) continue;
       if (location == path ||
+          (path == RoutePaths.yorksV1Calculators &&
+              location.startsWith('${RoutePaths.yorksV1Calculators}/')) ||
           (path == RoutePaths.yorksV1Accounts &&
               location.startsWith('${RoutePaths.yorksV1Accounts}/')) ||
           (path == RoutePaths.yorksV1Projects &&
@@ -748,6 +751,14 @@ List<_YorksDestination> _destinationsFor(
         teamChatEnabled: teamChatEnabled,
         chatUnread: chatUnread,
       ),
+    if (const bool.fromEnvironment('YORKS_V1_CALCULATOR_WORKSPACE'))
+      _YorksDestination(
+        label: YorksCalculatorStrings.calculators,
+        icon: Icons.calculate_outlined,
+        selectedIcon: Icons.calculate,
+        path: RoutePaths.yorksV1Calculators,
+        group: YorksV1ShellStrings.engineeringTools,
+      ),
     ...accountsOffice,
     if (analyticsEnabled)
       _YorksDestination(
@@ -896,9 +907,14 @@ List<_YorksDestination> _destinationsFor(
     if (path == RoutePaths.activityLog) {
       return allows(YorksV1CapabilityKeys.auditView, role == YorksV1Role.admin);
     }
+    if (path == RoutePaths.yorksV1Calculators) {
+      return role != null &&
+          const bool.fromEnvironment('YORKS_V1_CALCULATOR_WORKSPACE');
+    }
     if (path == RoutePaths.yorksV1DuctSizer ||
         path == RoutePaths.yorksV1EspCalculator) {
-      return role?.isEngineering ?? false;
+      return !const bool.fromEnvironment('YORKS_V1_CALCULATOR_WORKSPACE') &&
+          (role?.isEngineering ?? false);
     }
     return false;
   }
