@@ -152,3 +152,7 @@ saved calculations and grants remain intact.
 
 Published interface evidence and rollback are recorded in
 [CALCULATOR_UI_RELEASE_20261006.md](CALCULATOR_UI_RELEASE_20261006.md).
+
+The later interaction refinement, keyboard/history contract and explicit
+pre-production audit gate are in
+[CALCULATOR_INTERACTION_POLISH_20261007.md](CALCULATOR_INTERACTION_POLISH_20261007.md).

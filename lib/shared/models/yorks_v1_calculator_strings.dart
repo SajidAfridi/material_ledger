@@ -1,6 +1,210 @@
 import 'app_strings.dart';
 
 abstract final class YorksCalculatorStrings {
+  static const importAction = TranslatableString(
+    en: 'Import',
+    ar: 'استيراد',
+    ur: 'درآمد',
+    hi: 'आयात',
+  );
+  static const exportAction = TranslatableString(
+    en: 'Export',
+    ar: 'تصدير',
+    ur: 'برآمد',
+    hi: 'निर्यात',
+  );
+  static const units = TranslatableString(
+    en: 'Units',
+    ar: 'الوحدات',
+    ur: 'اکائیاں',
+    hi: 'इकाइयाँ',
+  );
+  static const undo = TranslatableString(
+    en: 'Undo',
+    ar: 'تراجع',
+    ur: 'واپس کریں',
+    hi: 'पूर्ववत करें',
+  );
+  static const redo = TranslatableString(
+    en: 'Redo',
+    ar: 'إعادة',
+    ur: 'دوبارہ کریں',
+    hi: 'फिर करें',
+  );
+  static const shortcuts = TranslatableString(
+    en: 'Keyboard shortcuts',
+    ar: 'اختصارات لوحة المفاتيح',
+    ur: 'کی بورڈ شارٹ کٹس',
+    hi: 'कीबोर्ड शॉर्टकट',
+  );
+  static const calculatorType = TranslatableString(
+    en: 'Calculator type',
+    ar: 'نوع الحاسبة',
+    ur: 'کیلکولیٹر کی قسم',
+    hi: 'कैलकुलेटर प्रकार',
+  );
+  static const chooseProject = TranslatableString(
+    en: 'Choose a project',
+    ar: 'اختر مشروعًا',
+    ur: 'پروجیکٹ منتخب کریں',
+    hi: 'परियोजना चुनें',
+  );
+  static const generalHelp = TranslatableString(
+    en: 'Independent of a project',
+    ar: 'مستقل عن المشروع',
+    ur: 'پروجیکٹ سے الگ',
+    hi: 'परियोजना से स्वतंत्र',
+  );
+  static const projectHelp = TranslatableString(
+    en: 'Available within a project',
+    ar: 'متاح ضمن مشروع',
+    ur: 'پروجیکٹ کے اندر دستیاب',
+    hi: 'परियोजना में उपलब्ध',
+  );
+  static const fileActions = TranslatableString(
+    en: 'Files',
+    ar: 'الملفات',
+    ur: 'فائلیں',
+    hi: 'फ़ाइलें',
+  );
+  static const importFile = TranslatableString(
+    en: 'Import a JSON file',
+    ar: 'استيراد ملف JSON',
+    ur: 'JSON فائل درآمد کریں',
+    hi: 'JSON फ़ाइल आयात करें',
+  );
+  static const importFileHelp = TranslatableString(
+    en: 'Create a calculation from an exported Duct or ESP file. Up to 1 MB.',
+    ar: 'أنشئ حسابًا من ملف Duct أو ESP مُصدّر. حتى 1 ميغابايت.',
+    ur: 'برآمد شدہ ڈکٹ یا ESP فائل سے حساب بنائیں۔ 1 MB تک۔',
+    hi: 'निर्यात की गई डक्ट या ESP फ़ाइल से गणना बनाएँ। 1 MB तक।',
+  );
+  static const deviceImportHelp = TranslatableString(
+    en: 'Previous calculations are stored in this browser on this device. They are not transferred automatically from another device or browser.',
+    ar: 'تُحفظ الحسابات السابقة في هذا المتصفح على هذا الجهاز. لا تُنقل تلقائيًا من جهاز أو متصفح آخر.',
+    ur: 'پچھلے حساب اسی آلے کے اسی براؤزر میں محفوظ ہیں۔ دوسرے آلے یا براؤزر سے خودکار منتقل نہیں ہوتے۔',
+    hi: 'पिछली गणनाएँ इसी डिवाइस के इसी ब्राउज़र में हैं। दूसरे डिवाइस या ब्राउज़र से अपने आप नहीं आतीं।',
+  );
+  static const noDeviceCalculations = TranslatableString(
+    en: 'No previous calculations on this device',
+    ar: 'لا توجد حسابات سابقة على هذا الجهاز',
+    ur: 'اس آلے پر کوئی پچھلا حساب نہیں',
+    hi: 'इस डिवाइस पर कोई पिछली गणना नहीं',
+  );
+  static const deviceUnavailable = TranslatableString(
+    en: 'No saved calculation',
+    ar: 'لا يوجد حساب محفوظ',
+    ur: 'کوئی محفوظ حساب نہیں',
+    hi: 'कोई सहेजी गणना नहीं',
+  );
+  static const deviceInvalid = TranslatableString(
+    en: 'Saved data needs a valid JSON file',
+    ar: 'تتطلب البيانات المحفوظة ملف JSON صالحًا',
+    ur: 'محفوظ ڈیٹا کے لیے درست JSON فائل درکار ہے',
+    hi: 'सहेजे डेटा के लिए मान्य JSON फ़ाइल चाहिए',
+  );
+  static const deviceReady = TranslatableString(
+    en: 'Ready to import',
+    ar: 'جاهز للاستيراد',
+    ur: 'درآمد کے لیے تیار',
+    hi: 'आयात के लिए तैयार',
+  );
+  static const close = TranslatableString(
+    en: 'Close',
+    ar: 'إغلاق',
+    ur: 'بند کریں',
+    hi: 'बंद करें',
+  );
+  static const accessHelp = TranslatableString(
+    en: 'Choose who can view or edit this calculation. Project access is still required for project calculations.',
+    ar: 'اختر من يمكنه عرض هذا الحساب أو تعديله. تظل صلاحية المشروع مطلوبة لحساباته.',
+    ur: 'چنیں کون یہ حساب دیکھ یا بدل سکتا ہے۔ پروجیکٹ حساب کے لیے پروجیکٹ تک رسائی ضروری ہے۔',
+    hi: 'चुनें कौन इस गणना को देख या संपादित कर सकता है। परियोजना गणना के लिए परियोजना पहुँच आवश्यक है।',
+  );
+  static const peopleWithAccess = TranslatableString(
+    en: 'People with access',
+    ar: 'الأشخاص المصرح لهم',
+    ur: 'رسائی والے افراد',
+    hi: 'पहुँच वाले लोग',
+  );
+  static const addPeople = TranslatableString(
+    en: 'Add a person',
+    ar: 'إضافة شخص',
+    ur: 'فرد شامل کریں',
+    hi: 'व्यक्ति जोड़ें',
+  );
+  static const choosePerson = TranslatableString(
+    en: 'Search people',
+    ar: 'البحث عن أشخاص',
+    ur: 'افراد تلاش کریں',
+    hi: 'लोग खोजें',
+  );
+  static const accessLevel = TranslatableString(
+    en: 'Access level',
+    ar: 'مستوى الوصول',
+    ur: 'رسائی کی سطح',
+    hi: 'पहुँच स्तर',
+  );
+  static const noSharedPeople = TranslatableString(
+    en: 'No individual access grants yet',
+    ar: 'لا توجد صلاحيات فردية بعد',
+    ur: 'ابھی کوئی انفرادی رسائی نہیں',
+    hi: 'अभी कोई व्यक्तिगत पहुँच नहीं',
+  );
+  static const viewHelp = TranslatableString(
+    en: 'Open, export and print',
+    ar: 'فتح وتصدير وطباعة',
+    ur: 'کھولیں، برآمد اور پرنٹ کریں',
+    hi: 'खोलें, निर्यात करें और प्रिंट करें',
+  );
+  static const editHelp = TranslatableString(
+    en: 'Change inputs and save revisions',
+    ar: 'تغيير المدخلات وحفظ الإصدارات',
+    ur: 'قدریں بدلیں اور ورژن محفوظ کریں',
+    hi: 'इनपुट बदलें और संशोधन सहेजें',
+  );
+  static const grantAccess = TranslatableString(
+    en: 'Grant access',
+    ar: 'منح الوصول',
+    ur: 'رسائی دیں',
+    hi: 'पहुँच दें',
+  );
+  static const accessSaved = TranslatableString(
+    en: 'Access updated',
+    ar: 'تم تحديث الوصول',
+    ur: 'رسائی اپ ڈیٹ ہو گئی',
+    hi: 'पहुँच अपडेट हुई',
+  );
+  static const addRow = TranslatableString(
+    en: 'Add row',
+    ar: 'إضافة صف',
+    ur: 'قطار شامل کریں',
+    hi: 'पंक्ति जोड़ें',
+  );
+  static const duplicateRow = TranslatableString(
+    en: 'Duplicate row',
+    ar: 'تكرار الصف',
+    ur: 'قطار کی نقل',
+    hi: 'पंक्ति की प्रतिलिपि',
+  );
+  static const rowShortcutHelp = TranslatableString(
+    en: 'Add or duplicate below the active row.',
+    ar: 'أضف أو كرر أسفل الصف النشط.',
+    ur: 'فعال قطار کے نیچے شامل کریں یا نقل بنائیں۔',
+    hi: 'सक्रिय पंक्ति के नीचे जोड़ें या प्रतिलिपि बनाएँ।',
+  );
+  static const replaceInputs = TranslatableString(
+    en: 'Replace current inputs?',
+    ar: 'استبدال المدخلات الحالية؟',
+    ur: 'موجودہ قدریں بدلیں؟',
+    hi: 'वर्तमान इनपुट बदलें?',
+  );
+  static const replaceHelp = TranslatableString(
+    en: 'Import replaces the current inputs. You can undo it before saving.',
+    ar: 'يستبدل الاستيراد المدخلات الحالية. يمكنك التراجع قبل الحفظ.',
+    ur: 'درآمد موجودہ قدریں بدل دے گی۔ محفوظ کرنے سے پہلے واپس کر سکتے ہیں۔',
+    hi: 'आयात वर्तमान इनपुट बदलता है। सहेजने से पहले पूर्ववत कर सकते हैं।',
+  );
   static const start = TranslatableString(
     en: 'Start a calculation',
     ar: 'ابدأ حسابًا',

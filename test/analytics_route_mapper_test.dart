@@ -4,6 +4,24 @@ import 'package:material_ledger/shared/services/analytics_route_mapper.dart';
 
 void main() {
   test(
+    'calculator routes never put saved identifiers into telemetry screens',
+    () {
+      expect(
+        AnalyticsRouteMapper.destinationFor(
+          Uri.parse('/tools/calculators'),
+        ).screen,
+        AnalyticsScreen.calculatorLibrary,
+      );
+      expect(
+        AnalyticsRouteMapper.destinationFor(
+          Uri.parse('/tools/calculators/private-record'),
+        ).screen,
+        AnalyticsScreen.calculatorEditor,
+      );
+    },
+  );
+
+  test(
     'Company routes cannot pollute project MR funnels or expose identifiers',
     () {
       expect(

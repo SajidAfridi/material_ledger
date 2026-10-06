@@ -119,6 +119,7 @@ explicit V7-to-V1 conflict resolution.
 
 The completed release is recorded in [CALCULATOR_PRODUCTION_RELEASE_20261006.md](CALCULATOR_PRODUCTION_RELEASE_20261006.md).
 The subsequent interface refinement is recorded in [CALCULATOR_UI_RELEASE_20261006.md](CALCULATOR_UI_RELEASE_20261006.md).
+The next staging-only audit candidate is described in [CALCULATOR_INTERACTION_POLISH_20261007.md](CALCULATOR_INTERACTION_POLISH_20261007.md).
 
 See [CALCULATOR_WORKSPACE.md](CALCULATOR_WORKSPACE.md) for the approved combined calculator home, view/edit sharing, data preservation and rollout boundary.
 

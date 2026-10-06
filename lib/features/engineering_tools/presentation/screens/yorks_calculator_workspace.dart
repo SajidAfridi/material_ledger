@@ -1,11 +1,15 @@
 import 'dart:async';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../shared/controllers/yorks_v1_calculator_controller.dart';
+import '../../../../shared/controllers/yorks_v1_calculator_edit_history.dart';
+import '../../../../shared/models/analytics_event.dart';
+import '../widgets/yorks_calculator_controls.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/yorks_v1_calculator_strings.dart';
 import '../../../../shared/models/yorks_v1_calculator_workspace.dart';
@@ -52,6 +56,9 @@ class _WorkspaceState extends ConsumerState<_Workspace> {
   YorksCalculatorController get c => widget.controller;
   final title = TextEditingController();
   final search = TextEditingController();
+  final editHistory = YorksCalculatorEditHistory();
+  final editorFocus = FocusNode(debugLabel: 'calculator-editor');
+  bool applyingHistory = false, atomicEdit = false;
   YorksCalculatorEditorSession? editor;
   String kind = 'duct', id = '', filter = 'all', scopeFilter = 'all';
   String? projectId, projectName;
@@ -65,9 +72,11 @@ class _WorkspaceState extends ConsumerState<_Workspace> {
   void initState() {
     super.initState();
     title.addListener(_changed);
+    HardwareKeyboard.instance.addHandler(_keyboard);
     if (widget.recordId != null) {
       exitGuard = ref.read(yorksCalculatorExitGuardProvider);
       exitGuard!.check = _canLeave;
+      exitGuard!.beforeNavigation = _beforeNavigation;
     }
     Future<void>.microtask(_initialize);
     refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
@@ -128,6 +137,12 @@ class _WorkspaceState extends ConsumerState<_Workspace> {
         projectName = record.projectName;
         title.text = record.title;
         _setEditor(record.payload);
+        c.track(
+          AnalyticsEvent.calculatorOpened,
+          kind: record.kind,
+          scope: record.projectId == null ? 'general' : 'project',
+          source: 'route',
+        );
       }
     }
   }
@@ -135,10 +150,12 @@ class _WorkspaceState extends ConsumerState<_Workspace> {
   void _setEditor(Map<String, dynamic> data, {bool unsaved = false}) {
     if (!mounted) return;
     firstSnapshot = true;
+    allowPop = false;
     editorGeneration++;
     editor = YorksCalculatorEditorSession(
       initialData: data,
       onChanged: _changed,
+      onAction: (action) => _track(action),
     );
     baseline = '';
     lastFingerprint = '';
@@ -147,27 +164,127 @@ class _WorkspaceState extends ConsumerState<_Workspace> {
   }
 
   void _changed() {
-    if (!mounted || editor?.snapshot == null || editor?.ready != true) return;
+    if (!mounted ||
+        applyingHistory ||
+        editor?.snapshot == null ||
+        editor?.ready != true) {
+      return;
+    }
     final fingerprint =
         '${title.text.trim()}|${YorksCalculatorFiles.fingerprint(Map<String, dynamic>.from(editor!.snapshot!()))}';
     if (firstSnapshot) {
       baseline = fingerprint;
       firstSnapshot = false;
+      editHistory.reset(_editSnapshot());
     }
     final next = c.record == null || fingerprint != baseline;
     if (lastFingerprint == fingerprint && next == dirty) return;
     lastFingerprint = fingerprint;
+    editHistory.record(_editSnapshot(), atomic: atomicEdit);
+    atomicEdit = false;
     setState(() => dirty = next);
   }
 
   @override
   void dispose() {
-    if (exitGuard?.check == _canLeave) exitGuard!.check = null;
+    if (exitGuard?.check == _canLeave) {
+      exitGuard!.check = null;
+      exitGuard!.beforeNavigation = null;
+    }
+    HardwareKeyboard.instance.removeHandler(_keyboard);
+    editorFocus.dispose();
     refreshTimer?.cancel();
     searchTimer?.cancel();
     title.dispose();
     search.dispose();
     super.dispose();
+  }
+
+  bool get _editable =>
+      editor?.ready == true &&
+      !c.busy &&
+      !c.hasPending &&
+      !c.denied &&
+      (c.record?.canEdit ?? c.canCreate);
+  Map<String, dynamic> _editSnapshot() => {
+    'title': title.text,
+    'payload': editor!.snapshot!(),
+  };
+  void _track(String action, {String source = 'button'}) => c.track(
+    AnalyticsEvent.calculatorInteraction,
+    kind: kind,
+    scope: projectId == null ? 'general' : 'project',
+    action: action,
+    source: source,
+  );
+  Future<bool> _beforeNavigation() async {
+    final accepted = await _canLeave();
+    if (accepted && mounted) setState(() => allowPop = true);
+    return accepted;
+  }
+
+  Future<void> _history({required bool redo, String source = 'button'}) async {
+    if (!_editable) return;
+    _changed();
+    final value = redo ? editHistory.redo() : editHistory.undo();
+    if (value == null) return;
+    applyingHistory = true;
+    title.text = value['title'] as String;
+    await editor!.restoreData?.call(
+      Map<String, dynamic>.from(value['payload'] as Map),
+    );
+    applyingHistory = false;
+    if (!mounted) return;
+    lastFingerprint =
+        '${title.text.trim()}|${YorksCalculatorFiles.fingerprint(Map<String, dynamic>.from(editor!.snapshot!()))}';
+    setState(() => dirty = c.record == null || lastFingerprint != baseline);
+    _track(redo ? 'redo' : 'undo', source: source);
+  }
+
+  void _rowAction({required bool duplicate, String source = 'button'}) {
+    if (!_editable || kind != 'esp') return;
+    _changed();
+    editHistory.checkpoint();
+    atomicEdit = true;
+    (duplicate ? editor!.duplicateRow : editor!.addRow)?.call();
+    _track(duplicate ? 'row_duplicate' : 'row_add', source: source);
+  }
+
+  bool _keyboard(KeyEvent event) {
+    if (event is! KeyDownEvent || widget.recordId == null) return false;
+    final focused = FocusManager.instance.primaryFocus;
+    if (focused != editorFocus &&
+        !(focused?.ancestors.contains(editorFocus) ?? false)) {
+      return false;
+    }
+    final keyboard = HardwareKeyboard.instance;
+    if (!keyboard.isControlPressed && !keyboard.isMetaPressed) return false;
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.keyS &&
+        !keyboard.isAltPressed &&
+        !keyboard.isShiftPressed) {
+      if ((!c.busy && c.hasPending) || (_editable && dirty)) {
+        unawaited(_save(source: 'keyboard'));
+      }
+      return true;
+    }
+    if (key == LogicalKeyboardKey.keyP &&
+        !keyboard.isAltPressed &&
+        !keyboard.isShiftPressed) {
+      unawaited(_output(print: true, source: 'keyboard'));
+      return true;
+    }
+    if (key == LogicalKeyboardKey.enter && kind == 'esp') {
+      if (keyboard.isShiftPressed && !keyboard.isAltPressed) {
+        _rowAction(duplicate: false, source: 'keyboard');
+        return true;
+      }
+      if (keyboard.isAltPressed && !keyboard.isShiftPressed) {
+        _rowAction(duplicate: true, source: 'keyboard');
+        return true;
+      }
+    }
+    return false;
   }
 
   Future<bool> _canLeave() async {
@@ -199,8 +316,10 @@ class _WorkspaceState extends ConsumerState<_Workspace> {
     }
   }
 
-  Future<void> _save() async {
-    if (editor?.snapshot == null || title.text.trim().isEmpty) return;
+  Future<void> _save({String source = 'button'}) async {
+    if (c.busy || editor?.snapshot == null || title.text.trim().isEmpty) return;
+    _changed();
+    editHistory.checkpoint();
     final result = await c.save({
       'id': id,
       'title': title.text.trim(),
@@ -208,7 +327,7 @@ class _WorkspaceState extends ConsumerState<_Workspace> {
       'project_id': projectId,
       'expected_version': c.record?.version ?? 0,
       'payload': editor!.snapshot!(),
-    });
+    }, source: source);
     if (result != null && mounted) {
       ref.invalidate(yorksCalculatorControllerProvider('library'));
       baseline =
@@ -229,134 +348,273 @@ class _WorkspaceState extends ConsumerState<_Workspace> {
       return;
     }
     if (!mounted) return;
+    c.track(
+      AnalyticsEvent.calculatorInteraction,
+      kind: type ?? 'all',
+      action: 'create_open',
+    );
     final name = TextEditingController();
-    String selected = type ?? 'duct';
-    String? project;
+    var selected = type ?? 'duct';
+    var project = 'general';
+    var scopeValid = true;
     final value = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialog) => AlertDialog(
-          title: Text(t(S.newCalculation)),
-          content: SizedBox(
-            width: 440,
-            child: SingleChildScrollView(
+        builder: (context, setDialog) {
+          void create() {
+            if (name.text.trim().isEmpty || !scopeValid) return;
+            Navigator.pop(dialogContext, {
+              'title': name.text.trim(),
+              'kind': selected,
+              'project_id': project == 'general' ? null : project,
+              'project_name': (c.options['projects'] as List? ?? [])
+                  .where((p) => p['id'] == project)
+                  .firstOrNull?['name'],
+              'payload':
+                  payload ??
+                  {
+                    ...YorksCalculatorFiles.fresh(selected),
+                    if (selected == 'esp' && project != 'general')
+                      'header': {
+                        'projectName':
+                            (c.options['projects'] as List? ?? [])
+                                .where((p) => p['id'] == project)
+                                .firstOrNull?['name'] ??
+                            '',
+                      },
+                  },
+            });
+          }
+
+          return _dialogSurface(
+            context,
+            child: CallbackShortcuts(
+              bindings: {
+                const SingleActivator(LogicalKeyboardKey.enter, meta: true):
+                    create,
+                const SingleActivator(LogicalKeyboardKey.enter, control: true):
+                    create,
+              },
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(t(S.startHelp)),
-                  const SizedBox(height: 20),
+                  _dialogHeader(
+                    t(S.newCalculation),
+                    () => Navigator.pop(dialogContext),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(t(S.startHelp), style: AppTypography.bodyMedium),
+                  const SizedBox(height: AppSpacing.xxl),
+                  Text(t(S.calculatorType), style: AppTypography.labelLarge),
+                  const SizedBox(height: AppSpacing.sm),
+                  SegmentedButton<String>(
+                    segments: [
+                      ButtonSegment(
+                        value: 'duct',
+                        icon: const YorksDuctIcon(size: 18),
+                        label: Text(t(S.duct)),
+                        enabled: payload == null || selected == 'duct',
+                      ),
+                      ButtonSegment(
+                        value: 'esp',
+                        icon: const Icon(Icons.speed_outlined, size: 18),
+                        label: Text(t(S.esp)),
+                        enabled: payload == null || selected == 'esp',
+                      ),
+                    ],
+                    selected: {selected},
+                    showSelectedIcon: false,
+                    style: ButtonStyle(
+                      minimumSize: const WidgetStatePropertyAll(Size(0, 48)),
+                      padding: const WidgetStatePropertyAll(
+                        EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                      ),
+                      side: const WidgetStatePropertyAll(
+                        BorderSide(color: AppColors.line),
+                      ),
+                      shape: WidgetStatePropertyAll(
+                        RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(
+                            AppSpacing.radiusSm,
+                          ),
+                        ),
+                      ),
+                    ),
+                    onSelectionChanged: payload == null
+                        ? (v) => setDialog(() => selected = v.single)
+                        : null,
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                  Text(t(S.name), style: AppTypography.labelLarge),
+                  const SizedBox(height: AppSpacing.sm),
                   TextField(
                     controller: name,
                     autofocus: true,
                     maxLength: 160,
+                    style: AppTypography.bodyMedium.copyWith(
+                      color: AppColors.ink,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: t(S.name),
+                      counterStyle: AppTypography.bodySmall,
+                    ),
                     onChanged: (_) => setDialog(() {}),
-                    decoration: InputDecoration(labelText: t(S.name)),
+                    onSubmitted: (_) => create(),
                   ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: selected,
-                    items: [
-                      DropdownMenuItem(value: 'duct', child: Text(t(S.duct))),
-                      DropdownMenuItem(value: 'esp', child: Text(t(S.esp))),
-                    ],
-                    onChanged: payload != null
-                        ? null
-                        : (v) => setDialog(() => selected = v!),
-                    decoration: InputDecoration(labelText: t(S.calculators)),
-                  ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    initialValue: 'general',
-                    isExpanded: true,
-                    items: [
-                      DropdownMenuItem(
+                  const SizedBox(height: AppSpacing.md),
+                  YorksCalculatorSelect<String>(
+                    label: t(S.scope),
+                    onValidityChanged: (valid) {
+                      if (scopeValid != valid) {
+                        setDialog(() => scopeValid = valid);
+                      }
+                    },
+                    value: project,
+                    searchable: true,
+                    hint: t(S.chooseProject),
+                    entries: [
+                      DropdownMenuEntry(
                         value: 'general',
-                        child: Text(t(S.general)),
+                        label: t(S.general),
+                        leadingIcon: const Icon(
+                          Icons.folder_outlined,
+                          size: 18,
+                        ),
                       ),
                       for (final p in c.options['projects'] as List? ?? [])
-                        DropdownMenuItem(
+                        DropdownMenuEntry(
                           value: p['id'] as String,
-                          child: Text(
-                            p['name'] as String,
-                            overflow: TextOverflow.ellipsis,
+                          label: p['name'] as String,
+                          leadingIcon: const Icon(
+                            Icons.apartment_outlined,
+                            size: 18,
                           ),
                         ),
                     ],
-                    onChanged: (v) => project = v == 'general' ? null : v,
-                    decoration: InputDecoration(labelText: t(S.scope)),
+                    onSelected: (v) {
+                      if (v != null) setDialog(() => project = v);
+                    },
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    t(project == 'general' ? S.generalHelp : S.projectHelp),
+                    style: AppTypography.bodySmall,
+                  ),
+                  const SizedBox(height: AppSpacing.xxl),
+                  const Divider(height: 1),
+                  const SizedBox(height: AppSpacing.lg),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(dialogContext),
+                        child: Text(t(S.cancel)),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      FilledButton(
+                        onPressed: name.text.trim().isEmpty || !scopeValid
+                            ? null
+                            : create,
+                        child: Text(t(S.create)),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: Text(t(S.cancel)),
-            ),
-            FilledButton(
-              onPressed: name.text.trim().isEmpty
-                  ? null
-                  : () => Navigator.pop(dialogContext, {
-                      'title': name.text.trim(),
-                      'kind': selected,
-                      'project_id': project,
-                      'project_name': (c.options['projects'] as List? ?? [])
-                          .where((p) => p['id'] == project)
-                          .firstOrNull?['name'],
-                      'payload':
-                          payload ??
-                          {
-                            ...YorksCalculatorFiles.fresh(selected),
-                            if (selected == 'esp' && project != null)
-                              'header': {
-                                'projectName':
-                                    (c.options['projects'] as List? ?? [])
-                                        .where((p) => p['id'] == project)
-                                        .firstOrNull?['name'] ??
-                                    '',
-                              },
-                          },
-                    }),
-              child: Text(t(S.create)),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
-    // The dialog's exit animation can still reference its controller.
     Future<void>.delayed(const Duration(milliseconds: 300), name.dispose);
     if (value != null && mounted) {
+      c.track(
+        AnalyticsEvent.calculatorCreationStarted,
+        kind: value['kind'] as String,
+        scope: value['project_id'] == null ? 'general' : 'project',
+      );
       context.go('$yorksCalculatorsPath/new', extra: value);
+    } else {
+      c.track(
+        AnalyticsEvent.calculatorInteraction,
+        kind: selected,
+        action: 'create_cancel',
+        outcome: 'cancelled',
+      );
     }
   }
+
+  Widget _dialogSurface(BuildContext context, {required Widget child}) => Theme(
+    data: Theme.of(context).copyWith(
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: AppColors.surfaceContainerLowest,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.md,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+          borderSide: const BorderSide(color: AppColors.line),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+          borderSide: const BorderSide(color: AppColors.line),
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: AppColors.ink,
+          minimumSize: const Size(0, AppSpacing.minTapTarget),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+          ),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: AppColors.inkSecondary,
+          minimumSize: const Size(0, AppSpacing.minTapTarget),
+        ),
+      ),
+    ),
+    child: Dialog(
+      backgroundColor: AppColors.surfaceContainerLowest,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+      ),
+      insetPadding: const EdgeInsets.all(AppSpacing.lg),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 560,
+          maxHeight: MediaQuery.sizeOf(context).height - 2 * AppSpacing.lg,
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(AppSpacing.xxl),
+          child: child,
+        ),
+      ),
+    ),
+  );
+  Widget _dialogHeader(String label, VoidCallback? close) => Row(
+    children: [
+      Expanded(child: Text(label, style: AppTypography.titleLarge)),
+      IconButton(
+        tooltip: t(S.close),
+        onPressed: close,
+        icon: const Icon(Icons.close, size: 20),
+      ),
+    ],
+  );
 
   Future<void> _import({bool legacy = false}) async {
     try {
       String? raw;
       if (legacy) {
-        final selected = await showDialog<String>(
-          context: context,
-          builder: (context) => SimpleDialog(
-            title: Text(t(S.legacy)),
-            children: [
-              SimpleDialogOption(
-                onPressed: () => Navigator.pop(context, 'duct'),
-                child: Text(t(S.duct)),
-              ),
-              SimpleDialogOption(
-                onPressed: () => Navigator.pop(context, 'esp'),
-                child: Text(t(S.esp)),
-              ),
-            ],
-          ),
-        );
-        if (selected == null) return;
-        raw = ref
-            .read(sharedPreferencesProvider)
-            .getString('yorks_r35_${selected}_calculation');
-        if (raw == null) throw const FormatException();
+        await _deviceImports();
+        return;
       } else {
         final file = await openFile(
           acceptedTypeGroups: const [
@@ -370,6 +628,12 @@ class _WorkspaceState extends ConsumerState<_Workspace> {
         raw = await file.readAsString();
       }
       final data = YorksCalculatorFiles.decode(raw);
+      c.track(
+        AnalyticsEvent.calculatorImportResult,
+        kind: data['app'] == 'duct-calc' ? 'duct' : 'esp',
+        source: 'file',
+        outcome: 'confirmed',
+      );
       if (mounted) {
         await _new(
           type: data['app'] == 'duct-calc' ? 'duct' : 'esp',
@@ -377,6 +641,11 @@ class _WorkspaceState extends ConsumerState<_Workspace> {
         );
       }
     } catch (_) {
+      c.track(
+        AnalyticsEvent.calculatorImportResult,
+        source: 'file',
+        outcome: 'invalid',
+      );
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -395,49 +664,107 @@ class _WorkspaceState extends ConsumerState<_Workspace> {
         onPopInvokedWithResult: (didPop, result) {
           if (!didPop) _back();
         },
-        child: Material(
-          color: AppColors.surfaceContainerLowest,
-          child: Theme(
-            data: Theme.of(context).copyWith(
-              inputDecorationTheme: Theme.of(context).inputDecorationTheme
-                  .copyWith(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.md,
-                      vertical: AppSpacing.md,
+        child: Focus(
+          focusNode: editorFocus,
+          autofocus: widget.recordId != null,
+          child: Material(
+            color: AppColors.surfaceContainerLowest,
+            child: Theme(
+              data: Theme.of(context).copyWith(
+                inputDecorationTheme: Theme.of(context).inputDecorationTheme
+                    .copyWith(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.md,
+                        vertical: AppSpacing.md,
+                      ),
+                      constraints: const BoxConstraints(
+                        minHeight: AppSpacing.minTapTarget,
+                      ),
                     ),
-                    constraints: const BoxConstraints(
-                      minHeight: AppSpacing.minTapTarget,
+                filledButtonTheme: FilledButtonThemeData(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.ink,
+                    minimumSize: const Size(0, AppSpacing.minTapTarget),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.lg,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
                     ),
                   ),
-              filledButtonTheme: FilledButtonThemeData(
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.ink,
-                  minimumSize: const Size(0, AppSpacing.minTapTarget),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.lg,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                ),
+                textButtonTheme: TextButtonThemeData(
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.inkSecondary,
+                    minimumSize: const Size(0, AppSpacing.minTapTarget),
                   ),
                 ),
-              ),
-              textButtonTheme: TextButtonThemeData(
-                style: TextButton.styleFrom(
-                  foregroundColor: AppColors.inkSecondary,
-                  minimumSize: const Size(0, AppSpacing.minTapTarget),
-                ),
-              ),
-              iconButtonTheme: IconButtonThemeData(
-                style: IconButton.styleFrom(
-                  foregroundColor: AppColors.inkSecondary,
-                  minimumSize: const Size(
-                    AppSpacing.minTapTarget,
-                    AppSpacing.minTapTarget,
+                iconButtonTheme: IconButtonThemeData(
+                  style: IconButton.styleFrom(
+                    foregroundColor: AppColors.inkSecondary,
+                    minimumSize: const Size(
+                      AppSpacing.minTapTarget,
+                      AppSpacing.minTapTarget,
+                    ),
                   ),
                 ),
               ),
+              child: widget.recordId == null
+                  ? _home()
+                  : Shortcuts(
+                      shortcuts: {
+                        const SingleActivator(
+                          LogicalKeyboardKey.keyZ,
+                          control: true,
+                        ): const UndoTextIntent(
+                          SelectionChangedCause.keyboard,
+                        ),
+                        const SingleActivator(
+                          LogicalKeyboardKey.keyZ,
+                          meta: true,
+                        ): const UndoTextIntent(
+                          SelectionChangedCause.keyboard,
+                        ),
+                        const SingleActivator(
+                          LogicalKeyboardKey.keyZ,
+                          control: true,
+                          shift: true,
+                        ): const RedoTextIntent(
+                          SelectionChangedCause.keyboard,
+                        ),
+                        const SingleActivator(
+                          LogicalKeyboardKey.keyZ,
+                          meta: true,
+                          shift: true,
+                        ): const RedoTextIntent(
+                          SelectionChangedCause.keyboard,
+                        ),
+                        const SingleActivator(
+                          LogicalKeyboardKey.keyY,
+                          control: true,
+                        ): const RedoTextIntent(
+                          SelectionChangedCause.keyboard,
+                        ),
+                      },
+                      child: Actions(
+                        actions: {
+                          UndoTextIntent:
+                              YorksCalculatorHistoryAction<UndoTextIntent>(
+                                () => unawaited(
+                                  _history(redo: false, source: 'keyboard'),
+                                ),
+                              ),
+                          RedoTextIntent:
+                              YorksCalculatorHistoryAction<RedoTextIntent>(
+                                () => unawaited(
+                                  _history(redo: true, source: 'keyboard'),
+                                ),
+                              ),
+                        },
+                        child: _record(),
+                      ),
+                    ),
             ),
-            child: widget.recordId == null ? _home() : _record(),
           ),
         ),
       ),
@@ -546,6 +873,10 @@ class _WorkspaceState extends ConsumerState<_Workspace> {
                             const Duration(milliseconds: 250),
                             () {
                               c.search = v;
+                              c.track(
+                                AnalyticsEvent.calculatorInteraction,
+                                action: 'search',
+                              );
                               c.load();
                             },
                           );
@@ -577,6 +908,11 @@ class _WorkspaceState extends ConsumerState<_Workspace> {
                             onChanged: (v) {
                               setState(() => filter = v);
                               c.kind = v;
+                              c.track(
+                                AnalyticsEvent.calculatorInteraction,
+                                kind: v,
+                                action: 'filter_type',
+                              );
                               c.load();
                             },
                           ),
@@ -597,6 +933,11 @@ class _WorkspaceState extends ConsumerState<_Workspace> {
                             onChanged: (v) {
                               setState(() => scopeFilter = v);
                               c.scope = v;
+                              c.track(
+                                AnalyticsEvent.calculatorInteraction,
+                                scope: v,
+                                action: 'filter_scope',
+                              );
                               c.load();
                             },
                           ),
@@ -609,6 +950,10 @@ class _WorkspaceState extends ConsumerState<_Workspace> {
                             },
                             onChanged: (v) {
                               c.archived = v == 'archived';
+                              c.track(
+                                AnalyticsEvent.calculatorInteraction,
+                                action: 'filter_state',
+                              );
                               c.load();
                             },
                           ),
@@ -645,20 +990,33 @@ class _WorkspaceState extends ConsumerState<_Workspace> {
 
   Widget _importMenu() => PopupMenuButton<String>(
     tooltip: t(S.import),
-    icon: const Icon(Icons.file_upload_outlined, size: 20),
     onSelected: (v) => _import(legacy: v == 'legacy'),
     itemBuilder: (_) => [
       PopupMenuItem(
         value: 'file',
         enabled: c.canCreate,
-        child: Text(t(S.import)),
+        child: _menuLabel(Icons.file_upload_outlined, t(S.importFile)),
       ),
       PopupMenuItem(
         value: 'legacy',
         enabled: c.canCreate,
-        child: Text(t(S.legacy)),
+        child: _menuLabel(Icons.computer_outlined, t(S.legacy)),
       ),
     ],
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+      child: SizedBox(
+        height: AppSpacing.minTapTarget,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.file_upload_outlined, size: 18),
+            const SizedBox(width: AppSpacing.sm),
+            Text(t(S.import), style: AppTypography.labelLarge),
+          ],
+        ),
+      ),
+    ),
   );
 
   Widget _filterMenu({
@@ -845,7 +1203,11 @@ class _WorkspaceState extends ConsumerState<_Workspace> {
       color: AppColors.surfaceContainerLow,
       borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
     ),
-    child: Icon(icon, size: 22, color: AppColors.inkSecondary),
+    child: Center(
+      child: icon == Icons.air_outlined
+          ? const YorksDuctIcon()
+          : Icon(icon, size: 22, color: AppColors.inkSecondary),
+    ),
   );
 
   Widget _typeCard(
@@ -884,11 +1246,10 @@ class _WorkspaceState extends ConsumerState<_Workspace> {
     ),
   );
   Widget _record() {
-    if (c.denied) return Column(children: [_backButton(), _error()]);
+    if (c.denied) return Center(child: _error());
     if (editor == null) {
       return Column(
         children: [
-          _backButton(),
           if (c.busy) const LinearProgressIndicator(),
           if (c.error != null) _error(),
         ],
@@ -896,6 +1257,7 @@ class _WorkspaceState extends ConsumerState<_Workspace> {
     }
     final canEdit = (c.record?.canEdit ?? true) && !c.busy && !c.hasPending;
     editor!.readOnly = !canEdit;
+    editor!.rowAction = (duplicate) => _rowAction(duplicate: duplicate);
     editor!
       ..title = title.text
       ..scope = projectName ?? t(S.general)
@@ -913,80 +1275,142 @@ class _WorkspaceState extends ConsumerState<_Workspace> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      _backButton(),
-                      if (!compact) ...[
-                        const Icon(
-                          Icons.chevron_right,
-                          size: 16,
-                          color: AppColors.mutedLight,
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Text(
-                          t(kind == 'duct' ? S.duct : S.esp),
-                          style: AppTypography.bodySmall,
-                        ),
-                      ],
-                      const Spacer(),
-                      if (!compact) _printButton(),
-                      _recordMenu(canEdit, compact: compact),
-                      if (c.record?.canManage == true)
-                        IconButton(
-                          tooltip: t(S.share),
-                          onPressed: c.busy || dirty || c.hasPending
-                              ? null
-                              : _sharing,
-                          icon: const Icon(Icons.group_outlined, size: 20),
-                        ),
-                      const SizedBox(width: AppSpacing.sm),
-                      FilledButton.icon(
-                        onPressed:
-                            !c.busy &&
-                                ((canEdit && dirty) || c.hasPending) &&
-                                title.text.trim().isNotEmpty
-                            ? _save
-                            : null,
-                        icon: Icon(
-                          c.hasPending ? Icons.refresh : Icons.check,
-                          size: 18,
-                        ),
-                        label: Text(
-                          t(
-                            c.busy
-                                ? S.saving
-                                : c.hasPending
-                                ? S.retry
-                                : S.save,
+                  if (!compact)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Semantics(
+                            label: t(S.name),
+                            child: TextField(
+                              controller: title,
+                              readOnly: !canEdit,
+                              maxLength: 160,
+                              style: compact
+                                  ? AppTypography.titleLarge
+                                  : AppTypography.headlineMedium,
+                              decoration: InputDecoration(
+                                hintText: t(S.name),
+                                border: InputBorder.none,
+                                enabledBorder: InputBorder.none,
+                                focusedBorder: const UnderlineInputBorder(
+                                  borderSide: BorderSide(color: AppColors.blue),
+                                ),
+                                filled: false,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  vertical: AppSpacing.sm,
+                                ),
+                                counterText: '',
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  Semantics(
-                    label: t(S.name),
-                    child: TextField(
-                      controller: title,
-                      readOnly: !canEdit,
-                      maxLength: 160,
-                      style: AppTypography.headlineMedium,
-                      decoration: InputDecoration(
-                        hintText: t(S.name),
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: const UnderlineInputBorder(
-                          borderSide: BorderSide(color: AppColors.blue),
+                        const SizedBox(width: AppSpacing.md),
+
+                        _recordMenu(canEdit, compact: compact),
+                        if (c.record?.canManage == true)
+                          IconButton(
+                            tooltip: t(S.access),
+                            onPressed: c.busy || dirty || c.hasPending
+                                ? null
+                                : _sharing,
+                            icon: const Icon(Icons.group_outlined, size: 20),
+                          ),
+                        const SizedBox(width: AppSpacing.sm),
+                        FilledButton.icon(
+                          onPressed:
+                              !c.busy &&
+                                  ((canEdit && dirty) || c.hasPending) &&
+                                  title.text.trim().isNotEmpty
+                              ? _save
+                              : null,
+                          icon: Icon(
+                            c.hasPending ? Icons.refresh : Icons.check,
+                            size: 18,
+                          ),
+                          label: Text(
+                            t(
+                              c.busy
+                                  ? S.saving
+                                  : c.hasPending
+                                  ? S.retry
+                                  : S.save,
+                            ),
+                          ),
                         ),
-                        filled: false,
-                        contentPadding: const EdgeInsets.symmetric(
-                          vertical: AppSpacing.sm,
+                      ],
+                    ),
+                  if (compact) ...[
+                    Semantics(
+                      label: t(S.name),
+                      child: TextField(
+                        controller: title,
+                        readOnly: !canEdit,
+                        maxLength: 160,
+                        style: AppTypography.titleLarge,
+                        decoration: InputDecoration(
+                          hintText: t(S.name),
+                          border: InputBorder.none,
+                          filled: false,
+                          counterText: '',
+                          contentPadding: EdgeInsets.zero,
                         ),
-                        counterText: '',
-                        isDense: true,
                       ),
                     ),
-                  ),
+                    Row(
+                      children: [
+                        _historyControls(),
+                        const Spacer(),
+                        FilledButton(
+                          onPressed:
+                              !c.busy &&
+                                  ((canEdit && dirty) || c.hasPending) &&
+                                  title.text.trim().isNotEmpty
+                              ? _save
+                              : null,
+                          child: Text(
+                            t(
+                              c.busy
+                                  ? S.saving
+                                  : c.hasPending
+                                  ? S.retry
+                                  : S.save,
+                            ),
+                          ),
+                        ),
+                        _recordMenu(canEdit, compact: true),
+                      ],
+                    ),
+                    Wrap(
+                      spacing: AppSpacing.md,
+                      children: [
+                        _filesMenu(canEdit),
+                        if (c.record?.canManage == true)
+                          TextButton.icon(
+                            onPressed: c.busy || dirty || c.hasPending
+                                ? null
+                                : _sharing,
+                            icon: const Icon(Icons.group_outlined, size: 18),
+                            label: Text(t(S.access)),
+                          ),
+                      ],
+                    ),
+                  ] else
+                    Padding(
+                      padding: const EdgeInsets.only(top: AppSpacing.sm),
+                      child: Row(
+                        children: [
+                          _historyControls(),
+                          const SizedBox(width: AppSpacing.lg),
+                          _fileControls(canEdit),
+                          const Spacer(),
+                          if (kind == 'esp')
+                            Text(
+                              t(S.rowShortcutHelp),
+                              style: AppTypography.bodySmall,
+                            ),
+                        ],
+                      ),
+                    ),
                   const SizedBox(height: AppSpacing.sm),
                   Wrap(
                     spacing: AppSpacing.lg,
@@ -1086,11 +1510,310 @@ class _WorkspaceState extends ConsumerState<_Workspace> {
     );
   }
 
-  Widget _printButton() => TextButton.icon(
-    onPressed: () => _output(print: true),
-    icon: const Icon(Icons.print_outlined, size: 18),
-    label: Text(t(S.print)),
+  Widget _historyControls() => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      IconButton(
+        tooltip: '${t(S.undo)} (${YorksCalculatorShortcuts.undo})',
+        onPressed: _editable && editHistory.canUndo
+            ? () => _history(redo: false)
+            : null,
+        icon: const Icon(Icons.undo, size: 20),
+      ),
+      IconButton(
+        tooltip: '${t(S.redo)} (${YorksCalculatorShortcuts.redo})',
+        onPressed: _editable && editHistory.canRedo
+            ? () => _history(redo: true)
+            : null,
+        icon: const Icon(Icons.redo, size: 20),
+      ),
+    ],
   );
+
+  Widget _fileControls(bool canEdit) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      TextButton.icon(
+        onPressed: canEdit ? _editorImport : null,
+        icon: const Icon(Icons.file_upload_outlined, size: 18),
+        label: Text(t(S.importAction)),
+      ),
+      const SizedBox(width: AppSpacing.sm),
+      PopupMenuButton<String>(
+        tooltip: t(S.exportAction),
+        onSelected: (v) => _output(print: v == 'print'),
+        itemBuilder: (_) => [
+          PopupMenuItem(
+            value: 'export',
+            child: _menuLabel(Icons.file_download_outlined, t(S.export)),
+          ),
+          PopupMenuItem(
+            value: 'print',
+            child: _menuLabel(
+              Icons.print_outlined,
+              t(S.print),
+              shortcut: YorksCalculatorShortcuts.print,
+            ),
+          ),
+        ],
+        child: Container(
+          constraints: const BoxConstraints(minHeight: AppSpacing.minTapTarget),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+          decoration: BoxDecoration(
+            border: Border.all(color: AppColors.line),
+            borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.file_download_outlined, size: 18),
+              const SizedBox(width: AppSpacing.sm),
+              Text(t(S.exportAction), style: AppTypography.labelLarge),
+              const SizedBox(width: AppSpacing.sm),
+              const Icon(Icons.keyboard_arrow_down, size: 18),
+            ],
+          ),
+        ),
+      ),
+    ],
+  );
+
+  Widget _filesMenu(bool canEdit) => PopupMenuButton<String>(
+    tooltip: t(S.fileActions),
+    onSelected: (v) async {
+      switch (v) {
+        case 'import':
+          await _editorImport();
+        case 'export':
+          await _output(print: false);
+        case 'print':
+          await _output(print: true);
+      }
+    },
+    itemBuilder: (_) => [
+      PopupMenuItem(
+        value: 'import',
+        enabled: canEdit,
+        child: _menuLabel(Icons.file_upload_outlined, t(S.import)),
+      ),
+      const PopupMenuDivider(),
+      PopupMenuItem(
+        value: 'export',
+        child: _menuLabel(Icons.file_download_outlined, t(S.export)),
+      ),
+      PopupMenuItem(
+        value: 'print',
+        child: _menuLabel(
+          Icons.print_outlined,
+          t(S.print),
+          shortcut: YorksCalculatorShortcuts.print,
+        ),
+      ),
+    ],
+    child: Container(
+      constraints: const BoxConstraints(minHeight: AppSpacing.minTapTarget),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.line),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(t(S.fileActions), style: AppTypography.labelLarge),
+          const SizedBox(width: AppSpacing.sm),
+          const Icon(Icons.keyboard_arrow_down, size: 18),
+        ],
+      ),
+    ),
+  );
+  Widget _menuLabel(IconData icon, String label, {String? shortcut}) => Row(
+    children: [
+      Icon(icon, size: 18, color: AppColors.inkSecondary),
+      const SizedBox(width: AppSpacing.md),
+      Expanded(child: Text(label)),
+      if (shortcut != null) ...[
+        const SizedBox(width: AppSpacing.xl),
+        YorksShortcutHint(shortcut),
+      ],
+    ],
+  );
+
+  Future<void> _editorImport() async {
+    if (!_editable) return;
+    _track('import_open');
+    if (dirty) {
+      final accepted = await showDialog<bool>(
+        context: context,
+        builder: (context) => _dialogSurface(
+          context,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _dialogHeader(
+                t(S.replaceInputs),
+                () => Navigator.pop(context, false),
+              ),
+              Text(t(S.replaceHelp), style: AppTypography.bodyMedium),
+              const SizedBox(height: AppSpacing.xl),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: Text(t(S.cancel)),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: Text(t(S.import)),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+      if (accepted != true || !mounted) return;
+    }
+    _changed();
+    editHistory.checkpoint();
+    atomicEdit = true;
+    final outcome = await editor!.importFile?.call();
+    if (!mounted) return;
+    _changed();
+    editHistory.checkpoint();
+    atomicEdit = false;
+    c.track(
+      AnalyticsEvent.calculatorImportResult,
+      kind: kind,
+      scope: projectId == null ? 'general' : 'project',
+      source: 'file',
+      outcome: outcome?.name ?? 'failed',
+    );
+  }
+
+  Future<void> _showShortcuts() async {
+    _track('shortcuts_open');
+    await showDialog<void>(
+      context: context,
+      builder: (context) => _dialogSurface(
+        context,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _dialogHeader(t(S.shortcuts), () => Navigator.pop(context)),
+            for (final row in <(String, String)>[
+              (t(S.save), YorksCalculatorShortcuts.save),
+              (t(S.undo), YorksCalculatorShortcuts.undo),
+              (t(S.redo), YorksCalculatorShortcuts.redo),
+              (t(S.print), YorksCalculatorShortcuts.print),
+              if (kind == 'esp') (t(S.addRow), YorksCalculatorShortcuts.addRow),
+              if (kind == 'esp')
+                (t(S.duplicateRow), YorksCalculatorShortcuts.duplicateRow),
+            ])
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                child: Row(
+                  children: [
+                    Expanded(child: Text(row.$1)),
+                    YorksShortcutHint(row.$2),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _deviceImports() async {
+    final device = c.deviceImports();
+    final available = device.available;
+    final invalid = device.invalid;
+    c.track(
+      AnalyticsEvent.calculatorImportResult,
+      source: 'device',
+      outcome: available.isNotEmpty
+          ? 'ready'
+          : invalid.isNotEmpty
+          ? 'invalid'
+          : 'missing',
+    );
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (context) => _dialogSurface(
+        context,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _dialogHeader(t(S.legacy), () => Navigator.pop(context)),
+            const SizedBox(height: AppSpacing.sm),
+            Text(t(S.deviceImportHelp), style: AppTypography.bodyMedium),
+            const SizedBox(height: AppSpacing.xl),
+            if (available.isEmpty && invalid.isEmpty) ...[
+              Text(t(S.noDeviceCalculations), style: AppTypography.titleMedium),
+              const SizedBox(height: AppSpacing.lg),
+            ],
+            for (final tool in ['duct', 'esp'])
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                child: Material(
+                  color: AppColors.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.lg,
+                      vertical: AppSpacing.sm,
+                    ),
+                    leading: tool == 'duct'
+                        ? const YorksDuctIcon()
+                        : const Icon(Icons.speed_outlined),
+                    title: Text(t(tool == 'duct' ? S.duct : S.esp)),
+                    subtitle: Text(
+                      t(
+                        available.containsKey(tool)
+                            ? S.deviceReady
+                            : invalid.contains(tool)
+                            ? S.deviceInvalid
+                            : S.deviceUnavailable,
+                      ),
+                    ),
+                    trailing: available.containsKey(tool)
+                        ? const Icon(Icons.arrow_forward, size: 18)
+                        : null,
+                    onTap: available.containsKey(tool)
+                        ? () => Navigator.pop(context, tool)
+                        : null,
+                  ),
+                ),
+              ),
+            const SizedBox(height: AppSpacing.lg),
+            TextButton.icon(
+              onPressed: () => Navigator.pop(context, 'file'),
+              icon: const Icon(Icons.file_upload_outlined, size: 18),
+              label: Text(t(S.importFile)),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || selected == null) return;
+    if (selected == 'file') {
+      await _import();
+      return;
+    }
+    c.track(
+      AnalyticsEvent.calculatorImportResult,
+      kind: selected,
+      source: 'device',
+      outcome: 'confirmed',
+    );
+    await _new(type: selected, payload: available[selected]);
+  }
 
   Widget _recordMenu(bool canEdit, {required bool compact}) =>
       PopupMenuButton<String>(
@@ -1099,13 +1822,15 @@ class _WorkspaceState extends ConsumerState<_Workspace> {
         onSelected: (value) async {
           switch (value) {
             case 'import':
-              await editor!.importFile?.call();
+              await _editorImport();
             case 'export':
               await _output(print: false);
             case 'print':
               await _output(print: true);
             case 'fittings':
               await editor!.showFittings?.call();
+            case 'shortcuts':
+              await _showShortcuts();
             case 'archive':
               await _archive();
             case 'refresh':
@@ -1113,13 +1838,7 @@ class _WorkspaceState extends ConsumerState<_Workspace> {
           }
         },
         itemBuilder: (_) => [
-          PopupMenuItem(
-            value: 'import',
-            enabled: canEdit,
-            child: Text(t(S.import)),
-          ),
-          PopupMenuItem(value: 'export', child: Text(t(S.export))),
-          if (compact) PopupMenuItem(value: 'print', child: Text(t(S.print))),
+          PopupMenuItem(value: 'shortcuts', child: Text(t(S.shortcuts))),
           if (kind == 'esp')
             PopupMenuItem(value: 'fittings', child: Text(t(S.fittings))),
           if (c.error != null)
@@ -1135,11 +1854,6 @@ class _WorkspaceState extends ConsumerState<_Workspace> {
         ],
       );
 
-  Widget _backButton() => TextButton.icon(
-    onPressed: _back,
-    icon: const Icon(Icons.arrow_back, size: 18),
-    label: Text(t(S.back)),
-  );
   Widget _error() {
     final message = c.error.toString();
     final text =
@@ -1168,7 +1882,8 @@ class _WorkspaceState extends ConsumerState<_Workspace> {
         : MaterialLocalizations.of(context).formatShortDate(d);
   }
 
-  Future<void> _output({required bool print}) async {
+  Future<void> _output({required bool print, String source = 'button'}) async {
+    _track(print ? 'print' : 'export', source: source);
     if (c.record != null) {
       await c.checkAccess();
       if (c.denied || !mounted) return;
@@ -1220,6 +1935,8 @@ class _WorkspaceState extends ConsumerState<_Workspace> {
   }
 
   Future<void> _sharing() async {
+    if (c.record?.canManage != true || dirty || c.busy || c.hasPending) return;
+    _track('access_open');
     try {
       await c.loadOptions();
     } catch (_) {
@@ -1227,107 +1944,227 @@ class _WorkspaceState extends ConsumerState<_Workspace> {
     }
     if (!mounted) return;
     String? person;
-    String access = 'view';
-    bool saving = false;
+    var access = 'view';
+    var saving = false;
+    var updated = false;
+    var personValid = false;
     await showDialog<void>(
       context: context,
+      barrierDismissible: false,
       builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialog) => AlertDialog(
-          title: Text(t(S.access)),
-          content: SizedBox(
-            width: 440,
-            child: SingleChildScrollView(
+        builder: (context, setDialog) {
+          Future<void> apply(Map<String, dynamic> change) async {
+            if (saving) return;
+            setDialog(() {
+              saving = true;
+              updated = false;
+            });
+            final ok = await _manage(change);
+            if (!dialogContext.mounted) return;
+            setDialog(() {
+              saving = false;
+              updated = ok;
+              if (ok) person = null;
+            });
+          }
+
+          final people = (c.options['people'] as List? ?? []).where(
+            (p) => !c.record!.grants.any((g) => g['user_id'] == p['id']),
+          );
+          return PopScope(
+            canPop: !saving,
+            child: _dialogSurface(
+              context,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(t(S.sharingHelp)),
-                  const SizedBox(height: 16),
-                  for (final grant in c.record!.grants)
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(grant['name'] as String),
-                      subtitle: Text(
-                        t(grant['access'] == 'edit' ? S.edit : S.view),
-                      ),
-                      trailing: IconButton(
-                        tooltip: t(S.remove),
-                        onPressed: saving
-                            ? null
-                            : () async {
-                                setDialog(() => saving = true);
-                                await _manage({
-                                  'action': 'access',
-                                  'user_id': grant['user_id'],
-                                  'access': 'none',
-                                });
-                                if (context.mounted) {
-                                  setDialog(() => saving = false);
-                                }
-                              },
-                        icon: const Icon(Icons.close),
+                  _dialogHeader(
+                    t(S.access),
+                    saving ? null : () => Navigator.pop(dialogContext),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(t(S.accessHelp), style: AppTypography.bodyMedium),
+                  const SizedBox(height: AppSpacing.xxl),
+                  Text(t(S.peopleWithAccess), style: AppTypography.labelLarge),
+                  const SizedBox(height: AppSpacing.sm),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const CircleAvatar(
+                      backgroundColor: AppColors.surfaceContainerLow,
+                      child: Icon(
+                        Icons.person_outline,
+                        color: AppColors.inkSecondary,
                       ),
                     ),
-                  DropdownButtonFormField<String>(
-                    isExpanded: true,
-                    decoration: InputDecoration(labelText: t(S.person)),
-                    items: [
-                      for (final p in c.options['people'] as List? ?? [])
-                        DropdownMenuItem(
-                          value: p['id'] as String,
-                          child: Text(
-                            p['name'] as String,
-                            overflow: TextOverflow.ellipsis,
+                    title: Text(c.record!.owner),
+                    trailing: Text(t(S.owner), style: AppTypography.bodySmall),
+                  ),
+                  if (c.record!.grants.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: AppSpacing.sm,
+                      ),
+                      child: Text(
+                        t(S.noSharedPeople),
+                        style: AppTypography.bodySmall,
+                      ),
+                    ),
+                  for (final grant in c.record!.grants)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: AppSpacing.sm,
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              grant['name'] as String,
+                              style: AppTypography.bodyMedium.copyWith(
+                                color: AppColors.ink,
+                              ),
+                            ),
                           ),
+                          const SizedBox(width: AppSpacing.md),
+                          SizedBox(
+                            width: 130,
+                            child: YorksCalculatorSelect<String>(
+                              label: t(S.accessLevel),
+                              value: grant['access'] as String,
+                              entries: [
+                                DropdownMenuEntry(
+                                  value: 'view',
+                                  label: t(S.view),
+                                ),
+                                DropdownMenuEntry(
+                                  value: 'edit',
+                                  label: t(S.edit),
+                                ),
+                              ],
+                              onSelected: saving
+                                  ? null
+                                  : (v) {
+                                      if (v != null && v != grant['access']) {
+                                        unawaited(
+                                          apply({
+                                            'action': 'access',
+                                            'user_id': grant['user_id'],
+                                            'access': v,
+                                          }),
+                                        );
+                                      }
+                                    },
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: t(S.remove),
+                            onPressed: saving
+                                ? null
+                                : () => apply({
+                                    'action': 'access',
+                                    'user_id': grant['user_id'],
+                                    'access': 'none',
+                                  }),
+                            icon: const Icon(Icons.close, size: 18),
+                          ),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: AppSpacing.lg),
+                  const Divider(height: 1),
+                  const SizedBox(height: AppSpacing.xl),
+                  Text(t(S.addPeople), style: AppTypography.titleMedium),
+                  const SizedBox(height: AppSpacing.md),
+                  YorksCalculatorSelect<String>(
+                    label: t(S.person),
+                    onValidityChanged: (valid) {
+                      if (personValid != valid) {
+                        setDialog(() => personValid = valid);
+                      }
+                    },
+                    hint: t(S.choosePerson),
+                    value: person,
+                    searchable: true,
+                    entries: [
+                      for (final p in people)
+                        DropdownMenuEntry(
+                          value: p['id'] as String,
+                          label: p['name'] as String,
                         ),
                     ],
-                    onChanged: saving
+                    onSelected: saving
                         ? null
                         : (v) => setDialog(() => person = v),
                   ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: access,
-                    items: [
-                      DropdownMenuItem(value: 'view', child: Text(t(S.view))),
-                      DropdownMenuItem(value: 'edit', child: Text(t(S.edit))),
+                  const SizedBox(height: AppSpacing.lg),
+                  YorksCalculatorSelect<String>(
+                    label: t(S.accessLevel),
+                    value: access,
+                    entries: [
+                      DropdownMenuEntry(
+                        value: 'view',
+                        label: t(S.view),
+                        leadingIcon: const Icon(
+                          Icons.visibility_outlined,
+                          size: 18,
+                        ),
+                      ),
+                      DropdownMenuEntry(
+                        value: 'edit',
+                        label: t(S.edit),
+                        leadingIcon: const Icon(Icons.edit_outlined, size: 18),
+                      ),
                     ],
-                    onChanged: saving
+                    onSelected: saving
                         ? null
-                        : (v) => setDialog(() => access = v!),
+                        : (v) {
+                            if (v != null) setDialog(() => access = v);
+                          },
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    t(access == 'view' ? S.viewHelp : S.editHelp),
+                    style: AppTypography.bodySmall,
                   ),
                   if (c.error != null) _error(),
+                  if (updated)
+                    Padding(
+                      padding: const EdgeInsets.only(top: AppSpacing.md),
+                      child: Text(
+                        t(S.accessSaved),
+                        style: AppTypography.bodyMedium.copyWith(
+                          color: AppColors.success,
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: AppSpacing.xl),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: saving
+                            ? null
+                            : () => Navigator.pop(dialogContext),
+                        child: Text(t(S.close)),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      FilledButton(
+                        onPressed: person == null || !personValid || saving
+                            ? null
+                            : () => apply({
+                                'action': 'access',
+                                'user_id': person,
+                                'access': access,
+                              }),
+                        child: Text(t(saving ? S.saving : S.grantAccess)),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: saving ? null : () => Navigator.pop(dialogContext),
-              child: Text(t(S.cancel)),
-            ),
-            FilledButton(
-              onPressed: person == null || saving
-                  ? null
-                  : () async {
-                      setDialog(() => saving = true);
-                      final ok = await _manage({
-                        'action': 'access',
-                        'user_id': person,
-                        'access': access,
-                      });
-                      if (dialogContext.mounted) {
-                        if (ok) {
-                          Navigator.pop(dialogContext);
-                        } else {
-                          setDialog(() => saving = false);
-                        }
-                      }
-                    },
-              child: Text(t(saving ? S.saving : S.apply)),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }

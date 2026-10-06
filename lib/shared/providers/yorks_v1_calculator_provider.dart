@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../controllers/yorks_v1_calculator_controller.dart';
 import 'language_provider.dart';
+import '../services/analytics_service.dart';
 import '../repositories/yorks_v1_calculator_repository.dart';
 import 'yorks_v1_project_repository_provider.dart';
 import 'yorks_v1_identity_provider.dart';
@@ -30,6 +31,7 @@ final yorksCalculatorControllerProvider = Provider.autoDispose
       final controller = YorksCalculatorController(
         ref.watch(yorksCalculatorRepositoryProvider),
         preferences: ref.watch(sharedPreferencesProvider),
+        analytics: ref.watch(analyticsServiceProvider),
         identity:
             '${const String.fromEnvironment('SUPABASE_URL')}|${ref.watch(yorksV1AuthUserIdProvider)}|$key',
       );
@@ -39,6 +41,7 @@ final yorksCalculatorControllerProvider = Provider.autoDispose
 
 class YorksCalculatorExitGuard {
   Future<bool> Function()? check;
+  Future<bool> Function()? beforeNavigation;
 }
 
 final yorksCalculatorExitGuardProvider = Provider<YorksCalculatorExitGuard>(

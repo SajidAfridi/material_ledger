@@ -175,6 +175,12 @@ abstract final class AnalyticsRouteMapper {
     if (s.length >= 2 && s[0] == 'yorks' && s[1] == 'accounts') {
       return AnalyticsRouteDestination(_accountsScreen(s));
     }
+    if (path == '/tools/calculators') {
+      return const AnalyticsRouteDestination(AnalyticsScreen.calculatorLibrary);
+    }
+    if (path.startsWith('/tools/calculators/')) {
+      return const AnalyticsRouteDestination(AnalyticsScreen.calculatorEditor);
+    }
     if (path == '/yorks/analytics') {
       return const AnalyticsRouteDestination(
         AnalyticsScreen.operationalAnalytics,
