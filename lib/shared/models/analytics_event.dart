@@ -5,6 +5,15 @@ const int analyticsSchemaVersion = 2;
 /// The complete Yorks product-analytics event allowlist. New events must be
 /// reviewed here and documented before a call site can emit them.
 enum AnalyticsEvent {
+  calculatorCreationStarted('calculator creation started'),
+  calculatorCreated('calculator created'),
+  calculatorOpened('calculator opened'),
+  calculatorSaved('calculator saved'),
+  calculatorSaveFailed('calculator save failed'),
+  calculatorSaveUnconfirmed('calculator save unconfirmed'),
+  calculatorInteraction('calculator interaction'),
+  calculatorImportResult('calculator import result'),
+  calculatorAccessResult('calculator access result'),
   companyRequestStarted('company request started'),
   companyRequestOpened('company request opened'),
   companyRequestActionConfirmed('company request action confirmed'),
@@ -165,7 +174,9 @@ enum AnalyticsProperty {
   coalesced,
   cacheState,
   requestGeneration,
-  visibilityState;
+  visibilityState,
+  calculatorKind,
+  scopeType;
 
   String get wireName => _snakeCase(name);
 }
@@ -234,6 +245,8 @@ enum AnalyticsScreen {
   people,
   browse,
   engineeringTool,
+  calculatorLibrary,
+  calculatorEditor,
   settings,
   unknown;
 
@@ -402,5 +415,90 @@ AnalyticsProperties projectSetupAnalyticsProperties(
                 : entry.value,
           ))
         entry.key: entry.value,
+  };
+}
+
+/// Calculator telemetry is a finite interaction catalogue. No title, input,
+/// filename, person, query, project or record identifier is permitted.
+AnalyticsProperties calculatorAnalyticsProperties(
+  AnalyticsEvent event,
+  AnalyticsProperties properties,
+) {
+  if (!const {
+    AnalyticsEvent.calculatorCreationStarted,
+    AnalyticsEvent.calculatorCreated,
+    AnalyticsEvent.calculatorOpened,
+    AnalyticsEvent.calculatorSaved,
+    AnalyticsEvent.calculatorSaveFailed,
+    AnalyticsEvent.calculatorSaveUnconfirmed,
+    AnalyticsEvent.calculatorInteraction,
+    AnalyticsEvent.calculatorImportResult,
+    AnalyticsEvent.calculatorAccessResult,
+  }.contains(event)) {
+    return properties;
+  }
+  const categories = <AnalyticsProperty, Set<String>>{
+    AnalyticsProperty.calculatorKind: {'duct', 'esp', 'all'},
+    AnalyticsProperty.scopeType: {'general', 'project', 'all'},
+    AnalyticsProperty.source: {'button', 'keyboard', 'file', 'device', 'route'},
+    AnalyticsProperty.actionType: {
+      'create_open',
+      'create_cancel',
+      'undo',
+      'redo',
+      'row_add',
+      'row_duplicate',
+      'row_delete',
+      'row_clear',
+      'settings_toggle',
+      'import_open',
+      'export',
+      'print',
+      'access_open',
+      'grant',
+      'revoke',
+      'archive',
+      'restore',
+      'filter_type',
+      'filter_scope',
+      'filter_state',
+      'search',
+      'shortcuts_open',
+    },
+    AnalyticsProperty.outcome: {
+      'confirmed',
+      'unconfirmed',
+      'failed',
+      'cancelled',
+      'missing',
+      'invalid',
+      'ready',
+    },
+    AnalyticsProperty.errorCategory: {
+      'validation',
+      'permission_denied',
+      'authentication',
+      'offline',
+      'conflict',
+      'timeout',
+      'network',
+      'database',
+      'storage',
+      'unknown',
+    },
+    AnalyticsProperty.mode: {'view', 'edit', 'none'},
+  };
+  return {
+    for (final e in properties.entries)
+      if (categories[e.key]?.contains(
+                e.value is Enum ? analyticsWireName(e.value as Enum) : e.value,
+              ) ==
+              true ||
+          (e.key == AnalyticsProperty.itemCount &&
+              e.value is int &&
+              (e.value as int) >= 0 &&
+              (e.value as int) <= 1000) ||
+          (e.key == AnalyticsProperty.success && e.value is bool))
+        e.key: e.value,
   };
 }

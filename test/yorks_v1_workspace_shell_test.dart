@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:material_ledger/core/zoom/yorks_workspace_zoom.dart';
 import 'package:material_ledger/core/fullscreen/yorks_workspace_fullscreen.dart';
@@ -12,6 +13,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ledger/app/router.dart';
+import 'package:material_ledger/core/theme/app_theme.dart';
 import 'package:material_ledger/app/yorks_v1_workspace_shell.dart';
 import 'package:material_ledger/features/login/presentation/screens/login_screen.dart';
 import 'package:material_ledger/shared/models/app_strings.dart';
@@ -19,6 +21,7 @@ import 'package:material_ledger/shared/models/yorks_v1_permission_management.dar
 import 'package:material_ledger/shared/models/yorks_v1_feature_flags.dart';
 import 'package:material_ledger/shared/models/yorks_v1_role.dart';
 import 'package:material_ledger/shared/models/yorks_v1_shell_strings.dart';
+import 'package:material_ledger/shared/models/yorks_v1_calculator_strings.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_feature_flags_provider.dart';
@@ -28,7 +31,92 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
+  setUpAll(() async {
+    if (!const bool.fromEnvironment('YORKS_V1_CALCULATOR_WORKSPACE')) return;
+    final root = File(Platform.resolvedExecutable).parent.parent.parent.parent;
+    await Future.wait([
+      (FontLoader(
+        'NexusSans',
+      )..addFont(rootBundle.load('assets/fonts/NotoSans-Regular.ttf'))).load(),
+      (FontLoader('MaterialIcons')..addFont(
+            Future.value(
+              ByteData.sublistView(
+                await File(
+                  '${root.path}/artifacts/material_fonts/MaterialIcons-Regular.otf',
+                ).readAsBytes(),
+              ),
+            ),
+          ))
+          .load(),
+    ]);
+  });
   setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  for (final width in [1366.0, 360.0]) {
+    for (final accountsEnabled in [false, true]) {
+      testWidgets('Accountant calculator discovery $accountsEnabled at $width', (
+        tester,
+      ) async {
+        _setViewport(tester, Size(width, 800));
+        addTearDown(() => _resetViewport(tester));
+        final preferences = await SharedPreferences.getInstance();
+        await tester.pumpWidget(
+          _ShellTestApp(
+            role: YorksV1Role.accountant,
+            preferences: preferences,
+            flags: YorksV1FeatureFlags(
+              foundation: true,
+              accounts: accountsEnabled,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        if (width < 720) {
+          tester.state<ScaffoldState>(find.byType(Scaffold).first).openDrawer();
+          await tester.pumpAndSettle();
+        }
+        final calculators = find.text(
+          YorksCalculatorStrings.calculators.primary,
+        );
+        const enabled = bool.fromEnvironment('YORKS_V1_CALCULATOR_WORKSPACE');
+        expect(calculators, enabled ? findsOneWidget : findsNothing);
+        expect(find.text(YorksV1ShellStrings.projects.primary), findsNothing);
+        expect(
+          find.text(YorksV1ShellStrings.browseInventory.primary),
+          findsNothing,
+        );
+        expect(
+          find.text(YorksV1ShellStrings.userManagement.primary),
+          findsNothing,
+        );
+        if (enabled) {
+          if (!accountsEnabled) {
+            await tester.runAsync(
+              () => precacheImage(
+                const AssetImage('assets/logo.png'),
+                tester.element(find.byType(YorksV1WorkspaceShell).first),
+              ),
+            );
+            await tester.pumpAndSettle();
+            await expectLater(
+              find.byKey(const ValueKey('shell-navigation-capture')),
+              matchesGoldenFile(
+                'goldens/calculators/accountant_navigation_${width.toInt()}.png',
+              ),
+            );
+          }
+          await tester.ensureVisible(calculators);
+          await tester.tap(calculators);
+          await tester.pumpAndSettle();
+          expect(
+            find.byKey(const ValueKey('calculator-library-route')),
+            findsOneWidget,
+          );
+        }
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
 
   for (final width in [1366.0, 360.0]) {
     for (final companyEnabled in [false, true]) {
@@ -1011,6 +1099,11 @@ class _ShellTestApp extends StatelessWidget {
           builder: (_, _) =>
               const YorksV1WorkspaceShell(child: YorksV1MobileMoreScreen()),
         ),
+        GoRoute(
+          path: RoutePaths.yorksV1Calculators,
+          builder: (_, _) =>
+              const SizedBox(key: ValueKey('calculator-library-route')),
+        ),
       ],
     );
     return ProviderScope(
@@ -1024,7 +1117,20 @@ class _ShellTestApp extends StatelessWidget {
             (_) => fullscreenController!,
           ),
       ],
-      child: MaterialApp.router(routerConfig: router),
+      child: RepaintBoundary(
+        key: const ValueKey('shell-navigation-capture'),
+        child: MaterialApp.router(
+          debugShowCheckedModeBanner:
+              !(const bool.fromEnvironment('YORKS_V1_CALCULATOR_WORKSPACE') &&
+                  role == YorksV1Role.accountant),
+          theme:
+              const bool.fromEnvironment('YORKS_V1_CALCULATOR_WORKSPACE') &&
+                  role == YorksV1Role.accountant
+              ? AppTheme.light
+              : null,
+          routerConfig: router,
+        ),
+      ),
     );
   }
 }

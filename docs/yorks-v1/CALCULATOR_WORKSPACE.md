@@ -19,6 +19,15 @@ Manager are the approved sharing managers.
   calculator grant never creates project membership or BOQ/MR/stock authority.
 - Managers grant view/edit access and revoke grants. Viewers can export/print
   but cannot change values. Only managers archive/restore; history is retained.
+- The combined calculator menu is discoverable for every active exact role,
+  including Accountant, when the workspace flag is enabled. The server returns
+  only authorized records; an Accountant grant adds no create, sharing,
+  technical project, BOQ, MR or stock authority.
+- Archived projects are excluded from creation options and cannot receive new
+  calculations or saved changes. The save command locks and checks the current
+  project row. Existing authorized calculations remain readable/exportable,
+  with `can_edit=false`. A previously committed idempotent retry acknowledges
+  its original save without writing again and refreshes current edit permission.
 - Project and calculator type are fixed after first save. A new calculation or
   explicit JSON import creates a separate identity, without moving shared data.
 - Save uses server confirmation, an expected revision and an idempotency key.
@@ -152,3 +161,7 @@ saved calculations and grants remain intact.
 
 Published interface evidence and rollback are recorded in
 [CALCULATOR_UI_RELEASE_20261006.md](CALCULATOR_UI_RELEASE_20261006.md).
+
+The later interaction refinement, keyboard/history contract and explicit
+pre-production audit gate are in
+[CALCULATOR_INTERACTION_POLISH_20261007.md](CALCULATOR_INTERACTION_POLISH_20261007.md).

@@ -1,4 +1,5 @@
 import '../shared/models/yorks_v1_calculator_strings.dart';
+import '../shared/providers/yorks_v1_calculator_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -203,6 +204,33 @@ class _YorksV1WorkspaceShellState extends ConsumerState<YorksV1WorkspaceShell> {
       current?.path,
     );
 
+    Future<void> navigateBack() async {
+      if (location.startsWith('${RoutePaths.yorksV1Calculators}/')) {
+        final before = ref
+            .read(yorksCalculatorExitGuardProvider)
+            .beforeNavigation;
+        if (before != null && !await before()) return;
+        if (!context.mounted) return;
+      }
+      yorksNavigateBack(
+        context,
+        ref,
+        currentLocation,
+        fallback: navigationFallback,
+      );
+    }
+
+    Future<void> navigateForward() async {
+      if (location.startsWith('${RoutePaths.yorksV1Calculators}/')) {
+        final before = ref
+            .read(yorksCalculatorExitGuardProvider)
+            .beforeNavigation;
+        if (before != null && !await before()) return;
+        if (!context.mounted) return;
+      }
+      yorksNavigateForward(context, ref, currentLocation);
+    }
+
     return YorksWorkspaceZoomHost(
       key: ValueKey(user?.id),
       routeKey: location,
@@ -217,7 +245,10 @@ class _YorksV1WorkspaceShellState extends ConsumerState<YorksV1WorkspaceShell> {
             canPopNatively ||
             !canUseWorkspaceHistory,
         onPopInvokedWithResult: (didPop, _) {
-          if (featureOwnsBackNavigation || didPop || !canUseWorkspaceHistory) {
+          if (featureOwnsBackNavigation ||
+              didPop ||
+              !canUseWorkspaceHistory ||
+              location.startsWith('${RoutePaths.yorksV1Calculators}/')) {
             return;
           }
           yorksNavigateBack(
@@ -289,12 +320,7 @@ class _YorksV1WorkspaceShellState extends ConsumerState<YorksV1WorkspaceShell> {
                             unreadChat: chatUnread,
                             onMenu: () =>
                                 context.go(RoutePaths.yorksV1MobileMore),
-                            onBack: () => yorksNavigateBack(
-                              context,
-                              ref,
-                              currentLocation,
-                              fallback: navigationFallback,
-                            ),
+                            onBack: navigateBack,
                           ),
                         Expanded(child: _contentViewport(language, location)),
                         if (!focusedMobileRoute)
@@ -389,17 +415,8 @@ class _YorksV1WorkspaceShellState extends ConsumerState<YorksV1WorkspaceShell> {
                                 yorksV1SidebarExpandedProvider,
                               );
                             },
-                            onBack: () => yorksNavigateBack(
-                              context,
-                              ref,
-                              currentLocation,
-                              fallback: navigationFallback,
-                            ),
-                            onForward: () => yorksNavigateForward(
-                              context,
-                              ref,
-                              currentLocation,
-                            ),
+                            onBack: navigateBack,
+                            onForward: navigateForward,
                           ),
                           Expanded(child: _contentViewport(language, location)),
                         ],
@@ -444,6 +461,9 @@ class _YorksV1WorkspaceShellState extends ConsumerState<YorksV1WorkspaceShell> {
     String location,
     String? currentDestinationPath,
   ) {
+    if (location.startsWith('${RoutePaths.yorksV1Calculators}/')) {
+      return RoutePaths.yorksV1Calculators;
+    }
     final segments = Uri(path: location).pathSegments;
     if (segments.length >= 3 &&
         segments[0] == 'yorks' &&
@@ -820,6 +840,7 @@ List<_YorksDestination> _destinationsFor(
         !(companyRequestsEnabled &&
             path == RoutePaths.yorksV1MaterialRequests) &&
         path != RoutePaths.yorksV1Accounts &&
+        path != RoutePaths.yorksV1Calculators &&
         path != RoutePaths.yorksV1Workforce &&
         (path == null || !path.startsWith('${RoutePaths.yorksV1Accounts}/'))) {
       return false;

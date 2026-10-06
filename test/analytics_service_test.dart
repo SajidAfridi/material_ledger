@@ -124,9 +124,59 @@ void main() {
     },
   );
 
+  test(
+    'calculator telemetry rejects business content and unbounded categories',
+    () async {
+      analytics.capture(
+        AnalyticsEvent.calculatorInteraction,
+        properties: {
+          AnalyticsProperty.calculatorKind: 'duct',
+          AnalyticsProperty.scopeType: 'general',
+          AnalyticsProperty.actionType: 'undo',
+          AnalyticsProperty.source: 'keyboard',
+          AnalyticsProperty.itemCount: 3,
+          AnalyticsProperty.mode: 'project_123',
+          AnalyticsProperty.operation: 'private_ref_123',
+          AnalyticsProperty.workflow: 'secret',
+          AnalyticsProperty.fileType: 'secret_document',
+          AnalyticsProperty.listFilter: 'secret_title',
+        },
+      );
+      analytics.capture(
+        AnalyticsEvent.calculatorImportResult,
+        properties: {
+          AnalyticsProperty.source: 'device',
+          AnalyticsProperty.outcome: 'missing',
+          AnalyticsProperty.itemCount: 1001,
+          AnalyticsProperty.calculatorKind: 'private_name',
+        },
+      );
+      await analytics.drain();
+      final first = sink.events.first.properties;
+      expect(first['calculator_kind'], 'duct');
+      expect(first['action_type'], 'undo');
+      expect(first['item_count'], 3);
+      for (final key in [
+        'mode',
+        'operation',
+        'workflow',
+        'file_type',
+        'list_filter',
+      ]) {
+        expect(first.containsKey(key), isFalse);
+      }
+      expect(sink.events.last.properties['outcome'], 'missing');
+      expect(sink.events.last.properties.containsKey('item_count'), isFalse);
+      expect(
+        sink.events.last.properties.containsKey('calculator_kind'),
+        isFalse,
+      );
+    },
+  );
+
   test('taxonomy stays bounded, stable, and unique', () {
     final names = AnalyticsEvent.values.map((event) => event.wireName).toList();
-    expect(names, hasLength(86));
+    expect(names, hasLength(95));
     expect(names.toSet(), hasLength(names.length));
     expect(names, everyElement(matches(RegExp(r'^[a-z0-9]+(?: [a-z0-9]+)*$'))));
     expect(names, isNot(contains('material_request_opened')));

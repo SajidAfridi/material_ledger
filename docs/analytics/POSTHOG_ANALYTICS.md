@@ -166,6 +166,36 @@ All events below are centrally defined in `analytics_event.dart`.
 | `feature flag evaluated` | Experiment exposure basis | Non-security flag resolves | flag, variant | Analytics service |
 | `reliability error occurred` | Reliability rollup | Timed operation fails | operation, category, retryable, duration | Analytics service; no raw exception |
 
+## Calculator workspace — 7 October 2026
+
+The managed calculator workspace adds these reviewed schema-v2 events. Its
+additional properties are `calculator_kind` (`duct`, `esp`, `all`) and
+`scope_type` (`general`, `project`, `all`). The calculator guard accepts only
+fixed action/source/outcome/access-mode categories, booleans and `item_count`
+from 0 through 1000. It rejects arbitrary IDs even when they resemble a safe
+categorical string. Common environment/release/role context remains automatic.
+
+| Event | Trigger | Safe dimensions |
+|---|---|---|
+| `calculator creation started` | Name/type/scope accepted into a new local editor | kind, scope |
+| `calculator created` | First save returns a server-confirmed record | kind, scope, source, confirmed outcome |
+| `calculator opened` | Saved inputs load successfully | kind, scope, route source |
+| `calculator saved` | Save/recovery RPC returns confirmed | kind, scope, button/keyboard source |
+| `calculator save failed` | A definitive rejected/invalid save | kind, scope, source, normalized category |
+| `calculator save unconfirmed` | Exact save intent remains pending | kind, scope, source, normalized category |
+| `calculator interaction` | Meaningful create/cancel, history, row, settings, filter, search, file, access or shortcut-help action | fixed action, source, kind, scope; never query text |
+| `calculator import result` | File validation/editor import or previous-device inspection | kind, file/device source, ready/confirmed/cancelled/missing/invalid/failed outcome |
+| `calculator access result` | Grant/revoke/archive/restore RPC returns | fixed action, kind, scope, view/edit/none mode, success/category |
+
+`calculator_list`, `calculator_open`, `calculator_options`, `calculator_save`
+and `calculator_manage` are fixed timed operation names. Library/editor routes
+use `calculator_library` / `calculator_editor` screen names without record IDs.
+An import result is an input/file observation, not a saved server record; only
+server-confirmed creation/save events may be used for completion. No calculator
+values, names, project/person IDs, files or filenames are transmitted. Replay,
+autocapture and raw exception capture remain disabled. These events are a
+staging audit candidate and do not authorize production publication.
+
 ## Legacy event migration
 
 All schema v1 snake_case events map mechanically to the schema v2 phrase with

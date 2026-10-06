@@ -23,6 +23,12 @@ class YorksCalculatorRecord {
       .toList();
 }
 
+class YorksCalculatorDeviceImports {
+  const YorksCalculatorDeviceImports(this.available, this.invalid);
+  final Map<String, Map<String, dynamic>> available;
+  final Set<String> invalid;
+}
+
 abstract final class YorksCalculatorFiles {
   static const maximumBytes = 1048576;
   static Map<String, dynamic> decode(String raw, {String? expectedKind}) {

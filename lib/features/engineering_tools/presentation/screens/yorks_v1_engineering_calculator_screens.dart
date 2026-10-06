@@ -12,6 +12,7 @@ import 'package:printing/printing.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../app/router.dart';
+import '../widgets/yorks_calculator_controls.dart';
 import '../../../../shared/models/yorks_v1_calculator_workspace.dart';
 import '../../../../shared/models/yorks_v1_calculator_strings.dart';
 import '../../../../shared/models/yorks_v1_calculator_editor_strings.dart';
@@ -29,18 +30,29 @@ String _editorText(BuildContext context, String text) =>
 
 /// Managed sessions never hydrate or overwrite the legacy one-slot device draft.
 /// The workspace owns identity, saving, permissions and navigation.
+enum YorksCalculatorFileOutcome { confirmed, cancelled, invalid, failed }
+
 class YorksCalculatorEditorSession {
   YorksCalculatorEditorSession({
     required this.initialData,
     required this.onChanged,
+    this.onAction,
+    this.beforeStructuralEdit,
   });
   final Map<String, dynamic> initialData;
   final VoidCallback onChanged;
+  final VoidCallback? beforeStructuralEdit;
   bool readOnly = false;
   bool ready = false;
   String title = '', scope = '', revision = '';
   Map<String, Object?> Function()? snapshot;
-  Future<void> Function()? importFile, exportFile, printFile, showFittings;
+  Future<YorksCalculatorFileOutcome> Function()? importFile;
+  Future<void> Function()? exportFile, printFile, showFittings;
+  Future<void> Function(Map<String, dynamic>)? restoreData;
+  VoidCallback? addRow, duplicateRow;
+  ValueChanged<bool>? rowAction;
+  ValueChanged<String>? onAction;
+  int Function()? rowCount;
   void changed() =>
       WidgetsBinding.instance.addPostFrameCallback((_) => onChanged());
 }
@@ -69,7 +81,10 @@ Widget _calculatorPage({
         constraints: const BoxConstraints(maxWidth: 1280),
         child: ExcludeFocus(
           excluding: session.readOnly,
-          child: AbsorbPointer(absorbing: session.readOnly, child: child),
+          child: AbsorbPointer(
+            absorbing: session.readOnly,
+            child: YorksCalculatorManagedScope(child: child),
+          ),
         ),
       ),
     ),
@@ -141,6 +156,13 @@ class _YorksV1DuctSizerScreenState
     super.initState();
     final session = widget.session;
     if (session != null) {
+      session.restoreData = (data) async {
+        session.ready = false;
+        session.initialData
+          ..clear()
+          ..addAll(data);
+        await _restore();
+      };
       session.snapshot = _json;
       session.importFile = _import;
       session.exportFile = _export;
@@ -368,25 +390,19 @@ class _YorksV1DuctSizerScreenState
           YorksCalculatorStrings.byFriction,
           YorksCalculatorStrings.equivalent,
         ];
-        final method = DropdownButtonFormField<YorksV1DuctSolveMode>(
-          initialValue: _mode,
-          isExpanded: true,
-          decoration: InputDecoration(
-            labelText: YorksCalculatorStrings.method.active(
-              ref.watch(languageProvider),
-            ),
+        final method = YorksCalculatorSelect<YorksV1DuctSolveMode>(
+          value: _mode,
+          label: YorksCalculatorStrings.method.active(
+            ref.watch(languageProvider),
           ),
-          items: [
+          entries: [
             for (final mode in YorksV1DuctSolveMode.values)
-              DropdownMenuItem(
+              DropdownMenuEntry(
                 value: mode,
-                child: Text(
-                  labels[mode.index].active(ref.watch(languageProvider)),
-                  overflow: TextOverflow.ellipsis,
-                ),
+                label: labels[mode.index].active(ref.watch(languageProvider)),
               ),
           ],
-          onChanged: (mode) {
+          onSelected: (mode) {
             if (mode != null) {
               setState(() {
                 _mode = mode;
@@ -466,6 +482,8 @@ class _YorksV1DuctSizerScreenState
             const SizedBox(height: AppSpacing.lg),
             _CalculatorPanel(
               child: ExpansionTile(
+                onExpansionChanged: (_) =>
+                    widget.session?.onAction?.call('settings_toggle'),
                 key: const PageStorageKey('calculator-design-basis'),
                 shape: const Border(),
                 collapsedShape: const Border(),
@@ -1097,14 +1115,14 @@ class _YorksV1DuctSizerScreenState
     if (mounted) _snack('Saved calculation reopened.');
   }
 
-  Future<void> _import() async {
+  Future<YorksCalculatorFileOutcome> _import() async {
     try {
       final file = await openFile(
         acceptedTypeGroups: const [
           XTypeGroup(label: 'JSON', extensions: ['json']),
         ],
       );
-      if (file == null) return;
+      if (file == null) return YorksCalculatorFileOutcome.cancelled;
       if (await file.length() > YorksCalculatorFiles.maximumBytes) {
         throw const FormatException();
       }
@@ -1113,7 +1131,7 @@ class _YorksV1DuctSizerScreenState
               as Map<String, dynamic>;
       YorksCalculatorFiles.validate(data, expectedKind: 'duct');
       if (widget.session != null) {
-        if (widget.session!.readOnly) return;
+        if (widget.session!.readOnly) return YorksCalculatorFileOutcome.failed;
         widget.session!.initialData
           ..clear()
           ..addAll(data);
@@ -1124,13 +1142,17 @@ class _YorksV1DuctSizerScreenState
       }
       await _restore();
       if (mounted) _snack(_editorText(context, 'Calculation imported.'));
-    } catch (_) {
+      return YorksCalculatorFileOutcome.confirmed;
+    } catch (e) {
       if (mounted) {
         _snack(
           _editorText(context, 'Could not import this JSON file.'),
           error: true,
         );
       }
+      return e is FormatException
+          ? YorksCalculatorFileOutcome.invalid
+          : YorksCalculatorFileOutcome.failed;
     }
   }
 
@@ -1189,6 +1211,7 @@ class _YorksV1EspCalculatorScreenState
     const YorksV1EspRow(id: 'esp-row-1', fitting: 'Straight Duct'),
   ];
   bool _restoring = true;
+  String? activeRow;
 
   static String _dateText(DateTime now) {
     return '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}';
@@ -1202,11 +1225,21 @@ class _YorksV1EspCalculatorScreenState
     );
     final session = widget.session;
     if (session != null) {
+      session.restoreData = (data) async {
+        session.ready = false;
+        session.initialData
+          ..clear()
+          ..addAll(data);
+        await _restore();
+      };
       session.snapshot = _json;
       session.importFile = _import;
       session.exportFile = _export;
       session.printFile = _print;
       session.showFittings = _showFittings;
+      session.addRow = _addRow;
+      session.duplicateRow = _duplicateLast;
+      session.rowCount = () => _rows.length;
     }
     Future<void>.microtask(_restore);
   }
@@ -1387,6 +1420,8 @@ class _YorksV1EspCalculatorScreenState
       children: [
         _CalculatorPanel(
           child: ExpansionTile(
+            onExpansionChanged: (_) =>
+                widget.session?.onAction?.call('settings_toggle'),
             key: const PageStorageKey('calculator-system-details'),
             initiallyExpanded:
                 MediaQuery.sizeOf(context).width >=
@@ -1427,16 +1462,8 @@ class _YorksV1EspCalculatorScreenState
                   runSpacing: AppSpacing.sm,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    _ToolbarButton(
-                      label: 'Add Row',
-                      icon: Icons.add,
-                      onPressed: _addRow,
-                      primary: true,
-                    ),
-                    _ToolbarButton(
-                      label: 'Duplicate Last',
-                      onPressed: _duplicateLast,
-                    ),
+                    _managedRowButton(context, duplicate: false),
+                    _managedRowButton(context, duplicate: true),
                     _ToolbarButton(label: 'Clear', onPressed: _clear),
                     TextButton.icon(
                       onPressed: _showFittings,
@@ -1465,8 +1492,14 @@ class _YorksV1EspCalculatorScreenState
                         rows: _rows,
                         onChanged: _updateRow,
                         onDelete: _deleteRow,
+                        activeId: activeRow,
+                        onSelected: (id) => activeRow = id,
                       )
                     : _EspRows(
+                        activeId: activeRow,
+                        onSelected: (id) {
+                          if (activeRow != id) setState(() => activeRow = id);
+                        },
                         rows: _rows,
                         onChanged: _updateRow,
                         onDelete: _deleteRow,
@@ -1498,6 +1531,49 @@ class _YorksV1EspCalculatorScreenState
       ],
     ),
   );
+
+  Widget _managedRowButton(BuildContext context, {required bool duplicate}) {
+    final label =
+        (duplicate
+                ? YorksCalculatorStrings.duplicateRow
+                : YorksCalculatorStrings.addRow)
+            .active(ref.watch(languageProvider));
+    final shortcut = duplicate
+        ? YorksCalculatorShortcuts.duplicateRow
+        : YorksCalculatorShortcuts.addRow;
+    final action = _rows.length >= 1000 || widget.session!.readOnly
+        ? null
+        : () {
+            final callback = widget.session!.rowAction;
+            if (callback != null) {
+              callback(duplicate);
+            } else {
+              (duplicate ? _duplicateLast : _addRow)();
+            }
+          };
+    final child = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(duplicate ? Icons.copy_outlined : Icons.add, size: 18),
+        const SizedBox(width: AppSpacing.sm),
+        Text(label),
+        if (MediaQuery.sizeOf(context).width >=
+            AppSpacing.compactBreakpoint) ...[
+          const SizedBox(width: AppSpacing.md),
+          YorksShortcutHint(
+            shortcut,
+            color: duplicate ? null : AppColors.surfaceContainerLowest,
+          ),
+        ],
+      ],
+    );
+    return Tooltip(
+      message: '$label ($shortcut)',
+      child: duplicate
+          ? OutlinedButton(onPressed: action, child: child)
+          : FilledButton(onPressed: action, child: child),
+    );
+  }
 
   Widget _buildMobile(
     BuildContext context,
@@ -1643,40 +1719,84 @@ class _YorksV1EspCalculatorScreenState
 
   void _updateRow(YorksV1EspRow row) => setState(() {
     final index = _rows.indexWhere((item) => item.id == row.id);
-    if (index >= 0) _rows[index] = row;
+    if (index >= 0) {
+      _rows[index] = row;
+      activeRow = row.id;
+    }
   });
 
-  void _addRow() => setState(
-    () => _rows.add(
-      YorksV1EspRow(
-        id: 'esp-row-${DateTime.now().microsecondsSinceEpoch}',
+  void _addRow() {
+    if (_rows.length >= 1000 || widget.session?.readOnly == true) return;
+    setState(() {
+      final index = _rows.indexWhere((r) => r.id == activeRow);
+      final row = YorksV1EspRow(
+        id: const Uuid().v4(),
         fitting: 'Straight Duct',
-      ),
-    ),
-  );
-  void _duplicateLast() => setState(() {
-    if (_rows.isEmpty) {
-      _rows.add(
-        YorksV1EspRow(
-          id: 'esp-row-${DateTime.now().microsecondsSinceEpoch}',
-          fitting: 'Straight Duct',
-        ),
       );
+      _rows.insert(index < 0 ? _rows.length : index + 1, row);
+      activeRow = row.id;
+    });
+  }
+
+  void _duplicateLast() {
+    if (_rows.length >= 1000 || widget.session?.readOnly == true) return;
+    if (_rows.isEmpty) {
+      _addRow();
       return;
     }
-    final last = _rows.last;
-    _rows.add(
-      last.copyWith(id: 'esp-row-${DateTime.now().microsecondsSinceEpoch}'),
-    );
-  });
-  void _deleteRow(String id) => setState(() {
-    if (_rows.length > 1) _rows.removeWhere((row) => row.id == id);
-  });
-  void _clear() => setState(() {
-    _rows
-      ..clear()
-      ..add(const YorksV1EspRow(id: 'esp-row-1', fitting: 'Straight Duct'));
-  });
+    setState(() {
+      final selected = _rows.indexWhere((r) => r.id == activeRow);
+      final index = selected < 0 ? _rows.length - 1 : selected;
+      final copy = _rows[index].copyWith(id: const Uuid().v4());
+      // Retain extension fields from an imported row in its duplicate.
+      if (widget.session != null) {
+        final current = _json();
+        widget.session!.initialData
+          ..clear()
+          ..addAll(current);
+        final originals = widget.session!.initialData['rows'] as List? ?? [];
+        final original = originals
+            .whereType<Map>()
+            .where((r) => r['id'] == _rows[index].id)
+            .firstOrNull;
+        if (original != null) {
+          originals.add(<String, Object?>{
+            ...original.cast<String, Object?>(),
+            ...copy.toJson(),
+          });
+        }
+      }
+      _rows.insert(index + 1, copy);
+      activeRow = copy.id;
+    });
+  }
+
+  void _deleteRow(String id) {
+    if (widget.session?.readOnly == true ||
+        !_rows.any((row) => row.id == id) ||
+        (widget.session == null && _rows.length <= 1)) {
+      return;
+    }
+    widget.session?.beforeStructuralEdit?.call();
+    setState(() {
+      _rows.removeWhere((row) => row.id == id);
+    });
+    widget.session?.onAction?.call('row_delete');
+  }
+
+  void _clear() {
+    if (widget.session?.readOnly == true || _rows.isEmpty) return;
+    widget.session?.beforeStructuralEdit?.call();
+    setState(() {
+      _rows.clear();
+      if (widget.session == null) {
+        _rows.add(
+          const YorksV1EspRow(id: 'esp-row-1', fitting: 'Straight Duct'),
+        );
+      }
+    });
+    widget.session?.onAction?.call('row_clear');
+  }
 
   Map<String, Object?> _json() => {
     ...?widget.session?.initialData,
@@ -1767,14 +1887,14 @@ class _YorksV1EspCalculatorScreenState
     if (mounted) _snack('Saved calculation reopened.');
   }
 
-  Future<void> _import() async {
+  Future<YorksCalculatorFileOutcome> _import() async {
     try {
       final file = await openFile(
         acceptedTypeGroups: const [
           XTypeGroup(label: 'ESP JSON', extensions: ['json', 'espcalc.json']),
         ],
       );
-      if (file == null) return;
+      if (file == null) return YorksCalculatorFileOutcome.cancelled;
       if (await file.length() > YorksCalculatorFiles.maximumBytes) {
         throw const FormatException();
       }
@@ -1783,7 +1903,7 @@ class _YorksV1EspCalculatorScreenState
               as Map<String, dynamic>;
       YorksCalculatorFiles.validate(data, expectedKind: 'esp');
       if (widget.session != null) {
-        if (widget.session!.readOnly) return;
+        if (widget.session!.readOnly) return YorksCalculatorFileOutcome.failed;
         widget.session!.initialData
           ..clear()
           ..addAll(data);
@@ -1794,13 +1914,17 @@ class _YorksV1EspCalculatorScreenState
       }
       await _restore();
       if (mounted) _snack(_editorText(context, 'Calculation imported.'));
-    } catch (_) {
+      return YorksCalculatorFileOutcome.confirmed;
+    } catch (e) {
       if (mounted) {
         _snack(
           _editorText(context, 'Could not import this JSON file.'),
           error: true,
         );
       }
+      return e is FormatException
+          ? YorksCalculatorFileOutcome.invalid
+          : YorksCalculatorFileOutcome.failed;
     }
   }
 
@@ -1868,10 +1992,14 @@ class _EspRows extends StatelessWidget {
     required this.rows,
     required this.onChanged,
     required this.onDelete,
+    this.onSelected,
+    this.activeId,
   });
   final List<YorksV1EspRow> rows;
   final ValueChanged<YorksV1EspRow> onChanged;
   final ValueChanged<String> onDelete;
+  final ValueChanged<String>? onSelected;
+  final String? activeId;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -1892,6 +2020,7 @@ class _EspRows extends StatelessWidget {
             child: ConstrainedBox(
               constraints: BoxConstraints(minWidth: constraints.maxWidth),
               child: DataTable(
+                showCheckboxColumn: false,
                 headingRowColor: WidgetStatePropertyAll(
                   AppColors.surfaceContainerHigh,
                 ),
@@ -1922,6 +2051,8 @@ class _EspRows extends StatelessWidget {
   DataRow _desktopRow(BuildContext context, int index, YorksV1EspRow row) {
     final result = YorksV1EngineeringCalculatorService.espRow(row);
     return DataRow(
+      selected: row.id == activeId,
+      onSelectChanged: onSelected == null ? null : (_) => onSelected!(row.id),
       cells: [
         DataCell(Text('${index + 1}')),
         DataCell(
@@ -2014,25 +2145,48 @@ class _EspRows extends StatelessWidget {
     BuildContext context,
     YorksV1EspRow row,
     ValueChanged<String> changed,
-  ) => DropdownButton<String>(
-    value:
-        YorksV1EngineeringCalculatorService.fittingCoefficients.containsKey(
-          row.fitting,
-        )
-        ? row.fitting
-        : 'Other',
-    items: YorksV1EngineeringCalculatorService.fittingCoefficients.keys
-        .map(
-          (key) => DropdownMenuItem(
-            value: key,
-            child: Text(_editorText(context, key)),
+  ) => YorksCalculatorManagedScope.isManaged(context)
+      ? SizedBox(
+          width: 210,
+          height: 56,
+          child: YorksCalculatorSelect<String>(
+            label: _editorText(context, 'Fitting Type'),
+            value:
+                YorksV1EngineeringCalculatorService.fittingCoefficients
+                    .containsKey(row.fitting)
+                ? row.fitting
+                : 'Other',
+            searchable: true,
+            entries: [
+              for (final key
+                  in YorksV1EngineeringCalculatorService
+                      .fittingCoefficients
+                      .keys)
+                DropdownMenuEntry(value: key, label: _editorText(context, key)),
+            ],
+            onSelected: (v) {
+              if (v != null) changed(v);
+            },
           ),
         )
-        .toList(),
-    onChanged: (value) {
-      if (value != null) changed(value);
-    },
-  );
+      : DropdownButton<String>(
+          value:
+              YorksV1EngineeringCalculatorService.fittingCoefficients
+                  .containsKey(row.fitting)
+              ? row.fitting
+              : 'Other',
+          items: YorksV1EngineeringCalculatorService.fittingCoefficients.keys
+              .map(
+                (key) => DropdownMenuItem(
+                  value: key,
+                  child: Text(_editorText(context, key)),
+                ),
+              )
+              .toList(),
+          onChanged: (value) {
+            if (value != null) changed(value);
+          },
+        );
 
   Widget _cell(
     YorksV1EspRow row,
@@ -2042,15 +2196,20 @@ class _EspRows extends StatelessWidget {
     bool enabled = true,
   }) => SizedBox(
     width: 100,
-    child: _EspEditableField(
-      key: ValueKey('${row.id}-$key'),
-      value: initial,
-      enabled: enabled,
-      decoration: const InputDecoration(
-        isDense: true,
-        border: OutlineInputBorder(),
+    child: Focus(
+      onFocusChange: (focused) {
+        if (focused) onSelected?.call(row.id);
+      },
+      child: _EspEditableField(
+        key: ValueKey('${row.id}-$key'),
+        value: initial,
+        enabled: enabled,
+        decoration: const InputDecoration(
+          isDense: true,
+          border: OutlineInputBorder(),
+        ),
+        onChanged: changed,
       ),
-      onChanged: changed,
     ),
   );
   bool _lengthEnabled(YorksV1EspRow row) =>
@@ -2062,10 +2221,14 @@ class _FocusedEspRows extends ConsumerStatefulWidget {
     required this.rows,
     required this.onChanged,
     required this.onDelete,
+    this.activeId,
+    this.onSelected,
   });
   final List<YorksV1EspRow> rows;
   final ValueChanged<YorksV1EspRow> onChanged;
   final ValueChanged<String> onDelete;
+  final String? activeId;
+  final ValueChanged<String>? onSelected;
   @override
   ConsumerState<_FocusedEspRows> createState() => _FocusedEspRowsState();
 }
@@ -2078,7 +2241,9 @@ class _FocusedEspRowsState extends ConsumerState<_FocusedEspRows> {
     if (widget.rows.isEmpty) return const SizedBox.shrink();
     if (widget.rows.length > previousCount ||
         !widget.rows.any((r) => r.id == selected)) {
-      selected = widget.rows.last.id;
+      selected = widget.rows.any((r) => r.id == widget.activeId)
+          ? widget.activeId
+          : widget.rows.last.id;
     }
     previousCount = widget.rows.length;
     final index = widget.rows.indexWhere((r) => r.id == selected);
@@ -2086,23 +2251,26 @@ class _FocusedEspRowsState extends ConsumerState<_FocusedEspRows> {
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-          child: DropdownButtonFormField<String>(
-            key: ValueKey(selected),
-            initialValue: selected,
-            isExpanded: true,
-            decoration: InputDecoration(
-              labelText: YorksCalculatorStrings.row.active(
-                ref.watch(languageProvider),
-              ),
+          child: YorksCalculatorSelect<String>(
+            label: YorksCalculatorStrings.row.active(
+              ref.watch(languageProvider),
             ),
-            items: [
+            value: selected,
+            searchable: widget.rows.length > 12,
+            entries: [
               for (var i = 0; i < widget.rows.length; i++)
-                DropdownMenuItem(
+                DropdownMenuEntry(
                   value: widget.rows[i].id,
-                  child: Text('${i + 1}. ${widget.rows[i].fitting}'),
+                  label:
+                      '${i + 1}. ${_editorText(context, widget.rows[i].fitting)}',
                 ),
             ],
-            onChanged: (value) => setState(() => selected = value),
+            onSelected: (value) {
+              if (value != null) {
+                setState(() => selected = value);
+                widget.onSelected?.call(value);
+              }
+            },
           ),
         ),
         _EspMobileRow(
@@ -2227,30 +2395,49 @@ class _EspMobileRow extends StatelessWidget {
     );
   }
 
-  Widget _rowSelect(BuildContext context) => DropdownButtonFormField<String>(
-    initialValue:
-        YorksV1EngineeringCalculatorService.fittingCoefficients.containsKey(
-          row.fitting,
+  Widget _rowSelect(BuildContext context) =>
+      YorksCalculatorManagedScope.isManaged(context)
+      ? YorksCalculatorSelect<String>(
+          label: _editorText(context, 'Fitting Type'),
+          value:
+              YorksV1EngineeringCalculatorService.fittingCoefficients
+                  .containsKey(row.fitting)
+              ? row.fitting
+              : 'Other',
+          searchable: true,
+          entries: [
+            for (final key
+                in YorksV1EngineeringCalculatorService.fittingCoefficients.keys)
+              DropdownMenuEntry(value: key, label: _editorText(context, key)),
+          ],
+          onSelected: (value) {
+            if (value != null) onChanged(row.copyWith(fitting: value));
+          },
         )
-        ? row.fitting
-        : 'Other',
-    isExpanded: true,
-    decoration: InputDecoration(
-      labelText: _editorText(context, 'Fitting Type'),
-      border: OutlineInputBorder(),
-    ),
-    items: YorksV1EngineeringCalculatorService.fittingCoefficients.keys
-        .map(
-          (key) => DropdownMenuItem(
-            value: key,
-            child: Text(_editorText(context, key)),
+      : DropdownButtonFormField<String>(
+          initialValue:
+              YorksV1EngineeringCalculatorService.fittingCoefficients
+                  .containsKey(row.fitting)
+              ? row.fitting
+              : 'Other',
+          isExpanded: true,
+          decoration: InputDecoration(
+            labelText: _editorText(context, 'Fitting Type'),
+            border: OutlineInputBorder(),
           ),
-        )
-        .toList(),
-    onChanged: (value) {
-      if (value != null) onChanged(row.copyWith(fitting: value));
-    },
-  );
+          items: YorksV1EngineeringCalculatorService.fittingCoefficients.keys
+              .map(
+                (key) => DropdownMenuItem(
+                  value: key,
+                  child: Text(_editorText(context, key)),
+                ),
+              )
+              .toList(),
+          onChanged: (value) {
+            if (value != null) onChanged(row.copyWith(fitting: value));
+          },
+        );
+
   Widget _mini(
     BuildContext context,
     String label,
@@ -2977,30 +3164,42 @@ class _SelectField extends StatelessWidget {
     required this.items,
     required this.onChanged,
   });
-  final String label;
-  final String value;
+  final String label, value;
   final List<String> items;
   final ValueChanged<String> onChanged;
   @override
-  Widget build(BuildContext context) => DropdownButtonFormField<String>(
-    initialValue: value,
-    isExpanded: true,
-    decoration: InputDecoration(
-      labelText: _editorText(context, label),
-      border: const OutlineInputBorder(),
-    ),
-    items: items
-        .map(
-          (item) => DropdownMenuItem(
-            value: item,
-            child: Text(_editorText(context, item)),
-          ),
+  Widget build(BuildContext context) =>
+      YorksCalculatorManagedScope.isManaged(context)
+      ? YorksCalculatorSelect<String>(
+          label: _editorText(context, label),
+          value: value,
+          entries: [
+            for (final item in items)
+              DropdownMenuEntry(value: item, label: _editorText(context, item)),
+          ],
+          onSelected: (v) {
+            if (v != null) onChanged(v);
+          },
         )
-        .toList(),
-    onChanged: (value) {
-      if (value != null) onChanged(value);
-    },
-  );
+      : DropdownButtonFormField<String>(
+          initialValue: value,
+          isExpanded: true,
+          decoration: InputDecoration(
+            labelText: _editorText(context, label),
+            border: const OutlineInputBorder(),
+          ),
+          items: items
+              .map(
+                (item) => DropdownMenuItem(
+                  value: item,
+                  child: Text(_editorText(context, item)),
+                ),
+              )
+              .toList(),
+          onChanged: (value) {
+            if (value != null) onChanged(value);
+          },
+        );
 }
 
 class _ToggleField extends StatelessWidget {
@@ -3027,7 +3226,11 @@ class _ToggleField extends StatelessWidget {
             child: InkWell(
               onTap: () => onChanged(item),
               child: Container(
-                constraints: const BoxConstraints(minHeight: 42),
+                constraints: BoxConstraints(
+                  minHeight: YorksCalculatorManagedScope.isManaged(context)
+                      ? AppSpacing.minTapTarget
+                      : 42,
+                ),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: item == selected ? AppColors.blueContainer : null,
@@ -3057,25 +3260,44 @@ class _SelectBox extends StatelessWidget {
   final List<String> items;
   final ValueChanged<String> onChanged;
   @override
-  Widget build(BuildContext context) => DropdownButtonFormField<String>(
-    initialValue: value,
-    isExpanded: true,
-    decoration: const InputDecoration(
-      border: OutlineInputBorder(),
-      isDense: true,
-    ),
-    items: items
-        .map(
-          (item) => DropdownMenuItem(
-            value: item,
-            child: Text(_editorText(context, item)),
+  Widget build(BuildContext context) =>
+      YorksCalculatorManagedScope.isManaged(context)
+      ? YorksCalculatorSelect<String>(
+          label: YorksCalculatorStrings.units.active(
+            ProviderScope.containerOf(
+              context,
+              listen: false,
+            ).read(languageProvider),
           ),
+          value: value,
+          searchable: items.length > 12,
+          entries: [
+            for (final item in items)
+              DropdownMenuEntry(value: item, label: _editorText(context, item)),
+          ],
+          onSelected: (v) {
+            if (v != null) onChanged(v);
+          },
         )
-        .toList(),
-    onChanged: (value) {
-      if (value != null) onChanged(value);
-    },
-  );
+      : DropdownButtonFormField<String>(
+          initialValue: value,
+          isExpanded: true,
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            isDense: true,
+          ),
+          items: items
+              .map(
+                (item) => DropdownMenuItem(
+                  value: item,
+                  child: Text(_editorText(context, item)),
+                ),
+              )
+              .toList(),
+          onChanged: (value) {
+            if (value != null) onChanged(value);
+          },
+        );
 }
 
 class _ToolbarButton extends StatelessWidget {

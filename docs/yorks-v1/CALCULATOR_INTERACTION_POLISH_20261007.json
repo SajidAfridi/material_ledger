@@ -1,0 +1,60 @@
+{
+  "status": "staging_ready_pending_astra_audit",
+  "application_source": "bc6859f3f23a48339f50ca9a6c9a8b2db7b06a2a",
+  "pull_request": "https://github.com/SajidAfridi/material_ledger/pull/51",
+  "deployment_id": "dpl_AzbAYbSsNdXSQL85At33qc4faR4k",
+  "immutable_url": "https://yorks-r35-8j19to7bn-sajid-alis-projects-0ec775a2.vercel.app",
+  "staging_url": "https://yorks-r35-staging.vercel.app/#/tools/calculators",
+  "backend": "iqltcyimlqtcwyzlemwx",
+  "main_bytes": 9928610,
+  "main_gzip_bytes": 2862255,
+  "main_sha256": "7a616a030ef4dd8003184d5fc9585640a0f1b1d92a23cf37ffe843edf89c17ea",
+  "gates": {
+    "flutter_analyze": "no_issues",
+    "flutter_passed": 2493,
+    "retained_skips": 4,
+    "database_files": 123,
+    "database_assertions": 3597,
+    "calculator_goldens": 13,
+    "widths": [
+      1366,
+      768,
+      360
+    ],
+    "candidate_checks": 26,
+    "alias_checks": 26,
+    "ci_web": "passed",
+    "ci_apk": "passed_ephemeral_signing_not_store_artifact",
+    "browser_errors": 0
+  },
+  "telemetry": {
+    "project_id": 600792,
+    "environment": "staging",
+    "schema_version": 2,
+    "live_ingestion_confirmed": true,
+    "final_witness_release": "bc6859f3f23a48339f50ca9a6c9a8b2db7b06a2a",
+    "final_witness_partial_hour_utc": "2026-10-06 20:00",
+    "opened": 3,
+    "interaction": 2,
+    "access_result": 1,
+    "operations": 4,
+    "product_metrics_claimed": false,
+    "replay_enabled_by_client": false
+  },
+  "synthetic_fixtures": {
+    "duct": "79d4974d-36d2-4b68-bb4d-ab594287f948",
+    "esp": "8644cf58-d84f-4d71-8344-d238254bbe87",
+    "both_archived": true,
+    "temporary_grants": 0
+  },
+  "production": {
+    "changed": false,
+    "deployment_id": "dpl_5N1eU8yvGGi9gGaRX4bBoa3ZW2yr",
+    "release_authorized": false
+  },
+  "limits": {
+    "physical_device_printer": false,
+    "all_role_browser_logins": false,
+    "hosted_flutter_ci": "retained workflow/account exception; local gates recorded"
+  }
+}

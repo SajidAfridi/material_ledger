@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../models/yorks_v1_calculator_workspace.dart';
+import '../models/analytics_event.dart';
+import '../services/analytics_service.dart';
 import '../repositories/yorks_v1_calculator_repository.dart';
 
 class YorksCalculatorController extends ChangeNotifier {
@@ -10,10 +12,38 @@ class YorksCalculatorController extends ChangeNotifier {
     this.repository, {
     this.preferences,
     required this.identity,
+    this.analytics = const NoopAnalyticsService(),
   });
   final YorksCalculatorRepository repository;
   final SharedPreferences? preferences;
   final String identity;
+  final AnalyticsService analytics;
+  void track(
+    AnalyticsEvent event, {
+    String kind = 'all',
+    String scope = 'all',
+    String source = 'button',
+    String? action,
+    String? outcome,
+    String? mode,
+    bool? success,
+    int? count,
+    Object? failure,
+  }) => analytics.capture(
+    event,
+    properties: {
+      AnalyticsProperty.calculatorKind: kind,
+      AnalyticsProperty.scopeType: scope,
+      AnalyticsProperty.source: source,
+      AnalyticsProperty.actionType: ?action,
+      AnalyticsProperty.outcome: ?outcome,
+      AnalyticsProperty.mode: ?mode,
+      AnalyticsProperty.success: ?success,
+      AnalyticsProperty.itemCount: ?count,
+      if (failure != null)
+        AnalyticsProperty.errorCategory: analyticsErrorCategory(failure),
+    },
+  );
   List<YorksCalculatorRecord> items = [];
   Map<String, dynamic> options = {};
   YorksCalculatorRecord? record;
@@ -48,6 +78,7 @@ class YorksCalculatorController extends ChangeNotifier {
     loading = true;
     error = null;
     notifyListeners();
+    final operation = analytics.beginOperation('calculator_list');
     try {
       final result = await repository.list(
         search: search,
@@ -56,6 +87,7 @@ class YorksCalculatorController extends ChangeNotifier {
         kind: kind,
         scope: scope,
       );
+      operation.complete(resultCount: (result['items'] as List).length);
       if (_disposed || generation != _generation) return;
       final rows = (result['items'] as List)
           .map(
@@ -67,6 +99,7 @@ class YorksCalculatorController extends ChangeNotifier {
       canCreate = result['can_create'] == true;
       canManage = result['can_manage'] == true;
     } catch (e) {
+      operation.fail(e);
       if (generation == _generation) {
         error = e;
         items = [];
@@ -87,10 +120,13 @@ class YorksCalculatorController extends ChangeNotifier {
     record = null;
     denied = false;
     notifyListeners();
+    final operation = analytics.beginOperation('calculator_open');
     try {
       final result = await repository.get(id);
+      operation.complete();
       if (!_disposed) record = result;
     } catch (e) {
+      operation.fail(e);
       if (!_disposed) {
         error = e;
         denied = e.toString().contains('ACCESS_DENIED');
@@ -102,9 +138,12 @@ class YorksCalculatorController extends ChangeNotifier {
   }
 
   Future<void> loadOptions() async {
+    final operation = analytics.beginOperation('calculator_options');
     try {
       options = await repository.options();
+      operation.complete();
     } catch (e) {
+      operation.fail(e);
       error = e;
       rethrow;
     } finally {
@@ -137,11 +176,15 @@ class YorksCalculatorController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<YorksCalculatorRecord?> save(Map<String, dynamic> payload) async {
+  Future<YorksCalculatorRecord?> save(
+    Map<String, dynamic> payload, {
+    String source = 'button',
+  }) async {
     if (busy || denied) return null;
     busy = true;
     error = null;
     notifyListeners();
+    final operation = analytics.beginOperation('calculator_save');
     try {
       _pending ??= {
         'payload': jsonDecode(jsonEncode(payload)),
@@ -158,6 +201,23 @@ class YorksCalculatorController extends ChangeNotifier {
       if (!_disposed) record = result;
       _pending = null;
       await prefs?.remove(_key);
+      operation.complete();
+      if ((payload['expected_version'] as int? ?? 0) == 0) {
+        track(
+          AnalyticsEvent.calculatorCreated,
+          source: source,
+          kind: result.kind,
+          scope: result.projectId == null ? 'general' : 'project',
+          outcome: 'confirmed',
+        );
+      }
+      track(
+        AnalyticsEvent.calculatorSaved,
+        source: source,
+        kind: result.kind,
+        scope: result.projectId == null ? 'general' : 'project',
+        outcome: 'confirmed',
+      );
       return result;
     } catch (e) {
       error = e;
@@ -171,12 +231,48 @@ class YorksCalculatorController extends ChangeNotifier {
         _pending = null;
         await preferences?.remove(_key);
         if (message.contains('ACCESS_DENIED')) denied = true;
+        if (message.contains('CALCULATOR_PROJECT_ARCHIVED') && record != null) {
+          record = YorksCalculatorRecord({...record!.json, 'can_edit': false});
+        }
       }
+      operation.fail(e);
+      track(
+        hasPending
+            ? AnalyticsEvent.calculatorSaveUnconfirmed
+            : AnalyticsEvent.calculatorSaveFailed,
+        source: source,
+        kind: payload['kind'] as String? ?? 'all',
+        scope: payload['project_id'] == null ? 'general' : 'project',
+        outcome: hasPending ? 'unconfirmed' : 'failed',
+        failure: e,
+      );
       return null;
     } finally {
       busy = false;
       notifyListeners();
     }
+  }
+
+  YorksCalculatorDeviceImports deviceImports() {
+    final available = <String, Map<String, dynamic>>{};
+    final invalid = <String>{};
+    for (final kind in ['duct', 'esp']) {
+      final stored = preferences?.get('yorks_r35_${kind}_calculation');
+      if (stored == null) continue;
+      if (stored is! String) {
+        invalid.add(kind);
+        continue;
+      }
+      try {
+        available[kind] = YorksCalculatorFiles.decode(
+          stored,
+          expectedKind: kind,
+        );
+      } catch (_) {
+        invalid.add(kind);
+      }
+    }
+    return YorksCalculatorDeviceImports(available, invalid);
   }
 
   Map<String, dynamic>? recoverPending() {
@@ -197,6 +293,7 @@ class YorksCalculatorController extends ChangeNotifier {
     busy = true;
     error = null;
     notifyListeners();
+    final operation = analytics.beginOperation('calculator_manage');
     try {
       final intent = {
         'id': current.id,
@@ -208,10 +305,34 @@ class YorksCalculatorController extends ChangeNotifier {
         'calculator:$identity:${YorksCalculatorFiles.fingerprint(intent)}',
       );
       final result = await repository.manage(intent, key);
+      operation.complete();
       if (!_disposed) record = result;
+      track(
+        AnalyticsEvent.calculatorAccessResult,
+        kind: current.kind,
+        scope: current.projectId == null ? 'general' : 'project',
+        action: change['action'] == 'access'
+            ? (change['access'] == 'none' ? 'revoke' : 'grant')
+            : (change['archived'] == true ? 'archive' : 'restore'),
+        mode: change['access'] as String?,
+        outcome: 'confirmed',
+        success: true,
+      );
       return true;
     } catch (e) {
+      operation.fail(e);
       error = e;
+      track(
+        AnalyticsEvent.calculatorAccessResult,
+        kind: current.kind,
+        scope: current.projectId == null ? 'general' : 'project',
+        action: change['action'] == 'access'
+            ? (change['access'] == 'none' ? 'revoke' : 'grant')
+            : (change['archived'] == true ? 'archive' : 'restore'),
+        outcome: 'failed',
+        success: false,
+        failure: e,
+      );
       return false;
     } finally {
       busy = false;
