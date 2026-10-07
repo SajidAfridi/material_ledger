@@ -21,3 +21,15 @@ Validation: `flutter pub get`, changed-file format check, `flutter analyze`, and
 ## Preservation and rollback
 
 No normalized request, line, archive, private account copy or migration is changed by this correction. Local unsaved input remains owner-scoped. Keep the database repair and archives from PR #53; a client rollback must not reinstate destructive recovery behavior. Browser/device acceptance and future production error rates remain distinct from automated regressions.
+
+## Published follow-up
+
+- Public app: <https://yorks-r35.vercel.app>.
+- Runtime source: `835b569f7f7af2cec5c30aa19c2c1fbbe4e2ed24`, built from a clean isolated checkout with the existing production configuration and rollout flags.
+- Deployment: `dpl_HhCHpT2robsQTTMagZzarPwAgbTK`; immutable URL: <https://yorks-r35-g4oiwhjun-sajid-alis-projects-0ec775a2.vercel.app>.
+- Main bundle: 9,944,973 bytes (2,866,747 gzip); SHA-256 `8036bcf302c2246669de896c8958dec9860d52154f78f1075120d62904448df5`.
+- Exactly 61 static files uploaded; source, environment files and Vercel local configuration excluded. Production backend, clean source stamp and absence of service-role JWTs verified before upload.
+- Candidate and public deployment each passed all 26 route/asset hash checks, including deferred bundles and PWA files. The earlier `f892d4d` candidate was not promoted to the public domain.
+- Signed-in Owner/Admin startup, the server-loaded 202-request register, seven-item My Material Requests view, and saved-draft open → Back passed on the published client. No Save, Submit or Delete action was invoked; browser error logs were empty. Fresh-device 26/27-line recovery and live revocation remain automated widget/controller evidence; production user records were not edited to reenact them.
+
+The PR remains open for source review. Existing browser sessions should refresh to load the corrected client. No additional database mutation or cleanup was performed for these P2 corrections.
