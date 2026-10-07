@@ -366,6 +366,10 @@ class YorksV1MaterialRequestDraftController
   void invalidateRecoveryAuthority() {
     if (_disposed || !_reviewingRecovery) return;
     _recoveryGeneration++;
+    // Capture only the current owner's pending local fields while updates are
+    // still accepted. This is synchronous: protected content is cleared below
+    // without waiting for persistence or a replacement authorized lookup.
+    _flushPendingEditorInput();
     _acceptingRecoveryInput = false;
     state = YorksV1MaterialRequestDraftState(
       draft: state.draft,

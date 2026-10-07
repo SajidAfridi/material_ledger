@@ -122,3 +122,31 @@ including the existing desktop and 360px visual goldens. CI web build passed
 its startup budget (9,885,130 bytes; gzip 2,847,887); CI APK build passed
 (111.9 MB, ephemeral signing only). No schema changes or production deployment;
 a live cross-device race on a physical mobile device remains unverified.
+
+
+## Authority refresh preserves pending local input — PR only, not deployed
+
+Recovery authority invalidation now invokes the existing synchronous editor
+flush before disabling input and closing the editor. This also covers the
+invalidation performed by an unchanged-permissions refresh. Local field capture
+uses the existing current-owner guard, so an account switch does not flush the
+previous user's form. The invalidation still advances the response generation
+first, clears the protected recovery projection synchronously and never waits
+for local persistence or a network read. Save/Submit and ordinary edits stay
+blocked while authority is denied.
+
+Four 360px delayed-lookup regressions reproduced the prior loss and cover
+Add/Edit with unchanged permissions and revoke/regrant. They preserve cleared
+quantity and unfinished size, inspect persisted local input, reject late data
+while revoked, hold the regrant lookup open to verify there is no stale server
+projection, clear an already populated comparison immediately on a later
+revocation, and reopen the editor after regrant with its fields intact. Two
+controller regressions cover direct invalidation for the current owner and
+an account change, including late lookup failure and blocked subsequent edits.
+
+Validation: dependency resolution, formatting and analyzer passed; full Flutter
+suite passed 2,540 tests with 4 retained skips, including existing desktop and
+360px visual goldens. CI web build passed its startup budget (9,885,138 bytes;
+gzip 2,847,857). CI APK build passed (111.9 MB, ephemeral signing only).
+No database or production deployment changes. Live permission-refresh/device
+acceptance remains separate from this local regression evidence.

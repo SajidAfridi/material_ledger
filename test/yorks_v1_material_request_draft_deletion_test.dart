@@ -191,6 +191,50 @@ void main() {
     },
   );
 
+  for (final ownerChanged in [false, true]) {
+    test(
+      'authority invalidation flushes only current owner input; changed=$ownerChanged',
+      () async {
+        repository.getError = const YorksV1DomainException(
+          YorksV1DomainErrorCode.invalidTransition,
+          serverMessage: 'V1_PRIVATE_DRAFT_ALREADY_SAVED',
+        );
+        repository.requestError = const YorksV1DomainException(
+          YorksV1DomainErrorCode.backendUnavailable,
+        );
+        repository.requestBlock = Completer<void>();
+        final hydration = controller.hydratePrivateDraft();
+        await repository.requestStarted.future;
+        var flushes = 0;
+        controller.addPendingEditorFlusher(() {
+          flushes++;
+          unawaited(controller.setTitle('Buffered local input'));
+        });
+        currentOwner = !ownerChanged;
+        projectAllowed = false;
+        controller.invalidateRecoveryAuthority();
+        expect(flushes, ownerChanged ? 0 : 1);
+        expect(
+          controller.currentDraft.title,
+          ownerChanged ? 'Private title' : 'Buffered local input',
+        );
+        expect(controller.state.recoveryRequest, isNull);
+        expect(controller.lastErrorCode, YorksV1DomainErrorCode.unauthorized);
+        await controller.setTitle('Must stay locked');
+        repository.requestBlock!.complete();
+        await hydration;
+        await Future<void>.delayed(Duration.zero);
+        expect(
+          store.readAll().first.title,
+          ownerChanged ? 'Private title' : 'Buffered local input',
+        );
+        expect(controller.lastErrorCode, YorksV1DomainErrorCode.unauthorized);
+        expect(controller.state.recoveryRequest, isNull);
+        expect(flushes, ownerChanged ? 0 : 1);
+      },
+    );
+  }
+
   test(
     'request read denial preserves recovery and reports a failed verification',
     () async {
