@@ -3,6 +3,18 @@ import 'app_language.dart';
 /// Localized copy for the guarded Workforce daily-attendance workspace.
 abstract final class YorksV1WorkforceStrings {
   static const Map<String, Map<String, String>> _copy = {
+    'attendance_changed': {
+      'en': 'Attendance changed — not saved yet',
+      'ar': 'تم تغيير الحضور — لم يُحفظ بعد',
+      'ur': 'حاضری تبدیل ہوئی — ابھی محفوظ نہیں ہوئی',
+      'hi': 'उपस्थिति बदली — अभी सहेजी नहीं गई',
+    },
+    'undo_mark': {
+      'en': 'Undo',
+      'ar': 'تراجع',
+      'ur': 'واپس کریں',
+      'hi': 'वापस करें',
+    },
     'workforce': {
       'en': 'Workforce',
       'ar': 'القوى العاملة',

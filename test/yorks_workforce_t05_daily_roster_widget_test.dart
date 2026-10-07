@@ -394,6 +394,34 @@ void main() {
     },
   );
 
+  testWidgets('direct mobile marks stay local and undo restores hours', (
+    tester,
+  ) async {
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final controller = await _pumpRoster(
+      tester,
+      viewport: const Size(390, 844),
+      language: AppLanguage.english,
+    );
+    final before = controller.state.rows.first;
+    await tester.tap(find.byKey(const Key('workforce-absent-$_workerId')));
+    await tester.pumpAndSettle();
+    expect(
+      controller.state.rows.first.status,
+      YorksWorkforceAttendanceStatus.absent,
+    );
+    expect(controller.state.rows.first.regularMinutes, 0);
+    expect(controller.state.isReviewing, isFalse);
+    await tester.tap(find.text('Undo'));
+    await tester.pumpAndSettle();
+    expect(controller.state.rows.first, same(before));
+    expect(controller.state.dirtyRows, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('mobile focused editor and bulk sheet match visual evidence', (
     tester,
   ) async {

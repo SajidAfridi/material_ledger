@@ -183,12 +183,11 @@ class _OverviewHeader extends StatelessWidget {
         Text(_t(language, 'body'), style: AppTypography.bodyMedium),
       ],
     );
-    // The compact overview is deliberately read-only. Management remains
-    // reachable from the permission-filtered workspace drawer, without
-    // turning the mobile summary into a mutation surface.
-    final actionSpecs = compact
-        ? const <_OverviewActionSpec>[]
-        : _overviewActions(projection, canManageWorkforce: canManageWorkforce);
+    // Navigation remains server-authorized on phones as well as desktop.
+    final actionSpecs = _overviewActions(
+      projection,
+      canManageWorkforce: !compact && canManageWorkforce,
+    );
     final actions = Wrap(
       spacing: AppSpacing.sm,
       runSpacing: AppSpacing.sm,

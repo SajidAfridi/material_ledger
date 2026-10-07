@@ -4134,6 +4134,29 @@ class _MobileTodayRoster extends StatelessWidget {
   final ValueChanged<String> onOpenWorker;
   final VoidCallback onBulk;
 
+  void _quickMark(
+    BuildContext context,
+    YorksWorkforceDailyRosterDraftRow before,
+    VoidCallback action,
+  ) {
+    action();
+    final after = controller.currentRow(before.workerId);
+    if (after == null || identical(before, after)) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            YorksV1WorkforceStrings.text(language, 'attendance_changed'),
+          ),
+          action: SnackBarAction(
+            label: YorksV1WorkforceStrings.text(language, 'undo_mark'),
+            onPressed: () => controller.undoQuickMark(before, after),
+          ),
+        ),
+      );
+  }
+
   @override
   Widget build(BuildContext context) {
     final entered = state.rows
@@ -4267,6 +4290,25 @@ class _MobileTodayRoster extends StatelessWidget {
                 selected: state.selectedWorkerIds.contains(row.workerId),
                 onToggle: controller.toggleSelection,
                 onOpen: onOpenWorker,
+                onPresent: state.isBusy || !row.isEditable
+                    ? null
+                    : () {
+                        _quickMark(context, row, () {
+                          if (!controller.markPresent(row.workerId)) {
+                            onOpenWorker(row.workerId);
+                          }
+                        });
+                      },
+                onAbsent: state.isBusy || !row.isEditable
+                    ? null
+                    : () => _quickMark(
+                        context,
+                        row,
+                        () => controller.updateRow(
+                          row.workerId,
+                          status: YorksWorkforceAttendanceStatus.absent,
+                        ),
+                      ),
               ),
             ),
         if (state.canLoadMore) ...[
@@ -4324,6 +4366,8 @@ class _MobileWorkerCard extends StatelessWidget {
     required this.selected,
     required this.onToggle,
     required this.onOpen,
+    required this.onPresent,
+    required this.onAbsent,
   });
 
   final AppLanguage language;
@@ -4332,6 +4376,8 @@ class _MobileWorkerCard extends StatelessWidget {
   final bool selected;
   final ValueChanged<String> onToggle;
   final ValueChanged<String> onOpen;
+  final VoidCallback? onPresent;
+  final VoidCallback? onAbsent;
 
   @override
   Widget build(BuildContext context) {
@@ -4340,7 +4386,7 @@ class _MobileWorkerCard extends StatelessWidget {
       button: true,
       selected: selected,
       label:
-          '${row.source.workerName}, ${row.source.workerNumber}, $status, ${_minutes(row.regularMinutes)} regular, ${_minutes(row.overtimeMinutes)} overtime',
+          '${row.source.workerName}, ${row.source.workerNumber}, $status, ${_minutes(row.regularMinutes)} ${YorksV1WorkforceStrings.text(language, 'regular_hours')}, ${_minutes(row.overtimeMinutes)} ${YorksV1WorkforceStrings.text(language, 'overtime_hours')}',
       child: Card(
         margin: EdgeInsets.zero,
         clipBehavior: Clip.antiAlias,
@@ -4378,8 +4424,6 @@ class _MobileWorkerCard extends StatelessWidget {
                       children: [
                         Text(
                           row.source.workerName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                           style: AppTypography.titleSmall,
                         ),
                         Text(
@@ -4433,6 +4477,49 @@ class _MobileWorkerCard extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                                 style: AppTypography.labelSmall.copyWith(
                                   color: AppColors.muted,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        Wrap(
+                          spacing: AppSpacing.xs,
+                          runSpacing: AppSpacing.xs,
+                          children: [
+                            OutlinedButton(
+                              key: Key('workforce-present-${row.workerId}'),
+                              style: OutlinedButton.styleFrom(
+                                minimumSize: const Size(0, 48),
+                                backgroundColor:
+                                    row.status ==
+                                        YorksWorkforceAttendanceStatus.present
+                                    ? AppColors.successContainer
+                                    : null,
+                              ),
+                              onPressed: onPresent,
+                              child: Text(
+                                _statusLabel(
+                                  language,
+                                  YorksWorkforceAttendanceStatus.present,
+                                ),
+                              ),
+                            ),
+                            OutlinedButton(
+                              key: Key('workforce-absent-${row.workerId}'),
+                              style: OutlinedButton.styleFrom(
+                                minimumSize: const Size(0, 48),
+                                backgroundColor:
+                                    row.status ==
+                                        YorksWorkforceAttendanceStatus.absent
+                                    ? AppColors.warningContainer
+                                    : null,
+                              ),
+                              onPressed: onAbsent,
+                              child: Text(
+                                _statusLabel(
+                                  language,
+                                  YorksWorkforceAttendanceStatus.absent,
                                 ),
                               ),
                             ),
