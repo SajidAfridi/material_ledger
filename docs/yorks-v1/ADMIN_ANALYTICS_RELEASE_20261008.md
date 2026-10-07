@@ -97,3 +97,29 @@ payroll, P&L or dashboard-builder scope is introduced.
 - Desktop, tablet, 360px and RTL golden evidence is in `test/goldens/analytics/`
   and Admin Overview evidence in `test/goldens/r38_10/`.
 - Internal documentation links and `git diff --check` passed.
+
+### Deployed release
+
+- Source commit: `fb6631fb26cb59f0ca99fc4c3fa0ce89bd41de76` (clean production build).
+- Staging: `https://yorks-r35-staging.vercel.app`, candidate
+  `https://yorks-r35-3etj7a37q-sajid-alis-projects-0ec775a2.vercel.app`.
+  Dedicated staging backend; all 27 route/asset checks matched the build.
+- Production: `https://yorks-r35.vercel.app`; deployment
+  `dpl_5jsSC2katbrBQnFoXxyb4CUVTAgV`, immutable URL
+  `https://yorks-r35-l86ndm73j-sajid-alis-projects-0ec775a2.vercel.app`.
+- Candidate and public production each passed all 27 route/asset SHA-256 checks,
+  including deferred libraries, PWA files and retained module routes.
+- Production source stamp/backend separation verified; no CI or staging backend
+  was present in the production artifact. Existing module flags retained.
+- Authenticated staging Analytics checked at desktop and 360px; mobile period
+  sheet changed to 12 months and the URL and confirmed result retained it.
+- Authenticated production Overview and Analytics checked in the universal shell
+  on desktop and mobile. These were read-only checks; no business records changed.
+- Immediate Vercel 5xx query returned no matching logs. This narrow observation
+  does not establish a longer reliability window or backend latency percentile.
+- Previous production remained active until explicit promotion. Rollback uses
+  the previously recorded deployment; database state remains unchanged.
+
+Browser evidence: `/private/tmp/yorks-analytics-evidence-20261008/`. Build/test/
+verification logs use `/tmp/yorks-analytics-*`. The production web build passed
+the startup budget: main JS 9,973,574 bytes, gzip 2,877,093 bytes.

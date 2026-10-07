@@ -450,7 +450,7 @@ cohort; local tests cannot manufacture that evidence.
 ## Admin Overview and Analytics — 8 October 2026
 
 The `analytics interaction` event records fixed `action_type` values (`filter`,
-`section`) and the selected `source_domain`. It contains no project IDs, names,
+`section`) and the selected domain in `source`. It contains no project IDs, names,
 filter text, quantities or commercial values. Dashboard repository reads use
 the existing `dashboard_load` operation with `source=company_analytics` and
 `workflow=dashboard`, including typed failure outcomes. These events measure
