@@ -105,6 +105,56 @@ class YorksV1OverviewScreen extends ConsumerWidget {
     final executive =
         role == YorksV1Role.admin || (role?.isGlobalProjectEngineer ?? false);
     final admin = role == YorksV1Role.admin;
+    final canOpenAnalytics =
+        featureFlags.analytics &&
+        permissions.hybridAllows(
+          YorksV1CapabilityKeys.analyticsView,
+          legacyAllowed: false,
+          organizationSummary: true,
+        );
+    final AsyncValue<CompanyAnalyticsProjection?> companyAnalytics =
+        admin && canOpenAnalytics
+        ? ref
+              .watch(
+                companyAnalyticsProjectionProvider(
+                  const CompanyAnalyticsFilters(months: 6),
+                ),
+              )
+              .whenData<CompanyAnalyticsProjection?>((value) => value)
+        : const AsyncData<CompanyAnalyticsProjection?>(null);
+    // The protected company response already contains the Admin summaries.
+    // Subscribe to legacy module projections only when this view is unavailable.
+    if (admin && canOpenAnalytics && !companyAnalytics.hasError) {
+      return YorksV1ExecutiveOverview(
+        language: language,
+        role: role!,
+        displayName: user?.fullName,
+        projects: const AsyncData([]),
+        requests: const AsyncData([]),
+        inventory: const AsyncData(null),
+        configuration: const AsyncData(null),
+        rentals: const AsyncData(null),
+        audit: null,
+        activeUsers: null,
+        canBrowseInventory: false,
+        canAccessRentals: false,
+        canOpenAnalytics: true,
+        companyAnalytics: companyAnalytics,
+        featureFlags: featureFlags,
+        onRefresh: () async {
+          final provider = companyAnalyticsProjectionProvider(
+            const CompanyAnalyticsFilters(),
+          );
+          if (ref.read(provider).isLoading) return;
+          try {
+            ref.invalidate(provider);
+            await ref.read(provider.future);
+          } catch (_) {
+            // The typed provider failure activates the existing source fallback.
+          }
+        },
+      );
+    }
     final AsyncValue<YorksV1ProjectOverview> projectOverview = ref.watch(
       yorksV1ProjectOverviewProvider,
     );
@@ -153,23 +203,6 @@ class YorksV1OverviewScreen extends ConsumerWidget {
       legacyAllowed: role?.canBrowseInventory == true,
       organizationSummary: true,
     );
-    final canOpenAnalytics =
-        featureFlags.analytics &&
-        permissions.hybridAllows(
-          YorksV1CapabilityKeys.analyticsView,
-          legacyAllowed: false,
-          organizationSummary: true,
-        );
-    final AsyncValue<CompanyAnalyticsProjection?> companyAnalytics =
-        admin && canOpenAnalytics
-        ? ref
-              .watch(
-                companyAnalyticsProjectionProvider(
-                  const CompanyAnalyticsFilters(months: 6),
-                ),
-              )
-              .whenData<CompanyAnalyticsProjection?>((value) => value)
-        : const AsyncData<CompanyAnalyticsProjection?>(null);
     final canAccessRentals = admin && ref.watch(canAccessRentalsProvider);
     final shouldLoadInventory = canBrowseInventory;
     final AsyncValue<YorksV1InventoryWorkspace?> inventory = shouldLoadInventory

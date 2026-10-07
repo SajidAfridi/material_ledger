@@ -2598,11 +2598,7 @@ class _DeferredCompanyAnalyticsScreen extends StatefulWidget {
     this.initialProjectId,
     required this.initialMonths,
     required this.initialDomain,
-  }) : super(
-         key: ValueKey(
-           'company-analytics-route:$initialProjectId:$initialMonths:$initialDomain',
-         ),
-       );
+  }) : super(key: ValueKey('company-analytics-route'));
 
   final String? initialProjectId;
   final int initialMonths;
@@ -2637,7 +2633,11 @@ class _DeferredCompanyAnalyticsScreenState
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.done &&
             !snapshot.hasError) {
-          return company_analytics.CompanyAnalyticsScreen();
+          return company_analytics.CompanyAnalyticsScreen(
+            initialProjectId: widget.initialProjectId,
+            initialMonths: widget.initialMonths,
+            initialDomain: widget.initialDomain,
+          );
         }
         if (snapshot.hasError) {
           return Center(

@@ -1,6 +1,6 @@
 # Admin Overview and Analytics: review and improvement plan
 
-Date: 8 October 2026. Status: **proposal for approval; no application or production changes**.
+Date: 8 October 2026. Status: **approved for implementation and production release by the owner on 8 October 2026**. Implementation and verification are recorded in the accompanying release evidence.
 
 ## 1. Conclusion
 

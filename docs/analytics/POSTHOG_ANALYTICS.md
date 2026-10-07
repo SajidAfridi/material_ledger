@@ -446,3 +446,14 @@ Its Aug25–Sep24 UTC observations are historical recorded attempts across relea
 they are not measurements of this candidate. No Company workflow events existed
 in that baseline. Company production usage and latency need a new post-release
 cohort; local tests cannot manufacture that evidence.
+
+## Admin Overview and Analytics — 8 October 2026
+
+The `analytics interaction` event records fixed `action_type` values (`filter`,
+`section`) and the selected `source_domain`. It contains no project IDs, names,
+filter text, quantities or commercial values. Dashboard repository reads use
+the existing `dashboard_load` operation with `source=company_analytics` and
+`workflow=dashboard`, including typed failure outcomes. These events measure
+interaction and transport outcomes; the protected RPC remains the source of
+operational facts. Post-release cohorts are required before judging adoption
+or latency improvements.

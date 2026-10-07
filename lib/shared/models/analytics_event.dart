@@ -5,6 +5,7 @@ const int analyticsSchemaVersion = 2;
 /// The complete Yorks product-analytics event allowlist. New events must be
 /// reviewed here and documented before a call site can emit them.
 enum AnalyticsEvent {
+  analyticsInteraction('analytics interaction'),
   calculatorCreationStarted('calculator creation started'),
   calculatorCreated('calculator created'),
   calculatorOpened('calculator opened'),
