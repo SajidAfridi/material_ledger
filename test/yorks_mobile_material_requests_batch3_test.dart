@@ -100,6 +100,71 @@ void main() {
     _preferences = await SharedPreferences.getInstance();
   });
 
+  for (final width in [360.0, 1366.0]) {
+    testWidgets('saved recovery review preserves differing input at $width', (
+      tester,
+    ) async {
+      await _setViewport(tester, Size(width, 800));
+      const owner = 'mobile-mr-user';
+      final store = YorksV1MaterialRequestDraftStore(
+        preferences: _preferences,
+        key: 'yorks_v1_material_request_drafts_v1_$owner',
+      );
+      await store.writeAll([
+        YorksV1MaterialRequestDraft(
+          id: _draftId,
+          ownerAuthUserId: owner,
+          submissionIdempotencyKey: 'recovery-key',
+          title: 'Additional workshop materials',
+          updatedAt: DateTime.utc(2026, 10, 7),
+          lines: const [
+            YorksV1MaterialRequestLine(
+              id: 'extra',
+              displayOrder: 1,
+              source: YorksV1MaterialRequestLineSource.custom,
+              description: 'Extra recovered duct section',
+              quantity: '2',
+              unit: 'Nos',
+            ),
+          ],
+        ),
+      ]);
+      await tester.pumpWidget(
+        _scope(
+          overrides: [
+            yorksV1AuthUserIdProvider.overrideWithValue(owner),
+            yorksV1CurrentRoleProvider.overrideWithValue(
+              YorksV1Role.projectEngineer,
+            ),
+            yorksV1MaterialRequestRepositoryProvider.overrideWithValue(
+              _RecoveryReviewRepository(),
+            ),
+            yorksV1RuntimeConfigurationProvider.overrideWith(
+              (ref) async => _runtimeConfiguration(),
+            ),
+          ],
+          child: const YorksV1MaterialRequestDraftScreen(
+            draftId: _draftId,
+            entryMode: YorksV1MaterialRequestDraftEntryMode.resumePrivateDraft,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Extra recovered duct section'), findsOneWidget);
+      expect(find.text('Continue with recovered changes'), findsOneWidget);
+      expect(find.text('Open existing request'), findsOneWidget);
+      expect(store.readAll().single.lines.single.id, 'extra');
+      expect(store.readAll().single.serverRecordVersion, 0);
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile(
+          'goldens/r35/mr_recovery_review_${width.toInt()}.png',
+        ),
+      );
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets(
     'arranging request edit shows Save without a second submission on desktop',
     (tester) async {
@@ -3760,6 +3825,22 @@ YorksV1RuntimeConfiguration _runtimeConfiguration({
   requireExternalSourceReadiness: false,
   pushEnabled: true,
 );
+
+class _RecoveryReviewRepository extends _MaterialRequestRepositoryFixture
+    implements YorksV1MaterialRequestPhase2Repository {
+  _RecoveryReviewRepository() : super(serverRequest: _draftRequest);
+  @override
+  Future<YorksV1PrivateMaterialRequestDraftRecord?> getPrivateDraft({
+    required String draftId,
+    required String ownerAuthUserId,
+    required String submissionIdempotencyKey,
+  }) async => throw const YorksV1DomainException(
+    YorksV1DomainErrorCode.invalidTransition,
+    serverMessage: 'V1_PRIVATE_DRAFT_ALREADY_SAVED',
+  );
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
 
 class _DraftDeletionRepositoryFixture extends _MaterialRequestRepositoryFixture
     implements YorksV1MaterialRequestPhase2Repository {

@@ -193,7 +193,7 @@ class _ProjectMaterialRequestsScreen extends ConsumerWidget {
                   .valueOrNull ??
               const <YorksV1PrivateMaterialRequestDraftRecord>[];
     final savedDrafts = _mergeRecoverableDrafts(
-      deviceDrafts,
+      _visibleDeviceRecoveryDrafts(ref, deviceDrafts, ownerAuthUserId),
       accountDrafts.map((record) => record.draft),
       projectId: projectId,
     );
@@ -474,7 +474,7 @@ class _YorksMobileMaterialRequestsPageState
                   .valueOrNull ??
               const <YorksV1PrivateMaterialRequestDraftRecord>[];
     final savedDrafts = _mergeRecoverableDrafts(
-      deviceDrafts,
+      _visibleDeviceRecoveryDrafts(ref, deviceDrafts, ownerAuthUserId),
       accountDrafts.map((record) => record.draft),
       projectId: widget.projectId,
     );
@@ -1314,7 +1314,7 @@ class _RecoverableMaterialDraftNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final visibleDrafts = compact ? drafts.take(3) : drafts.take(5);
+    final visibleDrafts = drafts;
     final body = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1478,6 +1478,44 @@ class _RecoverableDraftRowState extends ConsumerState<_RecoverableDraftRow> {
       ),
     );
   }
+}
+
+List<YorksV1MaterialRequestDraft> _visibleDeviceRecoveryDrafts(
+  WidgetRef ref,
+  List<YorksV1MaterialRequestDraft> drafts,
+  String? owner,
+) {
+  if (owner == null || drafts.isEmpty) return drafts;
+  final ids =
+      drafts
+          .where(
+            (draft) =>
+                !draft.hasPendingSave &&
+                draft.pendingSubmissionApproval == null,
+          )
+          .map((draft) => draft.id)
+          .toList()
+        ..sort();
+  final obsolete =
+      ref
+          .watch(
+            yorksV1ObsoleteMaterialRequestRecoveryProvider((
+              owner: owner,
+              ids: ids.join(','),
+            )),
+          )
+          .valueOrNull ??
+      const <String>{};
+  // Retain bytes locally: this is an authorized presentation classification,
+  // not deletion of potentially differing input from an offline device.
+  return drafts
+      .where(
+        (draft) =>
+            draft.hasPendingSave ||
+            draft.pendingSubmissionApproval != null ||
+            !obsolete.contains(draft.id),
+      )
+      .toList();
 }
 
 List<YorksV1MaterialRequestDraft> _mergeRecoverableDrafts(
@@ -2354,6 +2392,83 @@ class _YorksV1MaterialRequestDraftScreenState
     final controller = ref.read(
       yorksV1MaterialRequestDraftControllerProvider(key).notifier,
     );
+    final recoveryRequest = state.recoveryRequest;
+    if (recoveryRequest != null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text(
+            YorksV1MaterialRequestStrings.recoveredInput.active(language),
+          ),
+        ),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 900),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    YorksV1MaterialRequestStrings.recoveryReview.active(
+                      language,
+                    ),
+                    style: AppTypography.titleMedium,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    YorksV1MaterialRequestStrings.recoveredInput.active(
+                      language,
+                    ),
+                    style: AppTypography.labelLarge,
+                  ),
+                  Text(state.draft.title ?? ''),
+                  for (final line in state.draft.lines)
+                    ListTile(
+                      title: Text(line.description),
+                      subtitle: Text('${line.quantity} ${line.unit}'),
+                    ),
+                  const Divider(),
+                  Text(
+                    yorksV1MaterialRequestStateCopy(
+                      recoveryRequest.state,
+                    ).active(language),
+                    style: AppTypography.labelLarge,
+                  ),
+                  Text(recoveryRequest.title ?? ''),
+                  for (final line in recoveryRequest.lines)
+                    ListTile(
+                      title: Text(line.description),
+                      subtitle: Text('${line.quantity} ${line.unit}'),
+                    ),
+                  const SizedBox(height: AppSpacing.md),
+                  if (recoveryRequest.state.isDraft)
+                    FilledButton(
+                      onPressed: () async {
+                        await controller.keepRecoveredChanges();
+                        if (mounted) setState(() {});
+                      },
+                      child: Text(
+                        YorksV1MaterialRequestStrings.keepRecoveredChanges
+                            .active(language),
+                      ),
+                    ),
+                  TextButton(
+                    onPressed: () => context.go(
+                      RoutePaths.yorksV1MaterialRequestPath(recoveryRequest.id),
+                    ),
+                    child: Text(
+                      YorksV1MaterialRequestStrings.openExistingRequest.active(
+                        language,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     final runtimeConfiguration = ref.watch(yorksV1RuntimeConfigurationProvider);
     final needsPrivateResolution =
         widget.entryMode ==

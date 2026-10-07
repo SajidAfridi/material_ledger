@@ -56,6 +56,72 @@ void main() {
     },
   );
 
+  test(
+    'already-saved preflight removes only recovery without a failed retry',
+    () async {
+      repository.getError = const YorksV1DomainException(
+        YorksV1DomainErrorCode.invalidTransition,
+        serverMessage: 'V1_PRIVATE_DRAFT_ALREADY_SAVED',
+      );
+      await controller.discardLocal(requireServerConfirmation: true);
+      expect(repository.deletes, [0]);
+      expect(store.readAll().map((d) => d.id), ['other']);
+      expect(analytics.events.last, AnalyticsEvent.materialRequestDraftDeleted);
+    },
+  );
+
+  for (final progressed in [false, true]) {
+    test(
+      'existing request review preserves recovered input, progressed=$progressed',
+      () async {
+        repository.request = YorksV1MaterialRequest.fromRpcJson({
+          'id': 'draft',
+          'project_id': 'project',
+          'scope_id': 'scope',
+          'project_ref': 'TEST',
+          'project_name': 'Project',
+          'scope_name': 'Common',
+          'state': progressed ? 'closed' : 'draft',
+          'record_version': 4,
+          'created_at': '2026-01-01T00:00:00Z',
+          'updated_at': '2026-01-02T00:00:00Z',
+          'timing': 'normal',
+          'lines': <Object>[],
+        });
+        repository.getError = const YorksV1DomainException(
+          YorksV1DomainErrorCode.invalidTransition,
+          serverMessage: 'V1_PRIVATE_DRAFT_ALREADY_SAVED',
+        );
+        await controller.hydratePrivateDraft();
+        expect(controller.state.recoveryRequest, repository.request);
+        expect(controller.currentDraft.title, 'Private title');
+        expect(await controller.saveDraft(), isFalse);
+        expect(await controller.submit(), isNull);
+        await controller.keepRecoveredChanges();
+        expect(controller.currentDraft.serverRecordVersion, progressed ? 0 : 4);
+        expect(controller.currentDraft.title, 'Private title');
+        expect(store.readAll().length, 2);
+      },
+    );
+  }
+
+  test(
+    'request read denial preserves recovery and reports a failed verification',
+    () async {
+      repository.getError = const YorksV1DomainException(
+        YorksV1DomainErrorCode.invalidTransition,
+        serverMessage: 'V1_PRIVATE_DRAFT_ALREADY_SAVED',
+      );
+      repository.requestError = const YorksV1DomainException(
+        YorksV1DomainErrorCode.unauthorized,
+      );
+      await controller.hydratePrivateDraft();
+      expect(controller.state.errorCode, YorksV1DomainErrorCode.unauthorized);
+      expect(controller.state.recoveryRequest, isNull);
+      expect(store.readAll().length, 2);
+    },
+  );
+
   for (final error in [
     YorksV1DomainErrorCode.offline,
     YorksV1DomainErrorCode.conflict,
@@ -377,6 +443,14 @@ class _Repository extends Fake
     implements
         YorksV1MaterialRequestRepository,
         YorksV1MaterialRequestPhase2Repository {
+  YorksV1MaterialRequest? request;
+  Object? requestError;
+  @override
+  Future<YorksV1MaterialRequest> getRequest(String requestId) async {
+    if (requestError != null) throw requestError!;
+    return request!;
+  }
+
   YorksV1PrivateMaterialRequestDraftRecord? remote;
   Completer<void>? getBlock, deleteBlock, syncBlock;
   final getStarted = Completer<void>();

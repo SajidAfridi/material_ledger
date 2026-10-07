@@ -1,6 +1,6 @@
 # Material Request draft audit and repair plan — 7 October 2026
 
-Status: audit complete; repair design prepared; application/database changes not implemented or deployed in this audit.
+Status: original audit complete. The subsequently authorized implementation, cleanup and verification are recorded in [the repair report](MATERIAL_REQUEST_DRAFT_REPAIR_20261007.md). Findings below describe the pre-repair state.
 
 ## Finding
 

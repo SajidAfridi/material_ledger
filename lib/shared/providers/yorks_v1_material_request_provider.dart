@@ -276,6 +276,27 @@ final yorksV1MaterialRequestLocalDraftsProvider =
       return List.unmodifiable(drafts);
     });
 
+/// Stable identity-only key avoids a classification request on every keystroke.
+/// Failure retains the local entry; it never becomes evidence of absence.
+final yorksV1ObsoleteMaterialRequestRecoveryProvider = FutureProvider
+    .autoDispose
+    .family<Set<String>, ({String owner, String ids})>((ref, key) async {
+      yorksV1RefreshProtectedProjectionOnPermissionRevision(ref);
+      ref.listen<int>(yorksV1MaterialRequestRealtimeRevisionProvider, (
+        previous,
+        next,
+      ) {
+        if (previous != null && previous != next) ref.invalidateSelf();
+      });
+      final repository = ref.watch(yorksV1MaterialRequestRepositoryProvider);
+      if (repository is! YorksV1MaterialRequestRecoveryLifecycleRepository ||
+          key.ids.isEmpty) {
+        return const <String>{};
+      }
+      return (repository as YorksV1MaterialRequestRecoveryLifecycleRepository)
+          .obsoleteRecoveryIds(key.ids.split(','));
+    });
+
 /// Cross-device recovery index. The database function is owner-scoped and
 /// returns only the authenticated creator's private, unsubmitted drafts.
 final yorksV1MaterialRequestPrivateDraftsProvider = FutureProvider.autoDispose
@@ -283,6 +304,13 @@ final yorksV1MaterialRequestPrivateDraftsProvider = FutureProvider.autoDispose
       ref,
       ownerAuthUserId,
     ) {
+      yorksV1RefreshProtectedProjectionOnPermissionRevision(ref);
+      ref.listen<int>(yorksV1MaterialRequestRealtimeRevisionProvider, (
+        previous,
+        next,
+      ) {
+        if (previous != null && previous != next) ref.invalidateSelf();
+      });
       // Local editor persistence is intentionally not a dependency here.
       // Every keystroke updates the device recovery index; coupling that
       // revision to this server index caused a second list RPC after every
