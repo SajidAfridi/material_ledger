@@ -11,6 +11,7 @@ import '../models/yorks_v1_domain_error.dart';
 import '../models/yorks_v1_material_request.dart';
 import '../models/yorks_v1_material_request_document.dart';
 import '../models/yorks_v1_role.dart';
+import '../models/yorks_v1_permission_management.dart';
 import '../repositories/yorks_v1_material_request_draft_store.dart';
 import '../repositories/yorks_v1_material_request_repository.dart';
 import '../services/analytics_service.dart';
@@ -79,6 +80,15 @@ final yorksV1MaterialRequestDraftControllerProvider = StateNotifierProvider
         repository: ref.watch(yorksV1MaterialRequestRepositoryProvider),
         uuidFactory: uuid.v4,
         analytics: ref.watch(analyticsServiceProvider),
+        canReadRecoveryProject: (projectId) {
+          final permission = ref.read(yorksV1CurrentPermissionSnapshotProvider);
+          return permission.isTrustedForWrites &&
+              permission.hybridAllows(
+                YorksV1CapabilityKeys.materialRequestsView,
+                legacyAllowed: true,
+                projectId: projectId,
+              );
+        },
         isCurrentOwner: () =>
             ref.read(yorksV1AuthUserIdProvider) == key.ownerAuthUserId,
         onLocalDraftsChanged: () {
@@ -90,6 +100,18 @@ final yorksV1MaterialRequestDraftControllerProvider = StateNotifierProvider
           revision.state++;
         },
       );
+      ref.listen(yorksV1CurrentPermissionSnapshotProvider, (previous, next) {
+        if (previous?.snapshot != next.snapshot ||
+            previous?.isTrustedForWrites != next.isTrustedForWrites) {
+          unawaited(controller.refreshRecoveryAuthority());
+        }
+      });
+      ref.listen(yorksV1AuthUserIdProvider, (previous, next) {
+        if (previous != next) controller.invalidateRecoveryAuthority();
+      });
+      ref.listen(yorksV1CurrentRoleProvider, (previous, next) {
+        if (previous != next) controller.invalidateRecoveryAuthority();
+      });
       return controller;
     });
 

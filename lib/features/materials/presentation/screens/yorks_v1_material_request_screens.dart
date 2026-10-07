@@ -11,6 +11,7 @@ import 'package:printing/printing.dart';
 import 'package:uuid/uuid.dart';
 
 import '../widgets/yorks_v1_submission_recovery_panel.dart';
+import '../widgets/yorks_v1_material_request_recovery_changes.dart';
 import '../../../../app/router.dart';
 import '../../../../core/zoom/yorks_workspace_zoom.dart';
 import '../../../../core/constants/constants.dart';
@@ -2393,6 +2394,36 @@ class _YorksV1MaterialRequestDraftScreenState
       yorksV1MaterialRequestDraftControllerProvider(key).notifier,
     );
     final recoveryRequest = state.recoveryRequest;
+    final recoveryPermission = ref.watch(
+      yorksV1CurrentPermissionSnapshotProvider,
+    );
+    if (state.errorCode == YorksV1DomainErrorCode.unauthorized ||
+        (recoveryRequest != null &&
+            (!recoveryPermission.isTrustedForWrites ||
+                !yorksV1CanReadProjectRecord(
+                  recoveryPermission,
+                  YorksV1CapabilityKeys.materialRequestsView,
+                  legacyAllowed: true,
+                  projectId: recoveryRequest.projectId,
+                )))) {
+      return Scaffold(
+        appBar: AppBar(),
+        body: YorksV1ProjectReadBoundary(
+          allowed: false,
+          language: language,
+          child: const SizedBox.shrink(),
+        ),
+      );
+    }
+    if (controller.isReviewingRecovery && recoveryRequest == null) {
+      return Scaffold(
+        appBar: AppBar(),
+        body: _RequestError(
+          language: language,
+          onRetry: controller.retryRecoveryReview,
+        ),
+      );
+    }
     if (recoveryRequest != null) {
       return Scaffold(
         appBar: AppBar(
@@ -2422,11 +2453,9 @@ class _YorksV1MaterialRequestDraftScreenState
                     style: AppTypography.labelLarge,
                   ),
                   Text(state.draft.title ?? ''),
-                  for (final line in state.draft.lines)
-                    ListTile(
-                      title: Text(line.description),
-                      subtitle: Text('${line.quantity} ${line.unit}'),
-                    ),
+                  Text(
+                    '${YorksV1MaterialRequestStrings.lines.active(language)}: ${state.draft.lines.length}',
+                  ),
                   const Divider(),
                   Text(
                     yorksV1MaterialRequestStateCopy(
@@ -2435,12 +2464,15 @@ class _YorksV1MaterialRequestDraftScreenState
                     style: AppTypography.labelLarge,
                   ),
                   Text(recoveryRequest.title ?? ''),
-                  for (final line in recoveryRequest.lines)
-                    ListTile(
-                      title: Text(line.description),
-                      subtitle: Text('${line.quantity} ${line.unit}'),
-                    ),
+                  Text(
+                    '${YorksV1MaterialRequestStrings.lines.active(language)}: ${recoveryRequest.lines.length}',
+                  ),
                   const SizedBox(height: AppSpacing.md),
+                  YorksV1MaterialRequestRecoveryChanges(
+                    draft: state.draft,
+                    saved: recoveryRequest,
+                    language: language,
+                  ),
                   if (recoveryRequest.state.isDraft)
                     FilledButton(
                       onPressed: () async {

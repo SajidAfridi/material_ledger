@@ -72,6 +72,7 @@ class YorksV1MaterialRequestDraftController
     String Function()? uuidFactory,
     VoidCallback? onLocalDraftsChanged,
     bool Function()? isCurrentOwner,
+    bool Function(String projectId)? canReadRecoveryProject,
     VoidCallback Function()? retainForDeletion,
     AnalyticsService analytics = const NoopAnalyticsService(),
     Duration privateSyncDebounce = const Duration(milliseconds: 1200),
@@ -82,6 +83,7 @@ class YorksV1MaterialRequestDraftController
        _uuidFactory = uuidFactory ?? const Uuid().v4,
        _onLocalDraftsChanged = onLocalDraftsChanged,
        _isCurrentOwner = isCurrentOwner,
+       _canReadRecoveryProject = canReadRecoveryProject,
        _retainForDeletion = retainForDeletion,
        _analytics = analytics,
        _privateSyncDebounceDuration = privateSyncDebounce,
@@ -113,6 +115,7 @@ class YorksV1MaterialRequestDraftController
   final String Function() _uuidFactory;
   final VoidCallback? _onLocalDraftsChanged;
   final bool Function()? _isCurrentOwner;
+  final bool Function(String projectId)? _canReadRecoveryProject;
   final VoidCallback Function()? _retainForDeletion;
   final AnalyticsService _analytics;
   final Duration _privateSyncDebounceDuration;
@@ -162,6 +165,11 @@ class YorksV1MaterialRequestDraftController
   YorksV1DomainErrorCode? get lastErrorCode => state.errorCode;
 
   bool get isEditingBeforeApproval => _editingBeforeApproval;
+  bool get isReviewingRecovery => _reviewingRecovery;
+
+  Future<void> retryRecoveryReview() async {
+    if (_reviewingRecovery) await _resolveExistingRecovery();
+  }
 
   void recordReviewReached() {
     _analytics.capture(
@@ -213,6 +221,7 @@ class YorksV1MaterialRequestDraftController
         if (state.draft.updatedAt == initialLocal.updatedAt &&
             (!state.draft.hasRecoverableContent ||
                 remote.clientUpdatedAt.isAfter(state.draft.updatedAt))) {
+          _acceptedDraft = remote.draft;
           state = YorksV1MaterialRequestDraftState(draft: remote.draft);
           await _persist(remote.draft);
         }
@@ -293,6 +302,7 @@ class YorksV1MaterialRequestDraftController
         state.draft.pendingSubmissionApproval != null) {
       return;
     }
+    _reviewingRecovery = true;
     _privateSyncRequested = false;
     _privateSyncDebounce?.cancel();
     final generation = _recoveryGeneration;
@@ -311,12 +321,37 @@ class YorksV1MaterialRequestDraftController
       return;
     }
     if (!_recoveryIsCurrent(generation)) return;
-    _reviewingRecovery = true;
+    if (!(_canReadRecoveryProject?.call(request.projectId) ?? true)) {
+      invalidateRecoveryAuthority();
+      return;
+    }
     state = YorksV1MaterialRequestDraftState(
       draft: state.draft,
       status: YorksV1MaterialRequestDraftSyncStatus.conflict,
       recoveryRequest: request,
     );
+  }
+
+  /// Drop protected server data and invalidate pending reads without deleting
+  /// owner-authored recovery or changing an uncertain command's retry intent.
+  void invalidateRecoveryAuthority() {
+    if (_disposed || !_reviewingRecovery) return;
+    _recoveryGeneration++;
+    state = YorksV1MaterialRequestDraftState(
+      draft: state.draft,
+      status: YorksV1MaterialRequestDraftSyncStatus.failed,
+      errorCode: YorksV1DomainErrorCode.unauthorized,
+    );
+  }
+
+  Future<void> refreshRecoveryAuthority() async {
+    if (!_reviewingRecovery || _inactive) return;
+    invalidateRecoveryAuthority();
+    final projectId = state.draft.projectId;
+    if (projectId != null &&
+        (_canReadRecoveryProject?.call(projectId) ?? true)) {
+      await _resolveExistingRecovery();
+    }
   }
 
   /// Explicitly carry recovered input onto the version the user just reviewed.
@@ -326,6 +361,7 @@ class YorksV1MaterialRequestDraftController
     if (_inactive ||
         request == null ||
         !request.state.isDraft ||
+        !(_canReadRecoveryProject?.call(request.projectId) ?? true) ||
         state.draft.hasPendingSave ||
         state.draft.pendingSubmissionApproval != null) {
       return;
@@ -333,8 +369,10 @@ class YorksV1MaterialRequestDraftController
     final reconciled = state.draft.copyWith(
       serverRecordVersion: request.recordVersion,
     );
+    final generation = _recoveryGeneration;
     await _persist(reconciled);
-    if (_inactive) return;
+    if (!_recoveryIsCurrent(generation)) return;
+    _acceptedDraft = reconciled;
     _reviewingRecovery = false;
     state = YorksV1MaterialRequestDraftState(draft: reconciled);
   }

@@ -7,6 +7,84 @@ import 'yorks_v1_project_strings.dart';
 /// Centralized bilingual-capable presentation copy for the Yorks V1 Material
 /// Request slice. Domain and database layers use stable codes, never this copy.
 abstract final class YorksV1MaterialRequestStrings {
+  static const recoveryAddedLine = TranslatableString(
+    en: 'Added line',
+    ar: 'بند مضاف',
+    ur: 'شامل کردہ سطر',
+    hi: 'जोड़ी गई पंक्ति',
+  );
+  static const recoveryRemovedLine = TranslatableString(
+    en: 'Removed line',
+    ar: 'بند محذوف',
+    ur: 'ہٹائی گئی سطر',
+    hi: 'हटाई गई पंक्ति',
+  );
+  static const recoveryCustomSource = TranslatableString(
+    en: 'Custom item',
+    ar: 'صنف مخصص',
+    ur: 'کسٹم آئٹم',
+    hi: 'कस्टम आइटम',
+  );
+  static const recoveryYes = TranslatableString(
+    en: 'Yes',
+    ar: 'نعم',
+    ur: 'ہاں',
+    hi: 'हाँ',
+  );
+  static const recoveryNo = TranslatableString(
+    en: 'No',
+    ar: 'لا',
+    ur: 'نہیں',
+    hi: 'नहीं',
+  );
+  static const recoveryChanges = TranslatableString(
+    en: 'Changes to review',
+    ar: 'التغييرات للمراجعة',
+    ur: 'جائزے کے لیے تبدیلیاں',
+    hi: 'समीक्षा के लिए बदलाव',
+  );
+  static const savedValue = TranslatableString(
+    en: 'Saved value',
+    ar: 'القيمة المحفوظة',
+    ur: 'محفوظ قدر',
+    hi: 'सहेजा गया मान',
+  );
+  static const recoveryCleared = TranslatableString(
+    en: 'Not set / cleared',
+    ar: 'غير محدد / تم مسحه',
+    ur: 'خالی / صاف کیا گیا',
+    hi: 'सेट नहीं / हटाया गया',
+  );
+  static const lineOrder = TranslatableString(
+    en: 'Line order',
+    ar: 'ترتيب البنود',
+    ur: 'سطروں کی ترتیب',
+    hi: 'पंक्ति क्रम',
+  );
+  static const lineSource = TranslatableString(
+    en: 'Line source',
+    ar: 'مصدر البند',
+    ur: 'سطر کا ماخذ',
+    hi: 'पंक्ति स्रोत',
+  );
+  static const sourceGroup = TranslatableString(
+    en: 'Source BOQ folder',
+    ar: 'مجلد جدول الكميات المصدر',
+    ur: 'ماخذ BOQ فولڈر',
+    hi: 'स्रोत BOQ फ़ोल्डर',
+  );
+  static const sourceRow = TranslatableString(
+    en: 'Source BOQ row',
+    ar: 'صف جدول الكميات المصدر',
+    ur: 'ماخذ BOQ سطر',
+    hi: 'स्रोत BOQ पंक्ति',
+  );
+  static const suggestedQuantity = TranslatableString(
+    en: 'Quantity is suggested',
+    ar: 'الكمية مقترحة',
+    ur: 'مقدار تجویز کردہ ہے',
+    hi: 'मात्रा सुझाई गई है',
+  );
   static const recoveryReview = TranslatableString(
     en: 'This request already exists. Review your recovered input before continuing.',
     ar: 'هذا الطلب موجود بالفعل. راجع بيانات الاسترداد قبل المتابعة.',

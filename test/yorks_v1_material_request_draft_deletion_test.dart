@@ -21,9 +21,11 @@ void main() {
   late _Analytics analytics;
   late YorksV1MaterialRequestDraftController controller;
   var currentOwner = true;
+  var projectAllowed = true;
 
   setUp(() {
     currentOwner = true;
+    projectAllowed = true;
     store = _Store([_draft(), _draft(id: 'other')]);
     repository = _Repository();
     analytics = _Analytics();
@@ -34,6 +36,7 @@ void main() {
       repository: repository,
       analytics: analytics,
       isCurrentOwner: () => currentOwner,
+      canReadRecoveryProject: (_) => projectAllowed,
       privateSyncDebounce: Duration.zero,
     );
   });
@@ -104,6 +107,43 @@ void main() {
       },
     );
   }
+
+  test(
+    'revocation clears comparison and late protected reads cannot restore it',
+    () async {
+      repository.request = YorksV1MaterialRequest.fromRpcJson({
+        'id': 'draft',
+        'project_id': 'project',
+        'scope_id': 'scope',
+        'project_ref': 'TEST',
+        'project_name': 'Project',
+        'scope_name': 'Common',
+        'state': 'draft',
+        'record_version': 4,
+        'timing': 'normal',
+        'created_at': '2026-01-01T00:00:00Z',
+        'updated_at': '2026-01-02T00:00:00Z',
+        'lines': <Object>[],
+      });
+      repository.getError = const YorksV1DomainException(
+        YorksV1DomainErrorCode.invalidTransition,
+        serverMessage: 'V1_PRIVATE_DRAFT_ALREADY_SAVED',
+      );
+      repository.requestBlock = Completer<void>();
+      final hydration = controller.hydratePrivateDraft();
+      await repository.requestStarted.future;
+      projectAllowed = false;
+      controller.invalidateRecoveryAuthority();
+      repository.requestBlock!.complete();
+      await hydration;
+      expect(controller.state.recoveryRequest, isNull);
+      expect(controller.lastErrorCode, YorksV1DomainErrorCode.unauthorized);
+      expect(controller.currentDraft.title, 'Private title');
+      await controller.keepRecoveredChanges();
+      expect(controller.currentDraft.serverRecordVersion, 0);
+      expect(repository.deletes, isEmpty);
+    },
+  );
 
   test(
     'request read denial preserves recovery and reports a failed verification',
@@ -445,8 +485,12 @@ class _Repository extends Fake
         YorksV1MaterialRequestPhase2Repository {
   YorksV1MaterialRequest? request;
   Object? requestError;
+  Completer<void>? requestBlock;
+  final requestStarted = Completer<void>();
   @override
   Future<YorksV1MaterialRequest> getRequest(String requestId) async {
+    if (!requestStarted.isCompleted) requestStarted.complete();
+    await requestBlock?.future;
     if (requestError != null) throw requestError!;
     return request!;
   }
