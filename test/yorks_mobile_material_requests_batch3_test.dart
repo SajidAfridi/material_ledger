@@ -206,6 +206,140 @@ void main() {
     }
   }
 
+  for (final editing in [false, true]) {
+    for (final fails in [false, true]) {
+      for (final quantity in ['37', '']) {
+        testWidgets(
+          'mobile unsaved material survives recovery edit=$editing error=$fails quantity=$quantity',
+          (tester) async {
+            await _setViewport(tester, const Size(360, 800));
+            final repository = _DelayedBackgroundRecoveryRepository()
+              ..failLookup = fails;
+            await _pumpDraft(tester, repositoryOverride: repository);
+            final container = ProviderScope.containerOf(
+              tester.element(find.byType(YorksV1MaterialRequestDraftScreen)),
+            );
+            const key = YorksV1MaterialRequestDraftKey(
+              ownerAuthUserId: 'mobile-mr-user',
+              draftId: _draftId,
+            );
+            final controller = container.read(
+              yorksV1MaterialRequestDraftControllerProvider(key).notifier,
+            );
+            await controller.setScope('scope-common');
+            if (editing) {
+              await controller.addCustomLine();
+              await controller.updateLine(
+                controller.currentDraft.lines.single.id,
+                (line) => line.copyWith(
+                  description: 'Existing material',
+                  quantity: '2',
+                  unit: 'Nos',
+                  size: 'Old size',
+                ),
+              );
+            }
+            await tester.pumpAndSettle();
+            await _continueToMaterials(tester);
+            if (editing) {
+              await tester.tap(find.text('Existing material'));
+            } else {
+              await tester.tap(
+                find.byKey(const ValueKey('mobile-mr-add-custom')),
+              );
+            }
+            await tester.pumpAndSettle();
+            await tester.pump(const Duration(milliseconds: 1300));
+            expect(repository.requestStarted.isCompleted, isTrue);
+            final originalId = controller.currentDraft.lines.firstOrNull?.id;
+            final quantityField = find.byKey(
+              const ValueKey('mobile-custom-quantity'),
+            );
+            final sizeField = find.byKey(const ValueKey('mobile-custom-size'));
+            await tester.ensureVisible(quantityField);
+            await tester.enterText(quantityField, quantity);
+            await tester.ensureVisible(sizeField);
+            await tester.enterText(sizeField, '12x');
+            expect(
+              tester
+                  .widget<EditableText>(
+                    find.descendant(
+                      of: sizeField,
+                      matching: find.byType(EditableText),
+                    ),
+                  )
+                  .focusNode
+                  .hasFocus,
+              isTrue,
+            );
+            // Neither Add nor Update has been pressed. Add is incomplete because
+            // its required description/unit remain blank; Edit can clear quantity.
+            expect(controller.currentDraft.lines.length, editing ? 1 : 0);
+            repository.requestReady.complete();
+            await tester.pumpAndSettle();
+            void expectPreserved() {
+              final line = controller.currentDraft.lines.single;
+              expect(line.quantity, quantity);
+              expect(line.size, '12x');
+              if (editing) expect(line.id, originalId);
+              if (!editing || quantity.isEmpty) {
+                expect(line.hasValidOperationalValues, isFalse);
+              }
+              final stored = container
+                  .read(
+                    yorksV1MaterialRequestDraftStoreProvider('mobile-mr-user'),
+                  )
+                  .readAll()
+                  .single
+                  .lines
+                  .single;
+              expect(stored.quantity, quantity);
+              expect(stored.size, '12x');
+            }
+
+            expectPreserved();
+            if (fails) {
+              expect(
+                find.text('Continue with recovered changes'),
+                findsNothing,
+              );
+              repository.failLookup = false;
+              await controller.retryRecoveryReview();
+              await tester.pumpAndSettle();
+            }
+            expect(
+              find.text('Continue with recovered changes'),
+              findsOneWidget,
+            );
+            expectPreserved();
+            await controller.keepRecoveredChanges();
+            await tester.pumpAndSettle();
+            expectPreserved();
+            await _continueToMaterials(tester);
+            await tester.tap(
+              find.byKey(
+                ValueKey(
+                  '${controller.currentDraft.lines.single.id}-mobile-edit',
+                ),
+              ),
+            );
+            await tester.pumpAndSettle();
+            expect(
+              tester.widget<TextFormField>(quantityField).controller!.text,
+              quantity,
+            );
+            expect(
+              tester.widget<TextFormField>(sizeField).controller!.text,
+              '12x',
+            );
+            expect(repository.syncCalls, 1);
+            expect(tester.takeException(), isNull);
+          },
+        );
+      }
+    }
+  }
+
   for (final revoke in [false, true]) {
     testWidgets(
       'fresh-device recovery accepts baseline and protects input; revoke=$revoke',
@@ -4097,11 +4231,17 @@ class _DelayedBackgroundRecoveryRepository
   final requestStarted = Completer<void>();
   final requestReady = Completer<void>();
   int syncCalls = 0;
+  bool failLookup = false;
 
   @override
   Future<YorksV1MaterialRequest> getRequest(String requestId) async {
     if (!requestStarted.isCompleted) requestStarted.complete();
     await requestReady.future;
+    if (failLookup) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.backendUnavailable,
+      );
+    }
     return super.getRequest(requestId);
   }
 

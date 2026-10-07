@@ -795,6 +795,43 @@ class YorksV1MaterialRequestDraftController
     _captureItemChange('add_excel', count: additions.length);
   }
 
+  /// Preserve an interrupted inline editor as local draft input, including
+  /// incomplete required fields. Apply creation and edits in one replacement
+  /// before recovery locks input; never turn a removed line into a new one.
+  Future<void> preserveUnfinishedMaterial({
+    String? lineId,
+    required YorksV1MaterialRequestLine Function(YorksV1MaterialRequestLine)
+    transform,
+  }) async {
+    final draft = state.draft;
+    final index = lineId == null
+        ? -1
+        : draft.lines.indexWhere((line) => line.id == lineId);
+    if (lineId != null && index < 0) return;
+    final original = index < 0
+        ? YorksV1MaterialRequestLine(
+            id: _uuidFactory(),
+            displayOrder: draft.lines.length + 1,
+            source: YorksV1MaterialRequestLineSource.custom,
+            description: '',
+            quantity: '',
+            unit: '',
+          )
+        : draft.lines[index];
+    final recovered = transform(original);
+    if (index >= 0 &&
+        mapEquals(original.toDraftJson(), recovered.toDraftJson())) {
+      return;
+    }
+    final lines = [...draft.lines];
+    if (index < 0) {
+      lines.add(recovered);
+    } else {
+      lines[index] = recovered;
+    }
+    await _replace(draft.copyWith(lines: lines));
+  }
+
   @override
   Future<void> updateLine(
     String lineId,

@@ -91,3 +91,34 @@ event; invoked the trusted draft deletion RPC; and recorded the private-draft
 retirement barrier. Verification found zero target requests/lines, one retirement
 marker and nine other saved drafts unchanged. No request was submitted.
 Browser activity interrupted the final device-copy cleanup; that step is pending.
+
+
+## Mobile inline editor recovery — PR only, not deployed
+
+At 360px the inline Add/Edit Material form owns a separate set of text
+controllers. Blurring the focused field does not commit that form, so the
+previous desktop/tablet correction still lost its unsaved fields when recovery
+comparison or an error replaced the mobile flow.
+
+The mobile flow now registers its own pending-editor flush and unregisters it
+on disposal/controller changes. Before recovery locks input, it copies all
+current fields into one local draft replacement. Existing lines retain their
+identity and source correlation; Add captures an incomplete draft line without
+requiring description, unit or positive quantity. An untouched Add form creates
+no extra line, and an already removed edit target is never resurrected. Normal
+Add/Update validation remains unchanged and no server Save/Submit is performed.
+The same field transform is shared by explicit Add/Update and recovery capture.
+
+Eight delayed-lookup regressions at 360x800 failed on the previous source and
+pass with this fix: Add/Edit x success/error x entered/cleared quantity, each
+with an unfinished size. They verify that no Add/Update was pressed, then check
+controller state, decoded device storage, retry without duplicates, acceptance,
+and reopening the mobile editor with its values intact. Blank required fields
+remain invalid rather than being invented or dropped.
+
+Validation: dependency resolution and changed-file formatting passed; analyzer
+reported no issues; full Flutter suite passed 2,534 tests with 4 retained skips,
+including the existing desktop and 360px visual goldens. CI web build passed
+its startup budget (9,885,130 bytes; gzip 2,847,887); CI APK build passed
+(111.9 MB, ephemeral signing only). No schema changes or production deployment;
+a live cross-device race on a physical mobile device remains unverified.

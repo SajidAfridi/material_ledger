@@ -4531,10 +4531,62 @@ class _YorksMobileMaterialRequestDraftFlowState
     _customSize = TextEditingController();
     _customModel = TextEditingController();
     _customQuantity = TextEditingController(text: '1');
+    widget.controller.addPendingEditorFlusher(_preserveCustomEditor);
+  }
+
+  @override
+  void didUpdateWidget(
+    covariant _YorksMobileMaterialRequestDraftFlow oldWidget,
+  ) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.controller, widget.controller)) {
+      oldWidget.controller.removePendingEditorFlusher(_preserveCustomEditor);
+      widget.controller.addPendingEditorFlusher(_preserveCustomEditor);
+    }
+  }
+
+  void _preserveCustomEditor() {
+    if (!mounted || _sourcePage != _MobileMaterialRequestSourcePage.custom) {
+      return;
+    }
+    // Opening an untouched Add form must not manufacture an empty line.
+    if (_editingCustomLineId == null &&
+        _customDescription.text.isEmpty &&
+        _customBrand.text.isEmpty &&
+        _customSize.text.isEmpty &&
+        _customModel.text.isEmpty &&
+        _customQuantity.text == '1' &&
+        _customUnit.isEmpty) {
+      return;
+    }
+    unawaited(
+      widget.controller.preserveUnfinishedMaterial(
+        lineId: _editingCustomLineId,
+        transform: _applyCustomEditorInput,
+      ),
+    );
+  }
+
+  YorksV1MaterialRequestLine _applyCustomEditorInput(
+    YorksV1MaterialRequestLine current,
+  ) {
+    final selected = _customSuggestion;
+    final correlated = selected == null
+        ? current
+        : _applyMaterialSuggestion(current, selected);
+    return correlated.copyWith(
+      description: _customDescription.text,
+      brandOrigin: _customBrand.text,
+      size: _customSize.text,
+      model: _customModel.text,
+      quantity: _customQuantity.text,
+      unit: _customUnit,
+    );
   }
 
   @override
   void dispose() {
+    widget.controller.removePendingEditorFlusher(_preserveCustomEditor);
     _customDescription.dispose();
     _customBrand.dispose();
     _customSize.dispose();
@@ -5897,22 +5949,7 @@ class _YorksMobileMaterialRequestDraftFlowState
               .where((item) => item.id == editingLineId)
               .firstOrNull;
     if (line == null) return;
-    await widget.controller.updateLine(line.id, (current) {
-      final selected = _customSuggestion;
-      final correlated = selected == null
-          ? current
-          : _applyMaterialSuggestion(current, selected);
-      return correlated.copyWith(
-        description: _customDescription.text,
-        brandOrigin: _customBrand.text.trim().isEmpty
-            ? null
-            : _customBrand.text,
-        size: _customSize.text.trim().isEmpty ? null : _customSize.text,
-        model: _customModel.text.trim().isEmpty ? null : _customModel.text,
-        quantity: _customQuantity.text,
-        unit: _customUnit,
-      );
-    });
+    await widget.controller.updateLine(line.id, _applyCustomEditorInput);
     if (!mounted) return;
     setState(() {
       _sourcePage = _MobileMaterialRequestSourcePage.none;
