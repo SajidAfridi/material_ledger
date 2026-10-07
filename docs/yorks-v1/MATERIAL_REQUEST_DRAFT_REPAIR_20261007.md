@@ -1,6 +1,6 @@
 # Material Request recovery lifecycle repair — 7 October 2026
 
-Status: database repair and authorized obsolete-copy cleanup applied and verified in production; web publication is being verified. This follows the [draft audit](MATERIAL_REQUEST_DRAFT_AUDIT_20261007.md) and the owner's explicit request to fix the defect and remove obsolete drafts.
+Status: **released and verified in production**, including the web app, database repair and authorized obsolete-copy cleanup. This follows the [draft audit](MATERIAL_REQUEST_DRAFT_AUDIT_20261007.md) and the owner's explicit request to fix the defect and remove obsolete drafts.
 
 ## Changes
 
@@ -37,3 +37,17 @@ These checks establish the tested lifecycle guarantees, not a promise that softw
 ## Rollback / preservation
 
 Keep archive and retirement records. If needed, publish a corrective function/client version; never restore active progressed snapshots or drop the archive as a rollback. The previous client remains compatible with recovery deletion. Retain the current normalized workflow and all history. The primary dirty checkout and unrelated project configuration remain untouched.
+
+## Published web release
+
+- Live: [Yorks Material Requests](https://yorks-r35.vercel.app/#/yorks/material-requests).
+- Source: `2f3a641d0b73d8ec11ad7b4075960121d6cd64a0`; [PR #53](https://github.com/SajidAfridi/material_ledger/pull/53) retains the reviewable source changes.
+- Deployment: `dpl_3fGy4maBLq7753XSvm6wMfPrrD3L`, promoted after verification; [immutable artifact](https://yorks-r35-ciga17g67-sajid-alis-projects-0ec775a2.vercel.app).
+- Main bundle: 9,938,312 bytes; SHA-256 `c5ed6c1c36d700bef059a2020563f6c30a02f3fd01663b80e1396918faaf94db`.
+- All 26 candidate and all 26 public route/asset byte checks passed. Source stamp and production backend were verified; no staging backend, CI placeholder or service-role JWT was found in the artifact.
+- Calculator/Project Setup flags were explicitly preserved alongside the existing production Accounts, Company Requests, Workforce, Analytics, PostHog and FCM configuration. Static artifact inspection excluded deployment metadata and credentials.
+- Production migration ledger: `20261007104316`, `material_request_recovery_lifecycle`. All eight relevant function hashes match verified staging.
+- Public browser: existing signed-in Owner/Admin loaded Material Requests and My Material Requests, opened an existing saved draft with its retained line, and returned without saving/submitting successfully; no console errors. Candidate startup also passed. No real request was saved, submitted or deleted during browser verification.
+- Prior verified client for rollback: `dpl_EvfCnBCDQSLT3F2CoAMMJzE58ups`. Retain the repaired database lifecycle and archive when rolling back the client.
+
+The source PR remains available for repository review; this release is the verified immutable hotfix artifact above. Existing browser sessions should refresh once to load the updated client. Historical failure events are retained in analytics; they do not reset when a repair ships.
