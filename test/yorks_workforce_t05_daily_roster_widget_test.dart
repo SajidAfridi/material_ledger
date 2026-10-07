@@ -618,6 +618,8 @@ void main() {
       connectivity: connectivity,
     );
 
+    expect(find.text('Make a change to enable saving.'), findsOneWidget);
+
     controller.updateRow(_workerId, regularMinutes: 0);
     await tester.pump();
     expect(
@@ -625,9 +627,23 @@ void main() {
       findsOneWidget,
     );
 
+    expect(
+      find.text('Check the highlighted workers before saving.'),
+      findsOneWidget,
+    );
+
     connectivity.setOnline(false);
     await tester.pump();
     expect(find.text('Offline'), findsOneWidget);
+    expect(find.text('Connect to the internet to save.'), findsOneWidget);
+    expect(
+      tester
+          .widget<ElevatedButton>(
+            find.byKey(const Key('workforce-mobile-review-day')),
+          )
+          .onPressed,
+      isNull,
+    );
 
     controller.purgeProtectedState();
     await tester.pump();

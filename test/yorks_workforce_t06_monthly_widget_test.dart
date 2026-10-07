@@ -52,43 +52,47 @@ void main() {
     await Future.wait([nexus.load(), arabic.load(), materialIcons.load()]);
   });
 
-  testWidgets(
-    'phone worker month opens the exact selected day without a spreadsheet',
-    (tester) async {
-      addTearDown(() {
-        tester.view.resetPhysicalSize();
-        tester.view.resetDevicePixelRatio();
-      });
-      String? opened;
-      await _pumpMonthly(
-        tester,
-        viewport: const Size(360, 800),
-        language: AppLanguage.english,
-        onDateChanged: (date) => opened = date,
-      );
-      final day = find.byKey(const Key('workforce-month-day-2026-08-20'));
-      await tester.scrollUntilVisible(
-        day,
-        500,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(day);
-      expect(opened, '2026-08-20');
-      await expectLater(
-        find.byType(YorksWorkforceMonthlyView),
-        matchesGoldenFile(
-          'goldens/yorks_workforce_t06_monthly_day_en_360x800.png',
-        ),
-      );
-      expect(
-        find.byKey(const Key('workforce-worker-month-day-list')),
-        findsOneWidget,
-      );
-      expect(find.byType(DataTable), findsNothing);
-      expect(tester.takeException(), isNull);
-    },
-  );
+  for (final phoneLanguage in AppLanguage.values) {
+    testWidgets(
+      'phone worker month opens the exact selected day without a spreadsheet: $phoneLanguage',
+      (tester) async {
+        addTearDown(() {
+          tester.view.resetPhysicalSize();
+          tester.view.resetDevicePixelRatio();
+        });
+        String? opened;
+        await _pumpMonthly(
+          tester,
+          viewport: const Size(360, 800),
+          language: phoneLanguage,
+          onDateChanged: (date) => opened = date,
+        );
+        final day = find.byKey(const Key('workforce-month-day-2026-08-20'));
+        await tester.scrollUntilVisible(
+          day,
+          500,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(day);
+        expect(opened, '2026-08-20');
+        if (phoneLanguage == AppLanguage.english) {
+          await expectLater(
+            find.byType(YorksWorkforceMonthlyView),
+            matchesGoldenFile(
+              'goldens/yorks_workforce_t06_monthly_day_en_360x800.png',
+            ),
+          );
+        }
+        expect(
+          find.byKey(const Key('workforce-worker-month-day-list')),
+          findsOneWidget,
+        );
+        expect(find.byType(DataTable), findsNothing);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 
   for (final scenario in [
     'success',

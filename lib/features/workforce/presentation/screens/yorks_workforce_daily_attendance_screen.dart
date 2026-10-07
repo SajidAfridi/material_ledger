@@ -4609,6 +4609,16 @@ class _MobileCompletionFooter extends StatelessWidget {
         !state.isBusy &&
         state.projection?.isFuture != true;
     final canSave = state.isReviewing && canReview;
+    final hint = state.isBusy || state.projection?.isFuture == true
+        ? null
+        : !state.isOnline
+        ? 'mobile_save_offline'
+        : state.invalidWorkerIds.isNotEmpty
+        ? 'mobile_save_invalid'
+        : state.dirtyRows.isEmpty
+        ? 'mobile_save_idle'
+        : null;
+
     return Material(
       key: const Key('workforce-mobile-completion-footer'),
       elevation: 12,
@@ -4639,7 +4649,7 @@ class _MobileCompletionFooter extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      '${state.dirtyRows.length} ${YorksV1WorkforceStrings.text(language, 'changed_rows')}',
+                      '${state.dirtyRows.length} ${YorksV1WorkforceStrings.text(language, 'mobile_unsaved')}',
                       style: AppTypography.labelSmall.copyWith(
                         color: state.invalidWorkerIds.isEmpty
                             ? AppColors.muted
@@ -4649,6 +4659,14 @@ class _MobileCompletionFooter extends StatelessWidget {
                   ],
                 ),
               ),
+              if (hint != null) ...[
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  YorksV1WorkforceStrings.text(language, hint),
+                  key: const Key('workforce-mobile-save-hint'),
+                  style: AppTypography.bodySmall,
+                ),
+              ],
               const SizedBox(height: AppSpacing.sm),
               if (state.isReviewing)
                 Row(

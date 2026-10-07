@@ -3323,35 +3323,54 @@ class _WorkerMonthDetail extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            children: [
-              _WorkerMetricChip(
-                icon: Icons.schedule_outlined,
-                label: _t('monthly_metric_regular'),
-                value: _minutes(language, detail.worker.regularMinutes),
-                color: AppColors.primary,
-              ),
-              _WorkerMetricChip(
-                icon: Icons.more_time_outlined,
-                label: _t('monthly_metric_overtime'),
-                value: _minutes(language, detail.worker.overtimeMinutes),
-                color: AppColors.warning,
-              ),
-              _WorkerMetricChip(
-                icon: Icons.medical_services_outlined,
-                label: _t('monthly_metric_leave'),
-                value: '${detail.worker.leaveDayCount}',
-                color: AppColors.success,
-              ),
-              _WorkerMetricChip(
-                icon: Icons.event_busy_outlined,
-                label: _t('monthly_metric_weekly_off'),
-                value: '${detail.worker.weeklyOffDayCount}',
-                color: AppColors.purple,
-              ),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final metrics = <Widget>[
+                _WorkerMetricChip(
+                  icon: Icons.schedule_outlined,
+                  label: _t('monthly_metric_regular'),
+                  value: _minutes(language, detail.worker.regularMinutes),
+                  color: AppColors.primary,
+                ),
+                _WorkerMetricChip(
+                  icon: Icons.more_time_outlined,
+                  label: _t('monthly_metric_overtime'),
+                  value: _minutes(language, detail.worker.overtimeMinutes),
+                  color: AppColors.warning,
+                ),
+                _WorkerMetricChip(
+                  icon: Icons.medical_services_outlined,
+                  label: _t('monthly_metric_leave'),
+                  value: '${detail.worker.leaveDayCount}',
+                  color: AppColors.success,
+                ),
+                _WorkerMetricChip(
+                  icon: Icons.event_busy_outlined,
+                  label: _t('monthly_metric_weekly_off'),
+                  value: '${detail.worker.weeklyOffDayCount}',
+                  color: AppColors.purple,
+                ),
+              ];
+              if (MediaQuery.sizeOf(context).width <
+                  AppSpacing.compactBreakpoint) {
+                return Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.sm,
+                  children: [
+                    for (final metric in metrics)
+                      SizedBox(
+                        width: (constraints.maxWidth - AppSpacing.sm) / 2,
+                        child: metric,
+                      ),
+                  ],
+                );
+              }
+              return Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
+                children: metrics,
+              );
+            },
           ),
           const SizedBox(height: AppSpacing.lg),
           Text(
@@ -3495,18 +3514,20 @@ class _WorkerMetricChip extends StatelessWidget {
       children: [
         Icon(icon, color: color, size: 19),
         const SizedBox(width: AppSpacing.sm),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label, style: AppTypography.labelSmall),
-            Text(
-              value,
-              style: AppTypography.titleMedium.copyWith(
-                color: AppColors.ink,
-                fontWeight: FontWeight.w800,
+        Flexible(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: AppTypography.labelSmall),
+              Text(
+                value,
+                style: AppTypography.titleMedium.copyWith(
+                  color: AppColors.ink,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ],
     ),

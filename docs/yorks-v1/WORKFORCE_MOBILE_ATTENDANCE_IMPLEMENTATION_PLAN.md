@@ -327,3 +327,17 @@ Verification: 43 focused daily/monthly tests passed; full regression passed 2,50
 Remaining implementation includes durable draft recovery, a simpler home/exception flow, agreed actual-time evidence, paper-compatible export/sign-off mapping, telemetry and the site/warehouse usability pilot. The entire redesign is not complete and has not been deployed.
 
 Final build checks: CI-configured web build passed with startup budget; CI ephemeral-signed release APK build passed. The APK is a verification artifact, not a production-signed release.
+
+
+## 20. Attendance clarity and compact monthly summaries
+
+8 October 2026: further UI refinement keeps the existing controller/repository and server-save contracts:
+
+- Replaced the mobile Bulk label with Edit team and its sheet title with Edit selected workers in all four languages.
+- The fixed phone footer describes unsaved changes and explains an unavailable save action: no edits, invalid worker details or internet required. Offline and invalid states still cannot save.
+- Monthly totals use two columns on phones with wrapping text. Daily log replaces Compact calendar; displayed durations consistently use hour labels, including planned hours and hours by location.
+- Added assertions for idle/invalid/offline save guidance and tested selecting monthly days in all four languages. No mutation, authorization, schema or overtime calculation changes.
+
+This is a clarity improvement, not proof of field adoption. Actual clock-time evidence, recovery and the usability pilot remain tracked in sections 18–19.
+
+Validation for section 20: 46 focused tests and 2,510 full regression tests passed (four skips); analyzer clean; formatting and diff checks passed. CI web startup budget and ephemeral-signed verification APK passed. English desktop and 360px phone screenshots inspected; translated phone day interactions passed in all four languages. No deployment or human field-acceptance claim.
