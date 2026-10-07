@@ -84,5 +84,10 @@ save operation from 18 September; the same ID is saved as `test` with one line a
 version one. Status lookup found no receipt for that pending operation, and replay
 returned HTTP 409. Absence of a title match was not treated as absence of the
 underlying saved request. No unrelated Owner draft was selected for deletion.
-The exact server snapshot is backed up outside the repository. Removal awaits
-action-time confirmation for the browser's non-recoverable local copy.
+The exact server snapshot is backed up outside the repository. After explicit
+confirmation, a bounded transaction locked and verified the exact owner, project,
+state, version and line count; preserved the prior request and line in an audit
+event; invoked the trusted draft deletion RPC; and recorded the private-draft
+retirement barrier. Verification found zero target requests/lines, one retirement
+marker and nine other saved drafts unchanged. No request was submitted.
+Browser activity interrupted the final device-copy cleanup; that step is pending.
