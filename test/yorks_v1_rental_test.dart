@@ -229,6 +229,12 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      if (evidence.size.width < 720) {
+        await tester.tap(
+          find.byWidgetPredicate((widget) => widget is DropdownButtonFormField),
+        );
+        await tester.pumpAndSettle();
+      }
       await tester.tap(find.text('Property register'));
       await tester.pumpAndSettle();
 
@@ -286,6 +292,39 @@ void main() {
       );
     });
   }
+
+  testWidgets(
+    'empty rental home explains the first step without a false ratio',
+    (tester) async {
+      await _setViewport(tester, const Size(360, 800));
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            yorksV1RentalPortfolioProvider.overrideWith(
+              (ref) async => YorksV1RentalPortfolio.fromJson({
+                'summary': <String, dynamic>{},
+                'properties': [],
+                'recent_payments': [],
+                'cheques': [],
+              }),
+            ),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.light,
+            home: const YorksV1RentalDashboardScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Add your first rental property'), findsOneWidget);
+      expect(find.text('0%'), findsNothing);
+      expect(find.text('Add property'), findsOneWidget);
+      await tester.tap(find.byTooltip('Import Excel'));
+      await tester.pumpAndSettle();
+      expect(find.text('Download import format'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('lease documents use the controlled Yorks document workspace', (
     tester,

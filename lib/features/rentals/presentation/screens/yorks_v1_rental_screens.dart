@@ -10,6 +10,7 @@ import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/yorks_v1_document.dart';
+import '../../../../shared/models/yorks_v1_rental_strings.dart';
 import '../../../../shared/models/yorks_v1_rental.dart';
 import '../../../../shared/models/yorks_v1_rental_workbook.dart';
 import '../../../../shared/providers/yorks_v1_document_file_service_provider.dart';
@@ -61,22 +62,9 @@ class _YorksV1RentalDashboardScreenState
     final busy = ref.watch(yorksV1RentalCommandProvider).isLoading;
     return Scaffold(
       backgroundColor: AppColors.surface,
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        backgroundColor: AppColors.workspaceChrome,
-        surfaceTintColor: Colors.transparent,
-        title: const Text('Rental Properties'),
-        actions: [
-          IconButton(
-            tooltip: 'Refresh rental register',
-            onPressed: busy
-                ? null
-                : () => ref.invalidate(yorksV1RentalPortfolioProvider),
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-        ],
-      ),
       body: portfolio.when(
+        skipLoadingOnRefresh: false,
+        skipLoadingOnReload: false,
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => _RentalFailure(
           onRetry: () => ref.invalidate(yorksV1RentalPortfolioProvider),
@@ -92,6 +80,9 @@ class _YorksV1RentalDashboardScreenState
               children: [
                 _RentalPageHeader(
                   compact: compact,
+                  onRefresh: busy || portfolio.isLoading
+                      ? null
+                      : () => ref.invalidate(yorksV1RentalPortfolioProvider),
                   onAdd: busy ? null : () => _openPropertyEditor(context),
                   onDownloadTemplate: busy
                       ? null
@@ -145,7 +136,7 @@ class _YorksV1RentalDashboardScreenState
   }
 
   void _openProperty(YorksV1RentalProperty property) {
-    context.go('${RoutePaths.rentals}/${property.id}');
+    context.push('${RoutePaths.rentals}/${property.id}');
   }
 
   Future<void> _openPropertyEditor(BuildContext context) async {
@@ -255,52 +246,51 @@ class _RentalPageHeader extends StatelessWidget {
   const _RentalPageHeader({
     required this.compact,
     required this.onAdd,
+    required this.onRefresh,
     required this.onDownloadTemplate,
     required this.onImport,
     required this.onExport,
   });
-
   final bool compact;
   final VoidCallback? onAdd;
+  final VoidCallback? onRefresh;
   final VoidCallback? onDownloadTemplate;
   final VoidCallback? onImport;
   final ValueChanged<YorksV1RentalExportRegister>? onExport;
 
   @override
   Widget build(BuildContext context) {
-    final copy = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('ADMINISTRATION', style: AppTypography.eyebrow),
-        const SizedBox(height: 6),
-        Text('Rental Properties', style: AppTypography.displaySmall),
-        const SizedBox(height: 6),
-        Text(
-          'Owner view of every property, tenancy contract, rent receipt, '
-          'CDC/PDC and lease obligation.',
-          style: AppTypography.bodyMedium,
-        ),
-      ],
-    );
     final actions = Wrap(
-      spacing: 10,
-      runSpacing: 10,
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        SecondaryButton(
-          label: 'Download import format',
-          icon: YorksDataTransferIcons.downloadTemplate,
-          isExpanded: false,
-          onPressed: onDownloadTemplate,
+        IconButton(
+          tooltip: RentalWorkspaceStrings.text(context, 'refresh'),
+          onPressed: onRefresh,
+          icon: const Icon(Icons.refresh_rounded),
         ),
-        SecondaryButton(
-          label: 'Import Excel',
-          icon: YorksDataTransferIcons.importData,
-          isExpanded: false,
-          onPressed: onImport,
+        PopupMenuButton<String>(
+          tooltip: RentalWorkspaceStrings.text(context, 'import'),
+          enabled: onImport != null,
+          icon: const Icon(YorksDataTransferIcons.importData),
+          onSelected: (value) => value == 'template'
+              ? onDownloadTemplate?.call()
+              : onImport?.call(),
+          itemBuilder: (_) => [
+            PopupMenuItem(
+              value: 'import',
+              child: Text(RentalWorkspaceStrings.text(context, 'import')),
+            ),
+            PopupMenuItem(
+              value: 'template',
+              child: Text(RentalWorkspaceStrings.text(context, 'template')),
+            ),
+          ],
         ),
         _ExportRegistersButton(onSelected: onExport),
         PrimaryButton(
-          label: 'Add property',
+          label: RentalWorkspaceStrings.text(context, 'add'),
           icon: Icons.add_rounded,
           isExpanded: false,
           onPressed: onAdd,
@@ -309,15 +299,26 @@ class _RentalPageHeader extends StatelessWidget {
     );
     if (compact) {
       return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [copy, const SizedBox(height: 16), actions],
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            RentalWorkspaceStrings.text(context, 'title'),
+            style: AppTypography.headlineMedium,
+          ),
+          const SizedBox(height: 12),
+          actions,
+        ],
       );
     }
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(child: copy),
-        const SizedBox(width: 18),
+        Expanded(
+          child: Text(
+            RentalWorkspaceStrings.text(context, 'title'),
+            style: AppTypography.headlineMedium,
+          ),
+        ),
+        const SizedBox(width: 16),
         actions,
       ],
     );
@@ -333,7 +334,7 @@ class _ExportRegistersButton extends StatelessWidget {
   Widget build(BuildContext context) =>
       PopupMenuButton<YorksV1RentalExportRegister>(
         enabled: onSelected != null,
-        tooltip: 'Export rental registers',
+        tooltip: RentalWorkspaceStrings.text(context, 'export'),
         onSelected: onSelected,
         itemBuilder: (context) => [
           for (final register in YorksV1RentalExportRegister.values)
@@ -342,33 +343,7 @@ class _ExportRegistersButton extends StatelessWidget {
               child: Text(_rentalExportLabel(register)),
             ),
         ],
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 48),
-          padding: const EdgeInsets.symmetric(horizontal: 18),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceContainerLowest,
-            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-            border: Border.all(color: AppColors.line),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                YorksDataTransferIcons.exportData,
-                color: onSelected == null ? AppColors.muted : AppColors.navy,
-              ),
-              const SizedBox(width: 9),
-              Text(
-                'Export registers',
-                style: AppTypography.labelLarge.copyWith(
-                  color: onSelected == null ? AppColors.muted : AppColors.navy,
-                ),
-              ),
-              const SizedBox(width: 5),
-              const Icon(Icons.arrow_drop_down_rounded, color: AppColors.muted),
-            ],
-          ),
-        ),
+        icon: const Icon(YorksDataTransferIcons.exportData),
       );
 }
 
@@ -380,13 +355,51 @@ class _RentalSectionRail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const labels = {
-      _RentalSection.overview: ('Overview', Icons.home_outlined),
-      _RentalSection.properties: ('Property register', Icons.apartment_rounded),
-      _RentalSection.payments: ('Payments', Icons.receipt_long_outlined),
-      _RentalSection.cheques: ('CDC / PDC', Icons.account_balance_outlined),
-      _RentalSection.expiry: ('Lease expiry', Icons.event_outlined),
+    final labels = {
+      _RentalSection.overview: (
+        RentalWorkspaceStrings.text(context, 'overview'),
+        Icons.home_outlined,
+      ),
+      _RentalSection.properties: (
+        RentalWorkspaceStrings.text(context, 'properties'),
+        Icons.apartment_rounded,
+      ),
+      _RentalSection.payments: (
+        RentalWorkspaceStrings.text(context, 'payments'),
+        Icons.receipt_long_outlined,
+      ),
+      _RentalSection.cheques: (
+        RentalWorkspaceStrings.text(context, 'cheques'),
+        Icons.account_balance_outlined,
+      ),
+      _RentalSection.expiry: (
+        RentalWorkspaceStrings.text(context, 'expiry'),
+        Icons.event_outlined,
+      ),
     };
+    if (MediaQuery.sizeOf(context).width < _compactAt) {
+      return DropdownButtonFormField<_RentalSection>(
+        initialValue: selected,
+        isExpanded: true,
+        decoration: const InputDecoration(),
+        items: [
+          for (final entry in labels.entries)
+            DropdownMenuItem(
+              value: entry.key,
+              child: Row(
+                children: [
+                  Icon(entry.value.$2, size: 18),
+                  const SizedBox(width: 10),
+                  Text(entry.value.$1),
+                ],
+              ),
+            ),
+        ],
+        onChanged: (value) {
+          if (value != null) onSelected(value);
+        },
+      );
+    }
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surfaceContainerLow,
@@ -482,6 +495,31 @@ class _RentalOverview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (portfolio.properties.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 32),
+        child: Column(
+          children: [
+            const Icon(
+              Icons.apartment_outlined,
+              size: 40,
+              color: AppColors.muted,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              RentalWorkspaceStrings.text(context, 'emptyTitle'),
+              style: AppTypography.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              RentalWorkspaceStrings.text(context, 'emptyBody'),
+              textAlign: TextAlign.center,
+              style: AppTypography.bodyMedium,
+            ),
+          ],
+        ),
+      );
+    }
     final summary = portfolio.summary;
     final kpis = [
       _KpiData(
@@ -504,7 +542,9 @@ class _RentalOverview extends StatelessWidget {
       ),
       _KpiData(
         'Occupancy',
-        '${summary.occupancyPercent.toStringAsFixed(0)}%',
+        summary.totalProperties == 0
+            ? '—'
+            : '${summary.occupancyPercent.toStringAsFixed(0)}%',
         Icons.people_outline_rounded,
         AppColors.purple,
       ),
@@ -524,34 +564,12 @@ class _RentalOverview extends StatelessWidget {
     final attention = portfolio.properties
         .where(
           (item) =>
-              item.outstanding > 0 || item.expiringSoon || !item.isOccupied,
+              item.outstanding > 0 ||
+              (!item.isArchived && (item.expiringSoon || !item.isOccupied)),
         )
         .toList();
     return Column(
       children: [
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final columns = constraints.maxWidth >= 1320
-                ? 6
-                : constraints.maxWidth >= 860
-                ? 3
-                : 2;
-            final width =
-                (constraints.maxWidth - ((columns - 1) * 12)) / columns;
-            return Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                for (final kpi in kpis)
-                  SizedBox(
-                    width: width,
-                    child: _KpiCard(data: kpi),
-                  ),
-              ],
-            );
-          },
-        ),
-        const SizedBox(height: 16),
         LayoutBuilder(
           builder: (context, constraints) {
             final stacked = constraints.maxWidth < 980;
@@ -586,15 +604,38 @@ class _RentalOverview extends StatelessWidget {
             );
             if (stacked) {
               return Column(
-                children: [register, const SizedBox(height: 16), action],
+                children: [action, const SizedBox(height: 16), register],
               );
             }
             return Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(flex: 7, child: register),
+                Expanded(flex: 5, child: action),
                 const SizedBox(width: 16),
-                Expanded(flex: 3, child: action),
+                Expanded(flex: 5, child: register),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 16),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final columns = constraints.maxWidth >= 1320
+                ? 6
+                : constraints.maxWidth >= 860
+                ? 3
+                : 2;
+            final width =
+                (constraints.maxWidth - ((columns - 1) * 12)) / columns;
+            return Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                for (final kpi in kpis)
+                  SizedBox(
+                    width: width,
+                    child: _KpiCard(data: kpi),
+                  ),
               ],
             );
           },
@@ -3111,7 +3152,7 @@ class _PropertyEditorDialogState extends State<_PropertyEditorDialog> {
     insetPadding: const EdgeInsets.all(18),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
     child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 1280, maxHeight: 850),
+      constraints: const BoxConstraints(maxWidth: 920, maxHeight: 850),
       child: Column(
         children: [
           _DialogHeader(
@@ -3716,7 +3757,7 @@ class _FormSection extends StatelessWidget {
         const SizedBox(height: 12),
         LayoutBuilder(
           builder: (context, constraints) {
-            final width = constraints.maxWidth >= 760
+            final width = constraints.maxWidth >= 560
                 ? (constraints.maxWidth - 14) / 2
                 : constraints.maxWidth;
             return Wrap(
