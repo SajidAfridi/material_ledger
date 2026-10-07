@@ -2397,7 +2397,8 @@ class _YorksV1MaterialRequestDraftScreenState
     final recoveryPermission = ref.watch(
       yorksV1CurrentPermissionSnapshotProvider,
     );
-    if (state.errorCode == YorksV1DomainErrorCode.unauthorized ||
+    if ((controller.isReviewingRecovery &&
+            state.errorCode == YorksV1DomainErrorCode.unauthorized) ||
         (recoveryRequest != null &&
             (!recoveryPermission.isTrustedForWrites ||
                 !yorksV1CanReadProjectRecord(

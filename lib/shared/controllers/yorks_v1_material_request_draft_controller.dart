@@ -146,6 +146,7 @@ class YorksV1MaterialRequestDraftController
   bool _discardInFlight = false;
   bool _discarded = false;
   bool _reviewingRecovery = false;
+  String? _recoveryProjectId;
   Future<void>? _privateSyncDrain;
   bool get _inactive =>
       _disposed || _discarded || !(_isCurrentOwner?.call() ?? true);
@@ -321,6 +322,7 @@ class YorksV1MaterialRequestDraftController
       return;
     }
     if (!_recoveryIsCurrent(generation)) return;
+    _recoveryProjectId = request.projectId;
     if (!(_canReadRecoveryProject?.call(request.projectId) ?? true)) {
       invalidateRecoveryAuthority();
       return;
@@ -347,8 +349,8 @@ class YorksV1MaterialRequestDraftController
   Future<void> refreshRecoveryAuthority() async {
     if (!_reviewingRecovery || _inactive) return;
     invalidateRecoveryAuthority();
-    final projectId = state.draft.projectId;
-    if (projectId != null &&
+    final projectId = _recoveryProjectId ?? state.draft.projectId;
+    if (projectId == null ||
         (_canReadRecoveryProject?.call(projectId) ?? true)) {
       await _resolveExistingRecovery();
     }

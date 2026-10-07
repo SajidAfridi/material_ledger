@@ -121,7 +121,7 @@ void main() {
           id: _draftId,
           ownerAuthUserId: 'mobile-mr-user',
           submissionIdempotencyKey: 'recovery-key',
-          projectId: _projectId,
+          projectId: revoke ? null : _projectId,
           scopeId: 'scope-common',
           title: 'Recovered request',
           lines: lines,
