@@ -1807,3 +1807,24 @@ grant project membership, commercial access or operational mutations. See
 behind `YORKS_V1_CALCULATOR_WORKSPACE`, default off. The accepted production web
 artifact enables it after the owner-authorized 6 October 2026 release; see
 [CALCULATOR_PRODUCTION_RELEASE_20261006.md](CALCULATOR_PRODUCTION_RELEASE_20261006.md).
+
+
+### 32. Workforce worker creation in assigned teams — 8 October 2026
+
+The owner approved staff adding workers only to their assigned teams. The new
+Workers entry supports listing and creating workers within current dated team
+responsibility or current team supervision, together with effective Workforce
+view and attendance-maintain capabilities. A project-level or organization-level
+responsibility alone does not grant this team-specific action. Existing Admin
+worker administration remains separate. No company-wide worker-management,
+Auth account, payroll or commercial capability is granted.
+
+Name, designation, employer, worker type and joining date remain explicit core
+data; worker number is optional and generated when blank. Other administrative
+fields stay optional and collapsed in the existing administration form. Creation
+atomically creates the worker and current team assignment, with audit and
+idempotent retry. It grants no editing or deletion of existing workers.
+
+The additive implementation is gated by `YORKS_WORKFORCE_TEAM_WORKERS`, default
+off. Apply its migration before enabling a staging artifact. See section 21 of
+[the implementation plan](WORKFORCE_MOBILE_ATTENDANCE_IMPLEMENTATION_PLAN.md).

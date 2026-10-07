@@ -1,3 +1,4 @@
+import '../features/workforce/presentation/screens/yorks_workforce_team_workers_screen.dart';
 import '../shared/providers/yorks_v1_calculator_provider.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart' show ProviderScope;
@@ -2082,6 +2083,14 @@ GoRouter createAppRouter({
           pageBuilder: (context, state) => _yorksV1Slide(
             state.pageKey,
             const YorksWorkforceOverviewScreen(),
+          ),
+        ),
+      if (yorksV1WorkforceEnabled && workforceTeamWorkersEnabled)
+        GoRoute(
+          path: '/yorks/workforce/workers',
+          pageBuilder: (context, state) => _yorksV1Slide(
+            state.pageKey,
+            const YorksWorkforceTeamWorkersScreen(),
           ),
         ),
       if (yorksV1WorkforceEnabled)

@@ -341,3 +341,51 @@ Final build checks: CI-configured web build passed with startup budget; CI ephem
 This is a clarity improvement, not proof of field adoption. Actual clock-time evidence, recovery and the usability pilot remain tracked in sections 18–19.
 
 Validation for section 20: 46 focused tests and 2,510 full regression tests passed (four skips); analyzer clean; formatting and diff checks passed. CI web startup budget and ephemeral-signed verification APK passed. English desktop and 360px phone screenshots inspected; translated phone day interactions passed in all four languages. No deployment or human field-acceptance claim.
+
+
+## 21. Workers, Attendance and Reports entry points
+
+8 October 2026: implemented locally following the owner-confirmed assigned-team
+scope:
+
+- Home exposes capability-aware Workers, Attendance and Reports shortcuts.
+  Reports opens the existing monthly workspace and its report panel.
+- Phone reports now expose generation, Excel download, PDF download, preview,
+  print and PDF sharing through the existing authorized report controller.
+- The administration Add worker form collapses optional details. The new scoped
+  Workers form requests core identity and employment facts, permits a generated
+  worker number, and lists only authorized teams with paginated worker results.
+- Server checks live actor, capabilities and current team responsibility or
+  supervision. Worker and assignment creation is atomic, audited and idempotent.
+  Failed or uncertain replies do not report success; retries retain the command
+  key. Authority changes dispose the scoped controller and late reads are ignored.
+- All new labels are provided in English, Arabic, Urdu and Hindi.
+
+### Backend and release contract
+
+Migration: `supabase/migrations/20261007193129_workforce_assigned_team_worker_creation.sql`.
+Adds only authenticated `v1_get_workforce_team_workers` and
+`v1_create_workforce_team_worker`; the permission helper remains private.
+The exact callable inventory test was extended for these two endpoints.
+Existing organization management permissions and historical records are retained.
+
+`YORKS_WORKFORCE_TEAM_WORKERS` defaults off. For staging, apply the migration
+before building with the flag enabled. Rollback disables the flag and revokes
+the two endpoint grants; retain worker, assignment and audit history. No remote
+migration or deployment was performed in this slice.
+
+### Local verification
+
+- Analyzer: no issues; full Flutter suite: 2,517 passed, four skipped.
+- Local database reset, lint (no errors), and full suite: 125 files, 3,642 tests
+  passed. New tests cover Site Engineer, Procurement warehouse supervision,
+  Project Engineer and Admin, rejected foreign-team creation, expired scope,
+  private helper/table denial, unchanged organization-management denial and retry.
+- Desktop 1366px and phone 360px Add worker golden/interaction checks passed.
+  Existing report tests verify mobile and desktop action availability.
+- CI web build/startup budget and ephemeral-signed APK build passed with the new
+  feature flag enabled. The APK is a verification artifact, not production signed.
+
+Real printer/mobile-device acceptance and the site/warehouse pilot remain open.
+The actual-punch, overtime classification and recovery work in sections 18–20
+is not superseded by this slice. Automated evidence does not replace human UAT.
