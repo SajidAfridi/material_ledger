@@ -109,6 +109,50 @@ void main() {
   }
 
   test(
+    'background saved-request lookup retains edits made during its wait',
+    () async {
+      repository.request = YorksV1MaterialRequest.fromRpcJson({
+        'id': 'draft',
+        'project_id': 'project',
+        'scope_id': 'scope',
+        'project_ref': 'TEST',
+        'project_name': 'Project',
+        'scope_name': 'Common',
+        'state': 'draft',
+        'record_version': 4,
+        'timing': 'normal',
+        'created_at': '2026-01-01T00:00:00Z',
+        'updated_at': '2026-01-02T00:00:00Z',
+        'lines': <Object>[],
+      });
+      repository.syncError = const YorksV1DomainException(
+        YorksV1DomainErrorCode.invalidTransition,
+        serverMessage: 'V1_PRIVATE_DRAFT_ALREADY_SAVED',
+      );
+      repository.requestBlock = Completer<void>();
+      addTearDown(() {
+        if (!repository.requestBlock!.isCompleted) {
+          repository.requestBlock!.complete();
+        }
+      });
+      await controller.setTitle('Before lookup');
+      await repository.requestStarted.future;
+      expect(await controller.saveDraft(), isFalse);
+      expect(await controller.submit(), isNull);
+      await controller.setTitle('Typed during lookup');
+      expect(controller.currentDraft.title, 'Typed during lookup');
+      expect(
+        store.readAll().firstWhere((draft) => draft.id == 'draft').title,
+        'Typed during lookup',
+      );
+      repository.requestBlock!.complete();
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.state.recoveryRequest, repository.request);
+      expect(controller.currentDraft.title, 'Typed during lookup');
+    },
+  );
+
+  test(
     'revocation clears comparison and late protected reads cannot restore it',
     () async {
       repository.request = YorksV1MaterialRequest.fromRpcJson({
@@ -134,6 +178,8 @@ void main() {
       await repository.requestStarted.future;
       projectAllowed = false;
       controller.invalidateRecoveryAuthority();
+      await controller.setTitle('Must not edit after revocation');
+      expect(controller.currentDraft.title, 'Private title');
       repository.requestBlock!.complete();
       await hydration;
       expect(controller.state.recoveryRequest, isNull);
@@ -485,6 +531,7 @@ class _Repository extends Fake
         YorksV1MaterialRequestPhase2Repository {
   YorksV1MaterialRequest? request;
   Object? requestError;
+  Object? syncError;
   Completer<void>? requestBlock;
   final requestStarted = Completer<void>();
   @override
@@ -537,6 +584,7 @@ class _Repository extends Fake
   ) async {
     if (!syncStarted.isCompleted) syncStarted.complete();
     await syncBlock?.future;
+    if (syncError != null) throw syncError!;
     return remote = _record(input.draft, (remote?.syncVersion ?? 0) + 1);
   }
 }

@@ -146,6 +146,9 @@ class YorksV1MaterialRequestDraftController
   bool _discardInFlight = false;
   bool _discarded = false;
   bool _reviewingRecovery = false;
+  // Background resolution suspends connected commands immediately, but the
+  // visible editor must keep accepting input until comparison/error is shown.
+  bool _acceptingRecoveryInput = false;
   String? _recoveryProjectId;
   Future<void>? _privateSyncDrain;
   bool get _inactive =>
@@ -166,7 +169,8 @@ class YorksV1MaterialRequestDraftController
   YorksV1DomainErrorCode? get lastErrorCode => state.errorCode;
 
   bool get isEditingBeforeApproval => _editingBeforeApproval;
-  bool get isReviewingRecovery => _reviewingRecovery;
+  bool get isReviewingRecovery =>
+      _reviewingRecovery && !_acceptingRecoveryInput;
 
   Future<void> retryRecoveryReview() async {
     if (_reviewingRecovery) await _resolveExistingRecovery();
@@ -303,15 +307,18 @@ class YorksV1MaterialRequestDraftController
         state.draft.pendingSubmissionApproval != null) {
       return;
     }
+    _acceptingRecoveryInput = !_reviewingRecovery || _acceptingRecoveryInput;
     _reviewingRecovery = true;
     _privateSyncRequested = false;
     _privateSyncDebounce?.cancel();
-    final generation = _recoveryGeneration;
+    // A newer resolution supersedes an older response without replacing edits.
+    final generation = ++_recoveryGeneration;
     YorksV1MaterialRequest request;
     try {
       request = await _repository.getRequest(_draftId);
     } catch (error) {
       if (!_recoveryIsCurrent(generation)) return;
+      _acceptingRecoveryInput = false;
       state = YorksV1MaterialRequestDraftState(
         draft: state.draft,
         status: YorksV1MaterialRequestDraftSyncStatus.failed,
@@ -322,6 +329,7 @@ class YorksV1MaterialRequestDraftController
       return;
     }
     if (!_recoveryIsCurrent(generation)) return;
+    _acceptingRecoveryInput = false;
     _recoveryProjectId = request.projectId;
     if (!(_canReadRecoveryProject?.call(request.projectId) ?? true)) {
       invalidateRecoveryAuthority();
@@ -339,6 +347,7 @@ class YorksV1MaterialRequestDraftController
   void invalidateRecoveryAuthority() {
     if (_disposed || !_reviewingRecovery) return;
     _recoveryGeneration++;
+    _acceptingRecoveryInput = false;
     state = YorksV1MaterialRequestDraftState(
       draft: state.draft,
       status: YorksV1MaterialRequestDraftSyncStatus.failed,
@@ -1884,7 +1893,7 @@ class YorksV1MaterialRequestDraftController
 
   Future<void> _replace(YorksV1MaterialRequestDraft draft) async {
     if (_inactive ||
-        _reviewingRecovery ||
+        (_reviewingRecovery && !_acceptingRecoveryInput) ||
         _discardInFlight ||
         _connectedCommandInFlight ||
         state.draft.hasPendingSave ||

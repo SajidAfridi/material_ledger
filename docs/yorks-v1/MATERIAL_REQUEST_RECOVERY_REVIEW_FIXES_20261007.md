@@ -33,3 +33,15 @@ No normalized request, line, archive, private account copy or migration is chang
 - Signed-in Owner/Admin startup, the server-loaded 202-request register, seven-item My Material Requests view, and saved-draft open → Back passed on the published client. No Save, Submit or Delete action was invoked; browser error logs were empty. Fresh-device 26/27-line recovery and live revocation remain automated widget/controller evidence; production user records were not edited to reenact them.
 
 The PR remains open for source review. Existing browser sessions should refresh to load the corrected client. No additional database mutation or cleanup was performed for these P2 corrections.
+
+## Background typing correction — PR only, not deployed
+
+The later P2 report identified a separate transition defect: autosync could receive `V1_PRIVATE_DRAFT_ALREADY_SAVED`, start a protected request read, and reject `_replace` calls before the visible form changed. A new controller regression reproduced the loss on the prior source: after typing “Typed during lookup,” the retained value was still “Before lookup.”
+
+The controller now distinguishes the initial background lookup from a visible comparison/error. While that initial read is pending, the visible editor accepts and persists input; Save/Submit and private autosync remain paused. The comparison uses the latest draft, rather than the snapshot from before the wait. Completing the read, encountering an error, or invalidating authority ends that editing window. Newer lookups supersede older responses through the existing generation guard.
+
+Regression coverage includes delayed autosync-triggered lookup and typing in the actual 360px and 1366px editors, device-store preservation before and after comparison, no second autosync, blocked Save/Submit during resolution, and rejection of edits/late responses after revocation. Existing recovery baselines and comparison goldens remain covered.
+
+This typing correction is a source/automated-test update to PR #53. The preceding published artifact remains source `835b569f7f7af2cec5c30aa19c2c1fbbe4e2ed24`. Neither the new typing scenario nor the earlier three recovery edge cases has been reenacted against production user data; the recorded live checks were basic startup/register/saved-draft navigation only. No database changes or additional cleanup are part of this correction.
+
+Final typing-correction gates: `flutter pub get`, changed-file formatting, analyzer and `git diff --check` passed; full Flutter suite **2,522 passed / four retained skips**. CI web/startup budget passed (9,883,525-byte main bundle; 2,847,322 gzip). Ephemeral CI-signed Android release build passed (111.9 MB), not a store release. No SQL changed, so database gates were not rerun. The new delayed-fetch regression failed on the old controller and passed after the correction; existing responsive recovery goldens also passed.

@@ -101,6 +101,51 @@ void main() {
     _preferences = await SharedPreferences.getInstance();
   });
 
+  for (final width in [360.0, 1366.0]) {
+    testWidgets(
+      'typing survives delayed background recovery lookup at $width',
+      (tester) async {
+        await _setViewport(tester, Size(width, 800));
+        final titleKey = ValueKey(
+          width == 360 ? 'mobile-mr-title' : 'mr-title',
+        );
+        final repository = _DelayedBackgroundRecoveryRepository();
+        await _pumpDraft(tester, repositoryOverride: repository);
+        await tester.enterText(find.byKey(titleKey), 'Before lookup');
+        await tester.pump(const Duration(milliseconds: 1300));
+        expect(repository.requestStarted.isCompleted, isTrue);
+        expect(find.byKey(titleKey), findsOneWidget);
+
+        await tester.enterText(find.byKey(titleKey), 'Typed during lookup');
+        await tester.pump(const Duration(milliseconds: 1600));
+        expect(repository.syncCalls, 1);
+        final container = ProviderScope.containerOf(
+          tester.element(find.byType(YorksV1MaterialRequestDraftScreen)),
+        );
+        const key = YorksV1MaterialRequestDraftKey(
+          ownerAuthUserId: 'mobile-mr-user',
+          draftId: _draftId,
+        );
+        final controller = container.read(
+          yorksV1MaterialRequestDraftControllerProvider(key).notifier,
+        );
+        expect(controller.currentDraft.title, 'Typed during lookup');
+        final store = container.read(
+          yorksV1MaterialRequestDraftStoreProvider('mobile-mr-user'),
+        );
+        expect(store.readAll().single.title, 'Typed during lookup');
+
+        repository.requestReady.complete();
+        await tester.pumpAndSettle();
+        expect(find.text('Typed during lookup'), findsOneWidget);
+        expect(find.text('Continue with recovered changes'), findsOneWidget);
+        expect(store.readAll().single.title, 'Typed during lookup');
+        expect(repository.syncCalls, 1);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   for (final revoke in [false, true]) {
     testWidgets(
       'fresh-device recovery accepts baseline and protects input; revoke=$revoke',
@@ -3984,6 +4029,36 @@ YorksV1RuntimeConfiguration _runtimeConfiguration({
   requireExternalSourceReadiness: false,
   pushEnabled: true,
 );
+
+class _DelayedBackgroundRecoveryRepository
+    extends _MaterialRequestRepositoryFixture
+    implements YorksV1MaterialRequestPhase2Repository {
+  _DelayedBackgroundRecoveryRepository() : super(serverRequest: _draftRequest);
+  final requestStarted = Completer<void>();
+  final requestReady = Completer<void>();
+  int syncCalls = 0;
+
+  @override
+  Future<YorksV1MaterialRequest> getRequest(String requestId) async {
+    if (!requestStarted.isCompleted) requestStarted.complete();
+    await requestReady.future;
+    return super.getRequest(requestId);
+  }
+
+  @override
+  Future<YorksV1PrivateMaterialRequestDraftRecord> syncPrivateDraft(
+    YorksV1SyncPrivateMaterialRequestDraftInput input,
+  ) async {
+    syncCalls++;
+    throw const YorksV1DomainException(
+      YorksV1DomainErrorCode.invalidTransition,
+      serverMessage: 'V1_PRIVATE_DRAFT_ALREADY_SAVED',
+    );
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
 
 class _RecoveryReviewRepository extends _MaterialRequestRepositoryFixture
     implements YorksV1MaterialRequestPhase2Repository {
