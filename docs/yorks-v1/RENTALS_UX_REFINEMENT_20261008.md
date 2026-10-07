@@ -57,3 +57,19 @@ registers and detail, plus the empty-state/import-menu regression. Updated
 visuals are under `test/goldens/r38_4/`. Full gate and staging results are recorded
 below when complete. Physical-device, screen-reader and real-user acceptance
 remain separate from browser and automated evidence.
+
+### Completed gate and staging record
+
+- Source: `3de1d8046bab49a0492fcdf6febd218d741df050`.
+- Full Flutter suite: 2,560 passed, four retained skips; rental suite: 12 passed.
+- Analyzer, dependency resolution, changed-file format and diff checks passed.
+- CI web and ephemeral-signed APK gates passed. No distribution Android release.
+- Local database reset and pgTAP: 125 files, 3,661 tests passed. No hosted schema
+  or business data changes were made.
+- Staging deployment: `dpl_DgQYDFzyFKLSfT2bJt6yDUbjaZCo` at
+  `https://yorks-r35-n6jalcgky-sajid-alis-projects-0ec775a2.vercel.app`.
+- Existing staging alias updated after 27 route/asset hash checks passed:
+  `https://yorks-r35-staging.vercel.app/#/rentals`.
+- Production remains unchanged. This is the first UI refinement, not completion
+  of the wider save-recovery, detail-form and full localization work identified
+  above.
