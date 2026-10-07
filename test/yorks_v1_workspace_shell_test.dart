@@ -369,20 +369,18 @@ void main() {
       find.text(YorksV1ShellStrings.materialRequests.primary),
     );
     final accounts = tester.getRect(
-      find.text(YorksV1ShellStrings.accounts.primary),
+      find.text(YorksV1ShellStrings.projectAccounts.primary),
     );
     expect(accounts.top, greaterThan(requests.top));
     expect(accounts.top - requests.bottom, lessThanOrEqualTo(24));
-    await tester.drag(find.byType(Scrollable).first, const Offset(0, -120));
-    await tester.pumpAndSettle();
-    final accountsAudit = tester.getRect(
+    expect(
       find.text(YorksV1ShellStrings.accountsAuditTrail.primary),
+      findsNothing,
     );
     final workforce = tester.getRect(
       find.text(YorksV1ShellStrings.workforce.primary),
     );
-    expect(workforce.top, greaterThan(accountsAudit.top));
-    expect(workforce.top - accountsAudit.bottom, lessThanOrEqualTo(24));
+    expect(workforce.top, greaterThan(accounts.top));
     expect(tester.takeException(), isNull);
   });
 
@@ -419,9 +417,10 @@ void main() {
         );
         await controller.start();
         final router = GoRouter(
+          initialLocation: RoutePaths.yorksV1Accounts,
           routes: [
             GoRoute(
-              path: '/',
+              path: RoutePaths.yorksV1Accounts,
               builder: (_, _) => const YorksV1WorkspaceShell(
                 child: Scaffold(body: SizedBox.expand()),
               ),
@@ -461,7 +460,7 @@ void main() {
         await tester.pumpAndSettle();
 
         for (final label in [
-          YorksV1ShellStrings.accounts,
+          YorksV1ShellStrings.overview,
           YorksV1ShellStrings.projectAccounts,
           YorksV1ShellStrings.billingProgress,
           YorksV1ShellStrings.accountsClaims,
@@ -472,7 +471,14 @@ void main() {
           YorksV1ShellStrings.accountsReports,
           YorksV1ShellStrings.accountsAuditTrail,
         ]) {
-          expect(find.text(label.primary), findsOneWidget, reason: role.name);
+          expect(
+            find.descendant(
+              of: find.byKey(const ValueKey('workspace-internal-sections')),
+              matching: find.text(label.primary),
+            ),
+            findsOneWidget,
+            reason: role.name,
+          );
         }
         expect(tester.takeException(), isNull);
       }
@@ -544,10 +550,13 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text(YorksV1ShellStrings.accounts.primary), findsOneWidget);
+      expect(
+        find.text(YorksV1ShellStrings.projectAccounts.primary),
+        findsOneWidget,
+      );
       expect(
         find.text(YorksV1ShellStrings.accountsClaims.primary),
-        findsOneWidget,
+        findsNothing,
       );
       expect(
         find.text(YorksV1ShellStrings.supplierBills.primary),
@@ -626,24 +635,15 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text(YorksV1ShellStrings.accounts.primary), findsOneWidget);
     expect(
       find.text(YorksV1ShellStrings.projectAccounts.primary),
       findsOneWidget,
     );
-    await tester.scrollUntilVisible(
-      find.text(YorksV1ShellStrings.accountsAuditTrail.primary),
-      320,
-      scrollable: find.byType(Scrollable).first,
-    );
     expect(
       find.text(YorksV1ShellStrings.accountsAuditTrail.primary),
-      findsOneWidget,
+      findsNothing,
     );
-    expect(
-      find.text(YorksV1ShellStrings.supplierBills.primary),
-      findsOneWidget,
-    );
+    expect(find.text(YorksV1ShellStrings.supplierBills.primary), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

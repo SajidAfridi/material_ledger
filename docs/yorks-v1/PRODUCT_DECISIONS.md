@@ -1828,3 +1828,24 @@ idempotent retry. It grants no editing or deletion of existing workers.
 The additive implementation is gated by `YORKS_WORKFORCE_TEAM_WORKERS`, default
 off. Apply its migration before enabling a staging artifact. See section 21 of
 [the implementation plan](WORKFORCE_MOBILE_ATTENDANCE_IMPLEMENTATION_PLAN.md).
+
+### 33. Consolidated workspace navigation — 8 October 2026
+
+The owner requested a smaller global menu. Project Accounts is the single
+Accounts entry, opening its overview. Portfolio, billing, claims, receipts/PDC,
+supplier bills, due schedule, documents, reports and Accounts audit remain
+internal sections. Workforce administration moves inside the Workforce
+workspace alongside overview, attendance and timesheets. The mobile More menu
+uses the same consolidation; Accountant bottom navigation no longer duplicates
+individual Accounts sections.
+
+Desktop uses an internal horizontal section bar; phones use a full-width
+section dropdown. Existing deep links and capability filtering remain intact,
+and authorized detailed destinations remain searchable. This presentation change
+does not grant permissions or change backend routes/data. Users with no Accounts
+or Workforce access continue to receive no corresponding destination.
+
+Local verification: 2,556 Flutter tests passed with four retained skips; analyzer
+clean. Focused navigation and 1366px/360px golden checks passed after the final
+layout adjustment. CI web/startup-budget and ephemeral-signed APK builds are
+verification artifacts only. This navigation update has not been deployed.
