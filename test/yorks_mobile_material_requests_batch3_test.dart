@@ -146,6 +146,66 @@ void main() {
     );
   }
 
+  for (final width in [820.0, 1366.0]) {
+    for (final field in ['quantity', 'size']) {
+      testWidgets('focused $field survives delayed recovery at $width', (
+        tester,
+      ) async {
+        await _setViewport(tester, Size(width, 900));
+        final repository = _DelayedBackgroundRecoveryRepository();
+        await _pumpDraft(tester, repositoryOverride: repository);
+        final container = ProviderScope.containerOf(
+          tester.element(find.byType(YorksV1MaterialRequestDraftScreen)),
+        );
+        const key = YorksV1MaterialRequestDraftKey(
+          ownerAuthUserId: 'mobile-mr-user',
+          draftId: _draftId,
+        );
+        final controller = container.read(
+          yorksV1MaterialRequestDraftControllerProvider(key).notifier,
+        );
+        await controller.setScope('scope-common');
+        await controller.addCustomLine();
+        await tester.pump(const Duration(milliseconds: 1300));
+        expect(repository.requestStarted.isCompleted, isTrue);
+        final line = controller.currentDraft.lines.single;
+        final cell = find.byKey(ValueKey('${line.id}-$field'));
+        await tester.ensureVisible(cell);
+        await tester.enterText(cell, field == 'quantity' ? '37' : '12x24');
+        final input = tester.widget<EditableText>(
+          find.descendant(of: cell, matching: find.byType(EditableText)),
+        );
+        expect(input.focusNode.hasFocus, isTrue);
+        expect(
+          field == 'quantity'
+              ? controller.currentDraft.lines.single.quantity
+              : controller.currentDraft.lines.single.size,
+          isNot(field == 'quantity' ? '37' : '12x24'),
+        );
+        repository.requestReady.complete();
+        await tester.pumpAndSettle();
+        final recovered = controller.currentDraft.lines.single;
+        expect(
+          field == 'quantity' ? recovered.quantity : recovered.size,
+          field == 'quantity' ? '37' : '12x24',
+        );
+        final stored = container
+            .read(yorksV1MaterialRequestDraftStoreProvider('mobile-mr-user'))
+            .readAll()
+            .single
+            .lines
+            .single;
+        expect(
+          field == 'quantity' ? stored.quantity : stored.size,
+          field == 'quantity' ? '37' : '12x24',
+        );
+        expect(find.text('Continue with recovered changes'), findsOneWidget);
+        expect(repository.syncCalls, 1);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+
   for (final revoke in [false, true]) {
     testWidgets(
       'fresh-device recovery accepts baseline and protects input; revoke=$revoke',

@@ -45,3 +45,44 @@ Regression coverage includes delayed autosync-triggered lookup and typing in the
 This typing correction is a source/automated-test update to PR #53. The preceding published artifact remains source `835b569f7f7af2cec5c30aa19c2c1fbbe4e2ed24`. Neither the new typing scenario nor the earlier three recovery edge cases has been reenacted against production user data; the recorded live checks were basic startup/register/saved-draft navigation only. No database changes or additional cleanup are part of this correction.
 
 Final typing-correction gates: `flutter pub get`, changed-file formatting, analyzer and `git diff --check` passed; full Flutter suite **2,522 passed / four retained skips**. CI web/startup budget passed (9,883,525-byte main bundle; 2,847,322 gzip). Ephemeral CI-signed Android release build passed (111.9 MB), not a store release. No SQL changed, so database gates were not rerun. The new delayed-fetch regression failed on the old controller and passed after the correction; existing responsive recovery goldens also passed.
+
+
+## Focused material-cell correction — PR only, not deployed
+
+The background lookup continued accepting controller updates, but quantity and
+size cells keep their input in a TextEditingController until blur or Enter.
+Replacing the form at lookup completion disposed the focused cell before it
+could commit. Four delayed-lookup widget regressions reproduced this on the
+previous commit, covering quantity and size at 820px and 1366px.
+
+The draft screen now registers a synchronous, screen-scoped focus flush with
+its controller. A successful authorized lookup flushes blur handlers before
+locking input and constructing the comparison. Lookup failures also flush
+before replacing the form with the error state. Stale responses and revoked
+access retain their existing generation/authorization guards. The registration
+is removed when the screen is disposed or changes controllers. The controller
+contains no Flutter focus or widget dependency.
+
+All four regressions now prove that the field is still focused and its value is
+uncommitted before completion, then confirm the edited value in both comparison
+state and device storage. Existing title, authority-revocation, recovery-baseline
+and desktop/360px visual golden coverage also passes.
+
+Validation: dependency resolution and changed-file format check passed; analyzer
+reported no issues; full Flutter suite passed 2,526 tests with 4 retained skips;
+CI web build passed its startup budget (9,884,107 bytes, gzip 2,847,518); CI APK
+build passed (111.9 MB, ephemeral signing, not a production release artifact).
+No schema changes. This correction has not been deployed or runtime-verified
+against a live cross-device recovery race.
+
+### Owner draft diagnosis
+
+Read-only production and the originating Chrome storage identify the requested
+Shamsi draft as a stale local pending-save copy of an existing saved draft. The
+local title is `testtest` with four lines, expected version zero and an unresolved
+save operation from 18 September; the same ID is saved as `test` with one line at
+version one. Status lookup found no receipt for that pending operation, and replay
+returned HTTP 409. Absence of a title match was not treated as absence of the
+underlying saved request. No unrelated Owner draft was selected for deletion.
+The exact server snapshot is backed up outside the repository. Removal awaits
+action-time confirmation for the browser's non-recoverable local copy.

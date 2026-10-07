@@ -2325,6 +2325,17 @@ class YorksV1MaterialRequestDraftScreen extends ConsumerStatefulWidget {
 
 class _YorksV1MaterialRequestDraftScreenState
     extends ConsumerState<YorksV1MaterialRequestDraftScreen> {
+  final _editorFocusScope = FocusScopeNode();
+  YorksV1MaterialRequestDraftController? _flushController;
+
+  void _flushPendingEditorInput() {
+    if (!mounted || !_editorFocusScope.hasFocus) return;
+    _editorFocusScope.unfocus();
+    // Blur listeners commit cells synchronously, while the controller still
+    // accepts input. Do not defer this until the comparison replaces the form.
+    FocusManager.instance.applyFocusChangesIfNeeded();
+  }
+
   bool _seededFromBoq = false;
   bool _seededProjectFromRoute = false;
   bool _hydratedFromServer = false;
@@ -2362,6 +2373,8 @@ class _YorksV1MaterialRequestDraftScreenState
 
   @override
   void dispose() {
+    _flushController?.removePendingEditorFlusher(_flushPendingEditorInput);
+    _editorFocusScope.dispose();
     final previous = _sidebarWasExpanded;
     final sidebarController = _sidebarController;
     if (previous != null && sidebarController != null) {
@@ -2375,7 +2388,10 @@ class _YorksV1MaterialRequestDraftScreenState
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      FocusScope(node: _editorFocusScope, child: _buildEditor(context));
+
+  Widget _buildEditor(BuildContext context) {
     final owner = ref.watch(yorksV1AuthUserIdProvider);
     final language = ref.watch(languageProvider);
     if (owner == null || owner.isEmpty) {
@@ -2393,6 +2409,11 @@ class _YorksV1MaterialRequestDraftScreenState
     final controller = ref.read(
       yorksV1MaterialRequestDraftControllerProvider(key).notifier,
     );
+    if (!identical(_flushController, controller)) {
+      _flushController?.removePendingEditorFlusher(_flushPendingEditorInput);
+      _flushController = controller;
+      controller.addPendingEditorFlusher(_flushPendingEditorInput);
+    }
     final recoveryRequest = state.recoveryRequest;
     final recoveryPermission = ref.watch(
       yorksV1CurrentPermissionSnapshotProvider,

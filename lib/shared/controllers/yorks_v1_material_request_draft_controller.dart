@@ -149,6 +149,21 @@ class YorksV1MaterialRequestDraftController
   // Background resolution suspends connected commands immediately, but the
   // visible editor must keep accepting input until comparison/error is shown.
   bool _acceptingRecoveryInput = false;
+  final Set<VoidCallback> _pendingEditorFlushers = {};
+
+  /// Editors commit buffered cells synchronously before recovery locks input.
+  void addPendingEditorFlusher(VoidCallback flush) =>
+      _pendingEditorFlushers.add(flush);
+  void removePendingEditorFlusher(VoidCallback flush) =>
+      _pendingEditorFlushers.remove(flush);
+
+  void _flushPendingEditorInput() {
+    if (!_acceptingRecoveryInput || _inactive) return;
+    for (final flush in List<VoidCallback>.of(_pendingEditorFlushers)) {
+      flush();
+    }
+  }
+
   String? _recoveryProjectId;
   Future<void>? _privateSyncDrain;
   bool get _inactive =>
@@ -318,6 +333,8 @@ class YorksV1MaterialRequestDraftController
       request = await _repository.getRequest(_draftId);
     } catch (error) {
       if (!_recoveryIsCurrent(generation)) return;
+      _flushPendingEditorInput();
+      if (!_recoveryIsCurrent(generation)) return;
       _acceptingRecoveryInput = false;
       state = YorksV1MaterialRequestDraftState(
         draft: state.draft,
@@ -329,12 +346,14 @@ class YorksV1MaterialRequestDraftController
       return;
     }
     if (!_recoveryIsCurrent(generation)) return;
-    _acceptingRecoveryInput = false;
     _recoveryProjectId = request.projectId;
     if (!(_canReadRecoveryProject?.call(request.projectId) ?? true)) {
       invalidateRecoveryAuthority();
       return;
     }
+    _flushPendingEditorInput();
+    if (!_recoveryIsCurrent(generation)) return;
+    _acceptingRecoveryInput = false;
     state = YorksV1MaterialRequestDraftState(
       draft: state.draft,
       status: YorksV1MaterialRequestDraftSyncStatus.conflict,
