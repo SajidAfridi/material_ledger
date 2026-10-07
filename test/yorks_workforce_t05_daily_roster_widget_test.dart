@@ -198,7 +198,12 @@ void main() {
 
           expect(
             find.text(
-              YorksV1WorkforceStrings.text(language, 'daily_attendance'),
+              YorksV1WorkforceStrings.text(
+                language,
+                viewport.width < 720
+                    ? 'mobile_attendance_title'
+                    : 'daily_attendance',
+              ),
             ),
             findsOneWidget,
             reason: '${language.code} at $viewport',
@@ -353,7 +358,7 @@ void main() {
       );
 
       await tester.tap(
-        find.byKey(const Key('workforce-mobile-worker-$_workerId')),
+        find.byKey(const Key('workforce-mobile-details-$_workerId')),
       );
       await tester.pumpAndSettle();
       expect(
@@ -437,7 +442,7 @@ void main() {
     );
 
     await tester.tap(
-      find.byKey(const Key('workforce-mobile-worker-$_workerId')),
+      find.byKey(const Key('workforce-mobile-details-$_workerId')),
     );
     await tester.pumpAndSettle();
     await expectLater(

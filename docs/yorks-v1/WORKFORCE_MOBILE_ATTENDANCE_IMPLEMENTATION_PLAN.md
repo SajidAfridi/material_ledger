@@ -1,7 +1,7 @@
 # Workforce attendance: mobile-first product and implementation plan
 
 Prepared: 7 October 2026 (Asia/Karachi).
-Status: detailed planning deliverable; implementation, usability validation and release pending.
+Status: implementation in progress; two local UI slices implemented. Usability validation and release pending.
 Owner direction: mobile-first attendance for site engineers and warehouse recorders; clean Codex/calculator-style presentation within the familiar Yorks Material Request home and workflow language.
 
 ## 1. Outcome and evidence
@@ -311,3 +311,19 @@ Open clarification sent to the user: meaning of combined overtime notation; norm
 ### First-slice local validation
 
 7 October 2026: `flutter pub get` passed; changed-Dart formatting and `git diff --check` passed; `flutter analyze` reported no issues; full `flutter test` passed 2,506 tests with 4 skips. The CI-configured `./tool/r35.sh build-web` passed including startup budget. `CI=true YORKS_CI_EPHEMERAL_SIGNING=true` CI-configured APK build passed (verification artifact only, not production signing). Updated 360px/390px mobile goldens were inspected, along with the retained desktop daily-roster reference. No database changes, production mutation, real-device acceptance or named-persona UAT were performed.
+
+
+## 19. Mobile daily actions and worker-month continuation
+
+8 October 2026: implemented a second local presentation slice:
+
+- Phone attendance uses short localized instructions, an explicit Hours and details action, and Check and save in the fixed footer. Existing review and server save remain authoritative.
+- Mobile monthly worker lists expose search and pagination through the existing controller callbacks.
+- Opening a worker focuses their record. Phone days use readable vertical cards with status, regular/overtime hours and location; selecting a day shows compact facts inline. Tablet calendar and desktop table remain available.
+- No schema, RPC, permission or attendance calculation change. Actual clock intervals and overtime classification remain dependent on the rules recorded in section 18.
+
+Verification: 43 focused daily/monthly tests passed; full regression passed 2,507 tests with four skips. A final compact day-facts presentation adjustment then passed all 10 monthly tests. Analyzer reported no issues. Formatting and diff checks passed. Phone daily and selected-day golden images were inspected; desktop/tablet regression goldens passed unchanged. CI web and ephemeral-signed APK results are recorded after completion below. These are local checks, not named-persona or real-device acceptance.
+
+Remaining implementation includes durable draft recovery, a simpler home/exception flow, agreed actual-time evidence, paper-compatible export/sign-off mapping, telemetry and the site/warehouse usability pilot. The entire redesign is not complete and has not been deployed.
+
+Final build checks: CI-configured web build passed with startup budget; CI ephemeral-signed release APK build passed. The APK is a verification artifact, not a production-signed release.

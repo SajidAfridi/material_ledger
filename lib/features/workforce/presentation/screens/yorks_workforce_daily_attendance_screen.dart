@@ -1484,7 +1484,12 @@ class _RosterHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = YorksV1WorkforceStrings.text(language, 'daily_attendance');
+    final title = YorksV1WorkforceStrings.text(
+      language,
+      MediaQuery.sizeOf(context).width < AppSpacing.compactBreakpoint
+          ? 'mobile_attendance_title'
+          : 'daily_attendance',
+    );
     final actions = Wrap(
       spacing: AppSpacing.sm,
       runSpacing: AppSpacing.sm,
@@ -1513,7 +1518,10 @@ class _RosterHeader extends StatelessWidget {
                 Text(
                   YorksV1WorkforceStrings.text(
                     language,
-                    'daily_attendance_body',
+                    MediaQuery.sizeOf(context).width <
+                            AppSpacing.compactBreakpoint
+                        ? 'mobile_attendance_hint'
+                        : 'daily_attendance_body',
                   ),
                   style: AppTypography.bodyMedium,
                 ),
@@ -1538,7 +1546,9 @@ class _RosterHeader extends StatelessWidget {
                       Text(
                         YorksV1WorkforceStrings.text(
                           language,
-                          'daily_attendance_body',
+                          compact
+                              ? 'mobile_attendance_hint'
+                              : 'daily_attendance_body',
                         ),
                         style: AppTypography.bodyMedium,
                       ),
@@ -4525,6 +4535,20 @@ class _MobileWorkerCard extends StatelessWidget {
                             ),
                           ],
                         ),
+                        TextButton.icon(
+                          key: Key('workforce-mobile-details-${row.workerId}'),
+                          onPressed: () => onOpen(row.workerId),
+                          style: TextButton.styleFrom(
+                            minimumSize: const Size(0, 48),
+                          ),
+                          icon: const Icon(Icons.tune, size: 18),
+                          label: Text(
+                            YorksV1WorkforceStrings.text(
+                              language,
+                              'mobile_more',
+                            ),
+                          ),
+                        ),
                         if (row.isDirty || !row.isValid) ...[
                           const SizedBox(height: AppSpacing.xs),
                           Text(
@@ -4668,7 +4692,10 @@ class _MobileCompletionFooter extends StatelessWidget {
                     onPressed: canReview ? () => onReview() : null,
                     icon: const Icon(Icons.fact_check_outlined),
                     label: Text(
-                      YorksV1WorkforceStrings.text(language, 'review_day'),
+                      YorksV1WorkforceStrings.text(
+                        language,
+                        'mobile_check_save',
+                      ),
                     ),
                   ),
                 ),

@@ -3,6 +3,30 @@ import 'app_language.dart';
 /// Localized copy for the guarded Workforce daily-attendance workspace.
 abstract final class YorksV1WorkforceStrings {
   static const Map<String, Map<String, String>> _copy = {
+    'mobile_attendance_title': {
+      'en': "Daily attendance",
+      'ar': "الحضور اليومي",
+      'ur': "روزانہ حاضری",
+      'hi': "दैनिक उपस्थिति",
+    },
+    'mobile_attendance_hint': {
+      'en': "Mark your team, check the hours, then save.",
+      'ar': "حدد حضور فريقك، راجع الساعات ثم احفظ.",
+      'ur': "ٹیم کی حاضری لگائیں، گھنٹے دیکھیں، پھر محفوظ کریں۔",
+      'hi': "टीम की उपस्थिति दर्ज करें, घंटे जाँचें, फिर सहेजें।",
+    },
+    'mobile_check_save': {
+      'en': "Check and save",
+      'ar': "راجع واحفظ",
+      'ur': "دیکھیں اور محفوظ کریں",
+      'hi': "जाँचें और सहेजें",
+    },
+    'mobile_more': {
+      'en': "Hours and details",
+      'ar': "الساعات والتفاصيل",
+      'ur': "گھنٹے اور تفصیلات",
+      'hi': "घंटे और विवरण",
+    },
     'attendance_changed': {
       'en': 'Attendance changed — not saved yet',
       'ar': 'تم تغيير الحضور — لم يُحفظ بعد',
