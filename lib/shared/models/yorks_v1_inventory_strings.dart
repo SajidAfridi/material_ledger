@@ -3,6 +3,60 @@ import 'app_strings.dart';
 /// Centralized R38.3 warehouse copy. No operational warehouse surface owns
 /// literal user-facing text, so locale expansion remains a data-only change.
 abstract final class YorksV1InventoryStrings {
+  static const uncertainSave = TranslatableString(
+    en: 'The result is not confirmed. Keep this screen open and retry the same save to check its result.',
+    ar: 'لم يتم تأكيد النتيجة. أبقِ هذه الشاشة مفتوحة وأعد محاولة الحفظ نفسه للتحقق من النتيجة.',
+    ur: 'نتیجے کی تصدیق نہیں ہوئی۔ یہ اسکرین کھلی رکھیں اور نتیجہ جاننے کے لیے وہی محفوظ کاری دوبارہ آزمائیں۔',
+    hi: 'परिणाम की पुष्टि नहीं हुई। यह स्क्रीन खुली रखें और परिणाम जाँचने के लिए उसी सेव को फिर से आज़माएँ।',
+  );
+  static const retrySave = TranslatableString(
+    en: 'Retry save',
+    ar: 'إعادة الحفظ',
+    ur: 'دوبارہ محفوظ کریں',
+    hi: 'फिर से सेव करें',
+  );
+  static const loadFailed = TranslatableString(
+    en: 'Stock could not be loaded. Try again.',
+    ar: 'تعذر تحميل المخزون. حاول مرة أخرى.',
+    ur: 'اسٹاک لوڈ نہیں ہو سکا۔ دوبارہ کوشش کریں۔',
+    hi: 'स्टॉक लोड नहीं हो सका। फिर कोशिश करें।',
+  );
+  static const older = TranslatableString(
+    en: 'Older movements',
+    ar: 'حركات أقدم',
+    ur: 'پرانی نقل و حرکت',
+    hi: 'पुराने मूवमेंट',
+  );
+  static const newer = TranslatableString(
+    en: 'Newer movements',
+    ar: 'حركات أحدث',
+    ur: 'نئی نقل و حرکت',
+    hi: 'नए मूवमेंट',
+  );
+  static const exportMovements = TranslatableString(
+    en: 'Export matching movements',
+    ar: 'تصدير الحركات المطابقة',
+    ur: 'مطابق نقل و حرکت برآمد کریں',
+    hi: 'मिलते मूवमेंट निर्यात करें',
+  );
+  static const noMinimum = TranslatableString(
+    en: 'No minimum set',
+    ar: 'لم يحدد الحد الأدنى',
+    ur: 'کم از کم حد مقرر نہیں',
+    hi: 'न्यूनतम तय नहीं',
+  );
+  static const filters = TranslatableString(
+    en: 'Filters',
+    ar: 'عوامل التصفية',
+    ur: 'فلٹرز',
+    hi: 'फ़िल्टर',
+  );
+  static const exportMatchingStock = TranslatableString(
+    en: 'Export stock',
+    ar: 'تصدير المخزون',
+    ur: 'اسٹاک برآمد کریں',
+    hi: 'स्टॉक निर्यात करें',
+  );
   static const warehouse = TranslatableString(
     en: 'Warehouse',
     ar: 'المستودع',

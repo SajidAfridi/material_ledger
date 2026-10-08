@@ -1,3 +1,6 @@
+import '../models/yorks_v1_inventory_history.dart';
+import 'dart:async';
+import 'yorks_v1_identity_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/yorks_v1_domain_error.dart';
@@ -10,6 +13,7 @@ import 'yorks_v1_material_request_provider.dart';
 
 final yorksV1InventoryWorkspaceProvider = FutureProvider.autoDispose
     .family<YorksV1InventoryWorkspace, String?>((ref, search) {
+      _listenForInventoryRefresh(ref);
       return ref
           .watch(yorksV1LogisticsRepositoryProvider)
           .getInventory(search: search);
@@ -17,6 +21,7 @@ final yorksV1InventoryWorkspaceProvider = FutureProvider.autoDispose
 
 final yorksV1InventoryItemDetailProvider = FutureProvider.autoDispose
     .family<YorksV1InventoryItemDetail, String>((ref, inventoryItemId) {
+      _listenForInventoryRefresh(ref);
       return ref
           .watch(yorksV1LogisticsRepositoryProvider)
           .getInventoryItem(inventoryItemId);
@@ -200,3 +205,34 @@ YorksV1ProjectMaterialReturnRepository _projectReturnRepository(Ref ref) {
   }
   return repository as YorksV1ProjectMaterialReturnRepository;
 }
+
+void _listenForInventoryRefresh(Ref ref) {
+  ref.watch(yorksV1AuthUserIdProvider);
+  ref.watch(yorksV1CurrentRoleProvider);
+  Timer? refresh;
+  ref.listen<int>(yorksV1MaterialRequestRealtimeRevisionProvider, (
+    previous,
+    next,
+  ) {
+    if (previous == null || previous == next) return;
+    refresh?.cancel();
+    refresh = Timer(const Duration(milliseconds: 300), ref.invalidateSelf);
+  });
+  ref.onDispose(() => refresh?.cancel());
+}
+
+final yorksV1InventoryHistoryProvider = FutureProvider.autoDispose
+    .family<YorksV1InventoryHistoryPage, YorksV1InventoryHistoryQuery>((
+      ref,
+      query,
+    ) {
+      _listenForInventoryRefresh(ref);
+      final repository = ref.watch(yorksV1LogisticsRepositoryProvider);
+      if (repository is! YorksV1InventoryHistoryRepository) {
+        throw const YorksV1DomainException(
+          YorksV1DomainErrorCode.featureDisabled,
+        );
+      }
+      return (repository as YorksV1InventoryHistoryRepository)
+          .getInventoryHistory(query);
+    });

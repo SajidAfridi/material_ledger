@@ -1,3 +1,4 @@
+import 'package:material_ledger/shared/models/yorks_v1_inventory_history.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -205,7 +206,7 @@ void main() {
 
       expect(find.text('Add / Receive Stock'), findsNothing);
       expect(find.text('Import Inventory'), findsNothing);
-      expect(find.text('Export register'), findsOneWidget);
+      expect(find.text('Export stock'), findsOneWidget);
 
       await tester.tap(find.text('Items'));
       await tester.pumpAndSettle();
@@ -504,7 +505,16 @@ class _DispatchDeliveryOrderRefreshHarness extends ConsumerWidget {
 class _FakeLogisticsRepository
     implements
         YorksV1LogisticsRepository,
-        YorksV1InventoryItemMetadataRepository {
+        YorksV1InventoryItemMetadataRepository,
+        YorksV1InventoryHistoryRepository {
+  @override
+  Future<YorksV1InventoryHistoryPage> getInventoryHistory(
+    YorksV1InventoryHistoryQuery query,
+  ) async => YorksV1InventoryHistoryPage(
+    items: (await getInventoryItem(query.itemId ?? 'item')).movements,
+    hasMore: false,
+  );
+
   YorksV1InventoryItemMetadataInput? metadataInput;
   bool _dispatchCommitted = false;
   int returnsWorkspaceCalls = 0;

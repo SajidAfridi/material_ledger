@@ -1,3 +1,4 @@
+import '../models/yorks_v1_inventory_history.dart';
 import 'dart:async';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -144,7 +145,8 @@ class YorksV1SupabaseLogisticsRepository
         YorksV1LogisticsRepository,
         YorksV1ProjectMaterialReturnRepository,
         YorksV1InventoryCategorySuggestionRepository,
-        YorksV1InventoryItemMetadataRepository {
+        YorksV1InventoryItemMetadataRepository,
+        YorksV1InventoryHistoryRepository {
   const YorksV1SupabaseLogisticsRepository({
     required YorksV1FeatureFlags featureFlags,
     required ConnectivityService connectivity,
@@ -162,6 +164,19 @@ class YorksV1SupabaseLogisticsRepository
   final YorksV1MaterialRequestRpcClient? _rpcClient;
   final Duration _rpcTimeout;
   final AnalyticsService _analytics;
+
+  @override
+  Future<YorksV1InventoryHistoryPage> getInventoryHistory(
+    YorksV1InventoryHistoryQuery query,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_inventory_movement_page',
+      parameters: query.toRpc(),
+    );
+    return YorksV1InventoryHistoryPage.fromJson(
+      Map<String, dynamic>.from(response as Map),
+    );
+  }
 
   @override
   Future<YorksV1InventoryWorkspace> getInventory({String? search}) async {
@@ -198,7 +213,7 @@ class YorksV1SupabaseLogisticsRepository
     String inventoryItemId,
   ) async {
     final response = await _invoke(
-      functionName: 'v1_inventory_item_workspace_projection',
+      functionName: 'v1_inventory_item_workspace_v2',
       parameters: {'p_inventory_item_id': inventoryItemId},
     );
     final detail = _inventoryItemDetail(response);

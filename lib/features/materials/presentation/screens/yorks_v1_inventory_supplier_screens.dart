@@ -162,7 +162,7 @@ class _YorksV1InventorySupplierDirectoryScreenState
     }
     GoRouter.maybeOf(
       context,
-    )?.go('/yorks/inventory/suppliers/${Uri.encodeComponent(supplierId)}');
+    )?.push('/yorks/inventory/suppliers/${Uri.encodeComponent(supplierId)}');
   }
 
   void _openImport() {

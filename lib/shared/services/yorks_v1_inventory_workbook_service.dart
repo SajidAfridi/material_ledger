@@ -55,6 +55,10 @@ abstract interface class YorksV1InventoryWorkbookFileService {
   });
 }
 
+abstract interface class YorksV1InventoryMovementFileService {
+  Future<bool> saveMovementRegister(List<YorksV1InventoryMovement> movements);
+}
+
 abstract interface class YorksV1InventorySupplierRegisterFileService {
   Future<bool> saveSupplierRegister({
     required List<YorksV1InventorySupplierDirectoryEntry> suppliers,
@@ -81,6 +85,7 @@ abstract interface class YorksV1InventoryImportEvidenceFileService {
 class YorksV1PlatformInventoryWorkbookFileService
     implements
         YorksV1InventoryWorkbookFileService,
+        YorksV1InventoryMovementFileService,
         YorksV1InventorySupplierRegisterFileService,
         YorksV1InventoryImportEvidenceFileService {
   const YorksV1PlatformInventoryWorkbookFileService();
@@ -130,6 +135,49 @@ class YorksV1PlatformInventoryWorkbookFileService
     name: suggestedName,
     type: _xlsx,
     mimeType: _xlsxMime,
+  );
+
+  @override
+  Future<bool> saveMovementRegister(List<YorksV1InventoryMovement> movements) =>
+      _save(
+        bytes: buildMovementRegisterWorkbook(movements),
+        name:
+            'Yorks_Stock_Movements_${_dateStamp(DateTime.now().toUtc())}.xlsx',
+        type: _xlsx,
+        mimeType: _xlsxMime,
+      );
+
+  static Uint8List buildMovementRegisterWorkbook(
+    List<YorksV1InventoryMovement> movements,
+  ) => _encodeStyledStockRegister(
+    title: 'Yorks Stock Movements',
+    headings: const [
+      'Date (UTC)',
+      'Item Code',
+      'Item Description',
+      'Unit',
+      'Movement',
+      'Quantity Change',
+      'On Hand After',
+      'Reason',
+      'Actor',
+      'Reference',
+    ],
+    rows: [
+      for (final m in movements)
+        [
+          m.createdAt.toUtc().toIso8601String(),
+          m.itemCode ?? '',
+          m.itemDescription ?? '',
+          m.unit ?? '',
+          m.movementType,
+          m.quantityDelta,
+          m.onHandAfterQuantity,
+          m.reason,
+          m.actorDisplayName,
+          m.sourceEntityId ?? '',
+        ],
+    ],
   );
 
   @override

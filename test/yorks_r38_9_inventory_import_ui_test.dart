@@ -232,6 +232,19 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Supplier workspace could not be loaded.'), findsNothing);
+    expect(controller.state.hasUnconfirmedCommit, isTrue);
+    expect(controller.state.canCommit, isTrue);
+    final commit = tester.widget<FilledButton>(
+      find.byKey(const ValueKey('inventory-import-commit')),
+    );
+    expect(commit.onPressed, isNotNull);
+    expect(tester.widget<PopScope>(find.byType(PopScope).last).canPop, isFalse);
+    final source = controller.state.source;
+    controller.previousStage();
+    controller.reset();
+    expect(controller.state.stage, YorksV1InventoryImportStage.supplierReceipt);
+    expect(controller.state.source, same(source));
+
     expect(tester.takeException(), isNull);
   });
 

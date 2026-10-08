@@ -360,6 +360,7 @@ class YorksV1InventoryReservation {
     required this.itemDescription,
     required this.unit,
     required this.requestId,
+    this.requestKind = 'project',
     required this.requestNumber,
     required this.projectName,
     required this.scopeName,
@@ -376,6 +377,7 @@ class YorksV1InventoryReservation {
   final String itemDescription;
   final String unit;
   final String requestId;
+  final String requestKind;
   final String requestNumber;
   final String projectName;
   final String scopeName;
@@ -394,6 +396,7 @@ class YorksV1InventoryReservation {
         ),
         unit: _requiredString(json, 'unit'),
         requestId: _requiredString(json, 'request_id'),
+        requestKind: _trimToNull(json['request_kind']) ?? 'project',
         requestNumber: _requiredString(json, 'request_number'),
         projectName: _requiredString(json, 'project_name'),
         scopeName: _requiredString(json, 'scope_name'),

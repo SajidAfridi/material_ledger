@@ -550,6 +550,8 @@ class _YorksV1WorkspaceShellState extends ConsumerState<YorksV1WorkspaceShell> {
       final path = destination.path;
       if (path == null) continue;
       if (location == path ||
+          (path == RoutePaths.yorksV1Inventory &&
+              location.startsWith('${RoutePaths.yorksV1Inventory}/')) ||
           (path == RoutePaths.yorksV1Calculators &&
               location.startsWith('${RoutePaths.yorksV1Calculators}/')) ||
           (path == RoutePaths.yorksV1Accounts &&

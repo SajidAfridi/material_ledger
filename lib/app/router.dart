@@ -1,3 +1,6 @@
+import '../shared/providers/yorks_v1_inventory_stock_command_provider.dart';
+import '../shared/providers/yorks_v1_inventory_workbook_provider.dart';
+import '../shared/controllers/yorks_v1_inventory_import_controller.dart';
 import '../features/workforce/presentation/screens/yorks_workforce_team_workers_screen.dart';
 import '../shared/providers/yorks_v1_calculator_provider.dart';
 import 'package:flutter/foundation.dart';
@@ -2027,6 +2030,13 @@ GoRouter createAppRouter({
       ),
       GoRoute(
         path: RoutePaths.yorksV1Inventory,
+        onExit: (context, state) {
+          final command = ProviderScope.containerOf(
+            context,
+            listen: false,
+          ).read(yorksV1InventoryStockCommandProvider);
+          return !command.busy && !command.unresolved;
+        },
         pageBuilder: (context, state) => _yorksV1Slide(
           state.pageKey,
           YorksV1InventoryScreen(initialTab: state.uri.queryParameters['tab']),
@@ -2053,6 +2063,14 @@ GoRouter createAppRouter({
       if (yorksV1InventorySuppliersEnabled)
         GoRoute(
           path: RoutePaths.yorksV1InventoryImport,
+          onExit: (context, state) {
+            final pending = ProviderScope.containerOf(
+              context,
+              listen: false,
+            ).read(yorksV1InventoryImportControllerProvider);
+            return pending.status != YorksV1InventoryImportStatus.committing &&
+                !pending.hasUnconfirmedCommit;
+          },
           pageBuilder: (context, state) => _yorksV1Slide(
             state.pageKey,
             YorksV1InventoryImportScreen(

@@ -48,7 +48,18 @@ class YorksV1InventoryImportState {
   final bool supplierReceiptConfirmed;
   final String? openingBalanceAsOfDate;
 
+  bool get hasUnconfirmedCommit =>
+      stage == YorksV1InventoryImportStage.supplierReceipt &&
+      supplierReceiptConfirmed &&
+      status == YorksV1InventoryImportStatus.failed &&
+      {
+        YorksV1DomainErrorCode.backendUnavailable,
+        YorksV1DomainErrorCode.unexpectedResponse,
+        YorksV1DomainErrorCode.offline,
+      }.contains(errorCode);
+
   bool get isBusy =>
+      hasUnconfirmedCommit ||
       status == YorksV1InventoryImportStatus.selecting ||
       status == YorksV1InventoryImportStatus.committing;
 
@@ -58,7 +69,9 @@ class YorksV1InventoryImportState {
       mapping?.treatWorkbookAsOpeningBalance == true;
   bool get canTreatWorkbookAsOpeningBalance =>
       mapping != null &&
-      !mapping!.indexes.containsKey(YorksV1InventoryControlledField.sourceType) &&
+      !mapping!.indexes.containsKey(
+        YorksV1InventoryControlledField.sourceType,
+      ) &&
       !(preview?.hasOpeningBalanceRows ?? false);
   List<YorksV1InventoryUnitReviewGroup> get unresolvedUnitGroups =>
       preview?.unresolvedUnitGroups ?? const [];
@@ -73,7 +86,7 @@ class YorksV1InventoryImportState {
       supplierReceiptConfirmed &&
       preview?.canCommit == true &&
       hasValidOpeningBalanceAsOfDate &&
-      !isBusy;
+      (!isBusy || hasUnconfirmedCommit);
 }
 
 class YorksV1InventoryImportController
@@ -591,7 +604,8 @@ class YorksV1InventoryImportController
       // corrections, removals and metadata-only imports deliberately use the
       // established adjustment import command instead: they do not fabricate
       // a supplier receipt or receipt condition record.
-      final result = _r38_9Commit != null &&
+      final result =
+          _r38_9Commit != null &&
               preview.rows.every((row) => row.isReceiptAction)
           ? await _r38_9Commit(
               payload: preview.toR38_9RpcPayload(
@@ -606,6 +620,7 @@ class YorksV1InventoryImportController
                 idempotencyKey: idempotencyKey,
               ),
             );
+      if (!mounted) return result;
       state = YorksV1InventoryImportState(
         status: YorksV1InventoryImportStatus.succeeded,
         stage: YorksV1InventoryImportStage.importSummary,
@@ -767,6 +782,7 @@ class YorksV1InventoryImportController
     YorksV1DomainErrorCode code, {
     bool preserveConfirmation = false,
   }) {
+    if (!mounted) return;
     state = YorksV1InventoryImportState(
       status: YorksV1InventoryImportStatus.failed,
       stage: state.stage,

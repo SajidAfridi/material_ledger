@@ -1,3 +1,4 @@
+import 'package:material_ledger/shared/models/yorks_v1_inventory_history.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -75,7 +76,7 @@ void main() {
           child: MaterialApp(
             debugShowCheckedModeBanner: false,
             theme: AppTheme.light,
-            home: const YorksV1InventoryScreen(),
+            home: const YorksV1InventoryScreen(initialTab: 'overview'),
           ),
         ),
       );
@@ -145,13 +146,23 @@ void main() {
           child: MaterialApp(
             debugShowCheckedModeBanner: false,
             theme: AppTheme.light,
-            home: const YorksV1InventoryScreen(),
+            home: const YorksV1InventoryScreen(initialTab: 'overview'),
           ),
         ),
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Suppliers'), findsWidgets);
+      if (evidence.size.width <= 720) {
+        await tester.tap(
+          find.byKey(const ValueKey('inventory-section-selector')),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Suppliers'), findsWidgets);
+        await tester.tap(find.text('Overview').last);
+        await tester.pumpAndSettle();
+      } else {
+        expect(find.text('Suppliers'), findsWidgets);
+      }
       expect(find.text('Import Inventory'), findsWidgets);
       expect(tester.takeException(), isNull);
       await expectLater(
@@ -191,7 +202,7 @@ void main() {
           child: MaterialApp(
             debugShowCheckedModeBanner: false,
             theme: AppTheme.light,
-            home: const YorksV1InventoryScreen(),
+            home: const YorksV1InventoryScreen(initialTab: 'overview'),
           ),
         ),
       );
@@ -241,7 +252,7 @@ void main() {
           child: MaterialApp(
             debugShowCheckedModeBanner: false,
             theme: AppTheme.light,
-            home: const YorksV1InventoryScreen(),
+            home: const YorksV1InventoryScreen(initialTab: 'overview'),
           ),
         ),
       );
@@ -331,7 +342,7 @@ void main() {
           child: MaterialApp(
             debugShowCheckedModeBanner: false,
             theme: AppTheme.light,
-            home: const YorksV1InventoryScreen(),
+            home: const YorksV1InventoryScreen(initialTab: 'overview'),
           ),
         ),
       );
@@ -410,7 +421,7 @@ void main() {
           child: MaterialApp(
             debugShowCheckedModeBanner: false,
             theme: AppTheme.light,
-            home: const YorksV1InventoryScreen(),
+            home: const YorksV1InventoryScreen(initialTab: 'overview'),
           ),
         ),
       );
@@ -419,7 +430,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Create inventory item'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byType(DropdownButtonFormField<String>).first);
+      await tester.tap(find.byType(DropdownButtonFormField<String>).last);
       await tester.pumpAndSettle();
 
       expect(find.text('Ton'), findsOneWidget);
@@ -462,12 +473,12 @@ void main() {
           child: MaterialApp(
             debugShowCheckedModeBanner: false,
             theme: AppTheme.light,
-            home: const YorksV1InventoryScreen(),
+            home: const YorksV1InventoryScreen(initialTab: 'overview'),
           ),
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Items').first);
+      await _selectSection(tester, 'Items');
       await tester.pumpAndSettle();
       final item = find.textContaining('GI duct sheet 24 gauge').first;
       if (evidence.size.width < 500) {
@@ -517,14 +528,14 @@ void main() {
           child: MaterialApp(
             debugShowCheckedModeBanner: false,
             theme: AppTheme.light,
-            home: const YorksV1InventoryScreen(),
+            home: const YorksV1InventoryScreen(initialTab: 'overview'),
           ),
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Items').first);
+      await _selectSection(tester, 'Items');
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Manage categories').first);
+      await _openCategories(tester);
       await tester.pumpAndSettle();
 
       expect(find.text('Warehouse Categories'), findsOneWidget);
@@ -560,14 +571,14 @@ void main() {
         child: MaterialApp(
           debugShowCheckedModeBanner: false,
           theme: AppTheme.light,
-          home: const YorksV1InventoryScreen(),
+          home: const YorksV1InventoryScreen(initialTab: 'overview'),
         ),
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Items').first);
+    await _selectSection(tester, 'Items');
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Manage categories').first);
+    await _openCategories(tester);
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byWidgetPredicate(
@@ -649,16 +660,12 @@ void main() {
           child: MaterialApp(
             debugShowCheckedModeBanner: false,
             theme: AppTheme.light,
-            home: const YorksV1InventoryScreen(),
+            home: const YorksV1InventoryScreen(initialTab: 'overview'),
           ),
         ),
       );
       await tester.pumpAndSettle();
-      final tab = find.text(evidence.tab).first;
-      if (evidence.size.width < 500 && evidence.tab == 'Reservations') {
-        await tester.ensureVisible(tab);
-      }
-      await tester.tap(tab);
+      await _selectSection(tester, evidence.tab);
       await tester.pumpAndSettle();
 
       expect(find.text(evidence.surface), findsOneWidget);
@@ -708,12 +715,14 @@ void main() {
           child: MaterialApp(
             debugShowCheckedModeBanner: false,
             theme: AppTheme.light,
-            home: const YorksV1InventoryScreen(),
+            home: const YorksV1InventoryScreen(initialTab: 'overview'),
           ),
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Import Inventory').first);
+      await tester.tap(find.byType(PopupMenuButton<String>).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Import Inventory').last);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Select Excel or CSV file'));
       await tester.pumpAndSettle();
@@ -764,12 +773,14 @@ void main() {
           child: MaterialApp(
             debugShowCheckedModeBanner: false,
             theme: AppTheme.light,
-            home: const YorksV1InventoryScreen(),
+            home: const YorksV1InventoryScreen(initialTab: 'overview'),
           ),
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Import Inventory').first);
+      await tester.tap(find.byType(PopupMenuButton<String>).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Import Inventory').last);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Select Excel or CSV file'));
       await tester.pumpAndSettle();
@@ -811,12 +822,12 @@ void main() {
         child: MaterialApp(
           debugShowCheckedModeBanner: false,
           theme: AppTheme.light,
-          home: const YorksV1InventoryScreen(),
+          home: const YorksV1InventoryScreen(initialTab: 'overview'),
         ),
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Items').first);
+    await _selectSection(tester, 'Items');
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).first, 'Yorks');
     await tester.pumpAndSettle();
@@ -854,7 +865,7 @@ void main() {
           child: MaterialApp(
             debugShowCheckedModeBanner: false,
             theme: AppTheme.light,
-            home: const YorksV1InventoryScreen(),
+            home: const YorksV1InventoryScreen(initialTab: 'overview'),
           ),
         ),
       );
@@ -879,6 +890,104 @@ void main() {
       await tester.pump(const Duration(seconds: 6));
     },
   );
+  for (final correction in [false, true]) {
+    testWidgets(
+      'stock retry retains confirmed command; signed correction=$correction',
+      (tester) async {
+        tester.view.physicalSize = const Size(1440, 1000);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(() {
+          tester.view.resetPhysicalSize();
+          tester.view.resetDevicePixelRatio();
+        });
+        final repository = _RetryStockRepository();
+        final preferences = await SharedPreferences.getInstance();
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              yorksV1CurrentRoleProvider.overrideWithValue(
+                YorksV1Role.procurement,
+              ),
+              sharedPreferencesProvider.overrideWithValue(preferences),
+              yorksV1ConfigurationUnitCodesProvider.overrideWith(
+                (ref) async => const ['Nos'],
+              ),
+              yorksV1LogisticsRepositoryProvider.overrideWithValue(repository),
+            ],
+            child: MaterialApp(
+              theme: AppTheme.light,
+              home: const YorksV1InventoryScreen(),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.textContaining('GI duct sheet 24 gauge').first);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Receive / Adjust'));
+        await tester.pumpAndSettle();
+        if (correction) {
+          await tester.tap(find.text('Correction'));
+          await tester.pumpAndSettle();
+        }
+        await tester.enterText(
+          find.widgetWithText(TextField, 'Stock quantity'),
+          correction ? '-1' : '1',
+        );
+        await tester.enterText(
+          find.widgetWithText(TextField, 'Reason'),
+          'Verified count',
+        );
+        await tester.tap(
+          find
+              .widgetWithText(
+                FilledButton,
+                correction ? 'Correction' : 'Add stock',
+              )
+              .last,
+        );
+        await tester.pumpAndSettle();
+        expect(repository.inputs, hasLength(1));
+        expect(repository.inputs.single.quantityDelta, correction ? '-1' : '1');
+        expect(
+          find.textContaining('The result is not confirmed.'),
+          findsWidgets,
+        );
+        await tester.tap(find.text('Retry save'));
+        await tester.pumpAndSettle();
+        expect(repository.inputs, hasLength(2));
+        expect(
+          repository.inputs[0].idempotencyKey,
+          repository.inputs[1].idempotencyKey,
+        );
+        expect(find.text('Retry save'), findsNothing);
+        await tester.pump(const Duration(seconds: 6));
+        await tester.pumpWidget(const SizedBox());
+      },
+    );
+  }
+}
+
+Future<void> _openCategories(WidgetTester tester) async {
+  final menu = find.byTooltip('Manage categories');
+  if (menu.evaluate().isNotEmpty) {
+    await tester.ensureVisible(menu);
+    await tester.tap(menu);
+    await tester.pumpAndSettle();
+  }
+  await tester.tap(find.text('Manage categories').last);
+  await tester.pumpAndSettle();
+}
+
+Future<void> _selectSection(WidgetTester tester, String label) async {
+  final selector = find.byKey(const ValueKey('inventory-section-selector'));
+  if (selector.evaluate().isNotEmpty) {
+    await tester.tap(selector);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(label).last);
+  } else {
+    await tester.tap(find.text(label).first);
+  }
+  await tester.pumpAndSettle();
 }
 
 Directory _flutterCacheDirectory() {
@@ -892,7 +1001,18 @@ Directory _flutterCacheDirectory() {
   throw StateError('Could not locate the Flutter cache from the test runner');
 }
 
-class _GoldenInventoryRepository implements YorksV1LogisticsRepository {
+class _GoldenInventoryRepository
+    implements YorksV1LogisticsRepository, YorksV1InventoryHistoryRepository {
+  @override
+  Future<YorksV1InventoryHistoryPage> getInventoryHistory(
+    YorksV1InventoryHistoryQuery query,
+  ) async => YorksV1InventoryHistoryPage(
+    items: _workspace.recentMovements
+        .where((m) => query.itemId == null || m.inventoryItemId == query.itemId)
+        .toList(),
+    hasMore: false,
+  );
+
   const _GoldenInventoryRepository();
 
   @override
@@ -1204,3 +1324,15 @@ YorksV1InventoryCategory _category(
   createdByDisplayName: 'Yorks standard',
   createdAt: DateTime.utc(2026, 8, 9),
 );
+
+class _RetryStockRepository extends _GoldenInventoryRepository {
+  final inputs = <YorksV1InventoryAdjustmentInput>[];
+  @override
+  Future<YorksV1LogisticsInventoryItem> adjustInventory(
+    YorksV1InventoryAdjustmentInput input,
+  ) async {
+    inputs.add(input);
+    if (inputs.length == 1) throw StateError('Lost response');
+    return _workspace.items.first;
+  }
+}
