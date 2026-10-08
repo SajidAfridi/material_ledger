@@ -3983,7 +3983,12 @@ class _TextInput extends StatelessWidget {
     keyboardType: number
         ? const TextInputType.numberWithOptions(decimal: true)
         : null,
-    decoration: InputDecoration(labelText: label),
+    decoration: InputDecoration(
+      labelText: label,
+      constraints: MediaQuery.sizeOf(context).width < 600
+          ? const BoxConstraints(minHeight: 48)
+          : null,
+    ),
     validator: required
         ? (v) => v == null || v.trim().isEmpty ? '$label is required' : null
         : null,
@@ -4004,7 +4009,12 @@ class _DropField extends StatelessWidget {
   @override
   Widget build(BuildContext context) => DropdownButtonFormField<String>(
     initialValue: values.contains(value) ? value : values.first,
-    decoration: InputDecoration(labelText: label),
+    decoration: InputDecoration(
+      labelText: label,
+      constraints: MediaQuery.sizeOf(context).width < 600
+          ? const BoxConstraints(minHeight: 48)
+          : null,
+    ),
     items: [
       for (final option in values)
         DropdownMenuItem(value: option, child: Text(option)),
