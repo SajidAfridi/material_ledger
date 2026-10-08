@@ -88,3 +88,47 @@ Staging backend migrations: `20261008193902` automatic delivery numbers and
 are denied; anonymous public-RPC execution and ordinary internal-helper execution
 are denied. Security advisers have no ERROR findings; expected RPC-only/no-policy
 notices and existing warnings remain ([adviser documentation](https://supabase.com/docs/guides/database/database-linter)).
+
+## Staging deployment and browser evidence
+
+- Deployed source: `58effca` (9 October 2026).
+- Review alias: <https://yorks-r35-staging.vercel.app>.
+- Immutable preview: <https://yorks-r35-mx1nma2f1-sajid-alis-projects-0ec775a2.vercel.app>.
+- Deployment ID: `dpl_8worXrmaJt66v7Y7Gy5HMbRkAvLg`.
+- Isolated Flutter artifact contained 63 files. The main bundle is 9,949,651
+  bytes, startup-budget gzip 2,864,745 bytes, within the unchanged 2,900,000-byte
+  budget. SHA-256:
+  `9dcc67450b58f75a86a2d9bd4f2d4b7ae0604c14be4e90afaaa7d6bdfe4474da`.
+- All 28 route/asset checks passed against both the preview and staging alias.
+  Compiled JavaScript contains the staging backend, with no production or CI
+  backend reference.
+- The matching `send-push` function was deployed only to staging project
+  `iqltcyimlqtcwyzlemwx`; retrieved deployed source contains the new
+  `arrangement_preparation_completed` event. Actual device push delivery remains
+  unverified.
+- Live staging verification used the existing Procurement session. MR005 opened
+  with blank quantities and External Supplier selected for unmatched items.
+  Entering 20 against 87 Meter showed Partial and its reason field; restoring the
+  blank value returned Enter quantity. No final arrangement, stock, dispatch or
+  document command was submitted during browser verification.
+- At 360×800, the same request displayed a card list and focused one-item editor
+  with External Supplier selected and Next item navigation. The temporary
+  viewport override was reset afterwards. Captured browser error logs were empty.
+- Existing MR006 Delivery Order revision 2 opened without requiring reference
+  entry. The dialog was closed without creating a revision.
+- Live screenshots: `/tmp/yorks-procurement-simplification-evidence/staging-desktop.png`
+  and `/tmp/yorks-procurement-simplification-evidence/staging-mobile.png`.
+  Scheduled sharing and automatic new-number allocation have widget/database
+  and concurrency evidence; this browser session did not create a synthetic
+  Scheduled request or dispatch for live end-to-end UAT.
+- Production remained on `dpl_BzugN8M8Wawfa2rUU2zhdWLN9EC1`, verified before and
+  after staging release. No production database, function or alias was changed.
+- Staging client rollback target: `dpl_6HpsAjCpbszRbwuVs8TMuPnW5UeS`,
+  <https://yorks-r35-cb6okkxb3-sajid-alis-projects-0ec775a2.vercel.app>.
+
+Local release evidence is in `/tmp/procurement-simplification-candidate-verify.log`,
+`/tmp/procurement-simplification-alias-verify.log`,
+`/tmp/procurement-simplification-staging-deploy.log`,
+`/tmp/procurement-simplification-staging-edge-deploy.log` and the focused/full gate
+logs recorded during this task. These temporary files are local review evidence,
+not durable hosted artifacts.
