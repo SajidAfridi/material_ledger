@@ -1,3 +1,4 @@
+import '../models/yorks_v1_inventory_register_query.dart';
 import '../models/yorks_v1_inventory_history.dart';
 import 'dart:async';
 import 'yorks_v1_identity_provider.dart';
@@ -235,4 +236,18 @@ final yorksV1InventoryHistoryProvider = FutureProvider.autoDispose
       }
       return (repository as YorksV1InventoryHistoryRepository)
           .getInventoryHistory(query);
+    });
+
+final yorksV1InventoryRegisterProvider = FutureProvider.autoDispose
+    .family<YorksV1InventoryWorkspace, YorksV1InventoryRegisterQuery>((
+      ref,
+      query,
+    ) {
+      _listenForInventoryRefresh(ref);
+      final repository = ref.watch(yorksV1LogisticsRepositoryProvider);
+      return repository is YorksV1InventoryRegisterRepository
+          ? (repository as YorksV1InventoryRegisterRepository).getInventoryPage(
+              query,
+            )
+          : repository.getInventory();
     });

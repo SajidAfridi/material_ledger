@@ -1,3 +1,4 @@
+import '../models/yorks_v1_inventory_register_query.dart';
 import '../models/yorks_v1_inventory_history.dart';
 import 'dart:async';
 
@@ -146,7 +147,8 @@ class YorksV1SupabaseLogisticsRepository
         YorksV1ProjectMaterialReturnRepository,
         YorksV1InventoryCategorySuggestionRepository,
         YorksV1InventoryItemMetadataRepository,
-        YorksV1InventoryHistoryRepository {
+        YorksV1InventoryHistoryRepository,
+        YorksV1InventoryRegisterRepository {
   const YorksV1SupabaseLogisticsRepository({
     required YorksV1FeatureFlags featureFlags,
     required ConnectivityService connectivity,
@@ -166,11 +168,35 @@ class YorksV1SupabaseLogisticsRepository
   final AnalyticsService _analytics;
 
   @override
+  Future<YorksV1InventoryWorkspace> getInventoryPage(
+    YorksV1InventoryRegisterQuery query,
+  ) async {
+    final timing = Stopwatch()..start();
+    final response = await _invoke(
+      functionName: 'v1_inventory_register_page',
+      parameters: query.toRpc(),
+    );
+    final workspace = _inventoryWorkspace(response);
+    if (query.search.trim().isNotEmpty &&
+        query.register == 'stock' &&
+        query.limit == 50 &&
+        query.offset == 0) {
+      _analytics.recordMaterialSearch(
+        queryLength: query.search.trim().length,
+        resultCount: workspace.totalMatches ?? workspace.items.length,
+        duration: timing.elapsed,
+        context: AnalyticsSearchContext.inventory,
+      );
+    }
+    return workspace;
+  }
+
+  @override
   Future<YorksV1InventoryHistoryPage> getInventoryHistory(
     YorksV1InventoryHistoryQuery query,
   ) async {
     final response = await _invoke(
-      functionName: 'v1_inventory_movement_page',
+      functionName: 'v1_inventory_movement_page_v2',
       parameters: query.toRpc(),
     );
     return YorksV1InventoryHistoryPage.fromJson(

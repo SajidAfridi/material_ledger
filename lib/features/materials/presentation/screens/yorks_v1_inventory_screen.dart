@@ -1,3 +1,8 @@
+import '../../../../shared/models/yorks_v1_inventory_register_query.dart';
+import '../../../../shared/services/analytics_service.dart';
+import '../../../../shared/models/analytics_event.dart';
+import '../../../../shared/providers/yorks_v1_inventory_import_recovery_provider.dart';
+import 'yorks_v1_inventory_recovery_panel.dart';
 import '../../../../shared/providers/yorks_v1_inventory_stock_command_provider.dart';
 import '../../../../shared/models/yorks_v1_inventory_history.dart';
 import 'dart:async';
@@ -73,6 +78,9 @@ class _YorksV1InventoryScreenState extends ConsumerState<YorksV1InventoryScreen>
   String? _itemUnit;
   String? _itemCategoryId;
   bool _fileActionBusy = false;
+  int _stockOffset = 0;
+  YorksV1InventoryWorkspace? _lastPage;
+  String? _lastPageAuthority;
   Timer? _searchDebounce;
   Timer? _freshnessTimer;
 
@@ -118,7 +126,87 @@ class _YorksV1InventoryScreenState extends ConsumerState<YorksV1InventoryScreen>
     final suppliersEnabled = ref
         .watch(yorksV1FeatureFlagsProvider)
         .inventorySuppliers;
-    final workspace = ref.watch(yorksV1InventoryWorkspaceProvider(null));
+    final pendingImport = ref.watch(yorksV1InventoryImportRecoveryProvider);
+    if (canManage && pendingImport?.exists == true) {
+      return Scaffold(
+        body: SafeArea(
+          child: YorksV1InventoryImportRecoveryPanel(
+            onResolved: () {
+              if (mounted) setState(() {});
+            },
+          ),
+        ),
+      );
+    }
+    final command = ref.watch(yorksV1InventoryStockCommandProvider);
+    if (canManage && command.unresolved) {
+      return Scaffold(
+        body: SafeArea(
+          child: _StateMessage(
+            icon: Icons.pending_actions_outlined,
+            message:
+                (command.recoveryBlocked
+                        ? YorksV1InventoryStrings.recoveryBlocked
+                        : YorksV1InventoryStrings.uncertainSave)
+                    .active(language),
+            action: YorksV1InventoryStrings.retrySave.active(language),
+            onAction: () async {
+              if (command.busy) return;
+              try {
+                await command.save(
+                  ref.read(yorksV1LogisticsRepositoryProvider),
+                  () => command.pending!,
+                );
+              } catch (_) {
+                if (mounted && !command.unresolved) {
+                  _notice(
+                    YorksV1InventoryStrings.saveRejected.active(language),
+                    tone: YorksAppToastTone.error,
+                  );
+                }
+              }
+              if (mounted) {
+                setState(() {});
+                _refresh();
+              }
+            },
+          ),
+        ),
+      );
+    }
+    final paged = _tab != _WarehouseTab.overview;
+    final workspace = paged
+        ? ref.watch(
+            yorksV1InventoryRegisterProvider(
+              YorksV1InventoryRegisterQuery(
+                register: _tab == _WarehouseTab.reservations
+                    ? 'reservations'
+                    : 'stock',
+                search: _tab == _WarehouseTab.items ? _itemSearch : '',
+                status: _tab == _WarehouseTab.items ? _itemStatus.name : 'all',
+                unit: _tab == _WarehouseTab.items ? _itemUnit : null,
+                categoryId: _tab == _WarehouseTab.items
+                    ? _itemCategoryId
+                    : null,
+                offset: _tab == _WarehouseTab.movements ? 0 : _stockOffset,
+                limit: _tab == _WarehouseTab.movements ? 1 : 50,
+              ),
+            ),
+          )
+        : ref.watch(yorksV1InventoryWorkspaceProvider(null));
+    final authority =
+        '${ref.watch(yorksV1AuthUserIdProvider)}:${ref.watch(yorksV1CurrentRoleProvider)}:${_tab.name}';
+    if (_lastPageAuthority != authority) {
+      _lastPage = null;
+      _lastPageAuthority = authority;
+    }
+    if (paged && !workspace.isLoading && !workspace.hasError) {
+      _lastPage = workspace.asData?.value;
+    }
+    final visibleWorkspace =
+        paged && workspace.isLoading && !workspace.hasValue && _lastPage != null
+        ? AsyncValue<YorksV1InventoryWorkspace>.data(_lastPage!)
+        : workspace;
     final compact =
         MediaQuery.sizeOf(context).width <
         AppSpacing.yorksV1ShellDesktopBreakpoint;
@@ -126,7 +214,7 @@ class _YorksV1InventoryScreenState extends ConsumerState<YorksV1InventoryScreen>
       backgroundColor: compact ? AppColors.mobileSurface : AppColors.surface,
       body: SafeArea(
         top: false,
-        child: workspace.when(
+        child: visibleWorkspace.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (_, _) => _StateMessage(
             icon: Icons.cloud_off_rounded,
@@ -136,6 +224,10 @@ class _YorksV1InventoryScreenState extends ConsumerState<YorksV1InventoryScreen>
           ),
           data: (value) => _WarehouseBody(
             workspace: value,
+            refreshing: workspace.isLoading,
+            onPreviousPage: () =>
+                setState(() => _stockOffset = math.max(0, _stockOffset - 50)),
+            onNextPage: () => setState(() => _stockOffset += 50),
             language: language,
             canManage: canManage,
             tab: _tab,
@@ -145,22 +237,58 @@ class _YorksV1InventoryScreenState extends ConsumerState<YorksV1InventoryScreen>
             movementSearch: _movementSearch,
             itemUnit: _itemUnit,
             itemCategoryId: _itemCategoryId,
-            onTab: (value) => setState(() => _tab = value),
+            onTab: (value) => setState(() {
+              _tab = value;
+              _stockOffset = 0;
+            }),
             onSuppliers: suppliersEnabled && canManage
                 ? () => context.push('/yorks/inventory/suppliers')
                 : null,
-            onItemStatus: (value) => setState(() => _itemStatus = value),
+            onItemStatus: (value) => setState(() {
+              _itemStatus = value;
+              _stockOffset = 0;
+            }),
             onMovementType: (value) => setState(() => _movementType = value),
-            onItemSearch: (value) {
+            onItemSearch: (searchText) {
               _searchDebounce?.cancel();
               _searchDebounce = Timer(const Duration(milliseconds: 250), () {
-                if (mounted) setState(() => _itemSearch = value.trim());
+                if (!mounted) return;
+                final query = searchText.trim();
+                final timing = Stopwatch()..start();
+                final count = _matchingStock(
+                  value.items,
+                  search: query,
+                  status: _itemStatus,
+                  unit: _itemUnit,
+                  categoryId: _itemCategoryId,
+                ).length;
+                timing.stop();
+                setState(() {
+                  _itemSearch = query;
+                  _stockOffset = 0;
+                });
+                if (query.isNotEmpty && value.totalMatches == null) {
+                  ref
+                      .read(analyticsServiceProvider)
+                      .recordMaterialSearch(
+                        queryLength: query.length,
+                        resultCount: count,
+                        duration: timing.elapsed,
+                        context: AnalyticsSearchContext.inventory,
+                      );
+                }
               });
             },
             onMovementSearch: (value) =>
                 setState(() => _movementSearch = value.trim()),
-            onItemUnit: (value) => setState(() => _itemUnit = value),
-            onItemCategory: (value) => setState(() => _itemCategoryId = value),
+            onItemUnit: (value) => setState(() {
+              _itemUnit = value;
+              _stockOffset = 0;
+            }),
+            onItemCategory: (value) => setState(() {
+              _itemCategoryId = value;
+              _stockOffset = 0;
+            }),
             onRefresh: _refresh,
             onAdd: () => _openInventoryAction(value),
             onImport: suppliersEnabled && canManage
@@ -192,6 +320,7 @@ class _YorksV1InventoryScreenState extends ConsumerState<YorksV1InventoryScreen>
   }
 
   void _refresh() {
+    ref.invalidate(yorksV1InventoryRegisterProvider);
     ref.invalidate(yorksV1InventoryWorkspaceProvider);
     ref.invalidate(yorksV1InventoryItemDetailProvider);
     ref.invalidate(yorksV1InventoryHistoryProvider);
@@ -214,6 +343,23 @@ class _YorksV1InventoryScreenState extends ConsumerState<YorksV1InventoryScreen>
       );
       return;
     }
+    if (workspace.totalMatches != null) {
+      try {
+        workspace = await ref
+            .read(yorksV1LogisticsRepositoryProvider)
+            .getInventory();
+      } catch (_) {
+        if (mounted) {
+          _notice(
+            YorksV1InventoryStrings.loadFailed.active(
+              ref.read(languageProvider),
+            ),
+          );
+        }
+        return;
+      }
+      if (!mounted) return;
+    }
     final item = await showDialog<YorksV1LogisticsInventoryItem>(
       context: context,
       builder: (_) => _ExistingStockPicker(items: workspace.items),
@@ -230,6 +376,23 @@ class _YorksV1InventoryScreenState extends ConsumerState<YorksV1InventoryScreen>
   }
 
   Future<void> _openImport(YorksV1InventoryWorkspace workspace) async {
+    if (workspace.totalMatches != null) {
+      try {
+        workspace = await ref
+            .read(yorksV1LogisticsRepositoryProvider)
+            .getInventory();
+      } catch (_) {
+        if (mounted) {
+          _notice(
+            YorksV1InventoryStrings.loadFailed.active(
+              ref.read(languageProvider),
+            ),
+          );
+        }
+        return;
+      }
+      if (!mounted) return;
+    }
     ref.read(yorksV1InventoryImportControllerProvider.notifier).reset();
     await showDialog<void>(
       context: context,
@@ -271,10 +434,60 @@ class _YorksV1InventoryScreenState extends ConsumerState<YorksV1InventoryScreen>
     if (_fileActionBusy) return;
     setState(() => _fileActionBusy = true);
     try {
+      if (_tab == _WarehouseTab.items && workspace.totalMatches != null) {
+        final repository =
+            ref.read(yorksV1LogisticsRepositoryProvider)
+                as YorksV1InventoryRegisterRepository;
+        final exportUser = ref.read(yorksV1AuthUserIdProvider);
+        final exportRole = ref.read(yorksV1CurrentRoleProvider);
+        final search = _itemSearch;
+        final status = _itemStatus.name;
+        final unit = _itemUnit;
+        final category = _itemCategoryId;
+        final rows = <YorksV1LogisticsInventoryItem>[];
+        final seen = <String>{};
+        var offset = 0;
+        while (true) {
+          final page = await repository.getInventoryPage(
+            YorksV1InventoryRegisterQuery(
+              search: search,
+              status: status,
+              unit: unit,
+              categoryId: category,
+              offset: offset,
+              limit: 500,
+            ),
+          );
+          if (!mounted ||
+              ref.read(yorksV1AuthUserIdProvider) != exportUser ||
+              ref.read(yorksV1CurrentRoleProvider) != exportRole) {
+            return;
+          }
+          for (final item in page.items) {
+            if (!seen.add(item.id)) {
+              throw StateError(
+                'Stock changed during export; refresh and retry',
+              );
+            }
+            rows.add(item);
+          }
+          if (!page.hasMore) break;
+          if (page.items.isEmpty) {
+            throw StateError('Stock page did not advance');
+          }
+          offset += page.items.length;
+        }
+        workspace = YorksV1InventoryWorkspace(
+          items: rows,
+          categories: workspace.categories,
+          totalMatches: rows.length,
+        );
+      }
       final saved = await ref
           .read(yorksV1InventoryWorkbookFileServiceProvider)
           .saveStockRegister(
-            workspace: _tab == _WarehouseTab.items
+            workspace:
+                _tab == _WarehouseTab.items && workspace.totalMatches == null
                 ? YorksV1InventoryWorkspace(
                     items: _matchingStock(
                       workspace.items,
@@ -347,6 +560,9 @@ class _YorksV1InventoryScreenState extends ConsumerState<YorksV1InventoryScreen>
 class _WarehouseBody extends StatelessWidget {
   const _WarehouseBody({
     required this.workspace,
+    this.refreshing = false,
+    required this.onPreviousPage,
+    required this.onNextPage,
     required this.language,
     required this.canManage,
     required this.tab,
@@ -375,6 +591,9 @@ class _WarehouseBody extends StatelessWidget {
   });
 
   final YorksV1InventoryWorkspace workspace;
+  final bool refreshing;
+  final VoidCallback onPreviousPage;
+  final VoidCallback onNextPage;
   final AppLanguage language;
   final bool canManage;
   final _WarehouseTab tab;
@@ -436,6 +655,18 @@ class _WarehouseBody extends StatelessWidget {
                     onImport: onImport,
                     onDownload: onDownload,
                   ),
+                  if (workspace.fetchedAt != null || refreshing)
+                    Padding(
+                      padding: const EdgeInsets.only(top: AppSpacing.sm),
+                      child: Text(
+                        refreshing
+                            ? YorksV1InventoryStrings.refreshing.active(
+                                language,
+                              )
+                            : '${YorksV1InventoryStrings.refreshedAt.active(language)} · ${DateFormat.yMd().add_jm().format(workspace.fetchedAt!.toLocal())}',
+                        style: AppTypography.bodySmall,
+                      ),
+                    ),
                   const SizedBox(height: AppSpacing.xl),
                   _WarehouseTabs(
                     selected: tab,
@@ -483,6 +714,35 @@ class _WarehouseBody extends StatelessWidget {
                       language: language,
                     ),
                   },
+                  if (workspace.totalMatches != null &&
+                      (tab == _WarehouseTab.items ||
+                          tab == _WarehouseTab.reservations))
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        TextButton(
+                          onPressed: workspace.pageOffset == 0 || refreshing
+                              ? null
+                              : onPreviousPage,
+                          child: Text(
+                            YorksV1InventoryStrings.previousPage.active(
+                              language,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          '${workspace.pageOffset + (workspace.totalMatches == 0 ? 0 : 1)}–${math.min(workspace.pageOffset + 50, workspace.totalMatches!)} / ${workspace.totalMatches}',
+                        ),
+                        TextButton(
+                          onPressed: workspace.hasMore && !refreshing
+                              ? onNextPage
+                              : null,
+                          child: Text(
+                            YorksV1InventoryStrings.nextPage.active(language),
+                          ),
+                        ),
+                      ],
+                    ),
                   SizedBox(height: compact ? 112 : AppSpacing.massive),
                 ],
               ),
@@ -1686,6 +1946,7 @@ class _ItemsTab extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _WarehouseItemFilters(
+          search: search,
           workspace: workspace,
           language: language,
           status: status,
@@ -1756,6 +2017,7 @@ class _ItemsTab extends StatelessWidget {
 class _WarehouseItemFilters extends StatelessWidget {
   const _WarehouseItemFilters({
     required this.workspace,
+    this.search = '',
     required this.language,
     required this.status,
     required this.unit,
@@ -1773,6 +2035,7 @@ class _WarehouseItemFilters extends StatelessWidget {
   });
 
   final YorksV1InventoryWorkspace workspace;
+  final String search;
   final AppLanguage language;
   final _WarehouseItemStatus status;
   final String? unit;
@@ -1790,8 +2053,11 @@ class _WarehouseItemFilters extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final units = workspace.items.map((item) => item.unit).toSet().toList()
-      ..sort();
+    final units =
+        (workspace.availableUnits.isNotEmpty
+              ? workspace.availableUnits.toList()
+              : workspace.items.map((item) => item.unit).toSet().toList())
+          ..sort();
     final categories =
         workspace.categories.where((category) => category.isActive).toList()
           ..sort((a, b) => a.displayPath.compareTo(b.displayPath));
@@ -1806,6 +2072,7 @@ class _WarehouseItemFilters extends StatelessWidget {
                 final wide = constraints.maxWidth >= 900;
                 final controls = [
                   _WarehouseTextFilter(
+                    value: search,
                     label: YorksV1InventoryStrings.searchWarehouse.active(
                       language,
                     ),
@@ -1984,26 +2251,51 @@ class _WarehouseItemFilters extends StatelessWidget {
   }
 }
 
-class _WarehouseTextFilter extends StatelessWidget {
+class _WarehouseTextFilter extends StatefulWidget {
   const _WarehouseTextFilter({
     required this.label,
     required this.hint,
     required this.onChanged,
+    this.value = '',
   });
   final String label;
   final String hint;
+  final String value;
   final ValueChanged<String> onChanged;
+  @override
+  State<_WarehouseTextFilter> createState() => _WarehouseTextFilterState();
+}
+
+class _WarehouseTextFilterState extends State<_WarehouseTextFilter> {
+  late final _controller = TextEditingController(text: widget.value);
+  @override
+  void didUpdateWidget(covariant _WarehouseTextFilter oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.value != widget.value && _controller.text != widget.value) {
+      _controller.value = TextEditingValue(
+        text: widget.value,
+        selection: TextSelection.collapsed(offset: widget.value.length),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text(label, style: AppTypography.labelMedium),
+      Text(widget.label, style: AppTypography.labelMedium),
       const SizedBox(height: AppSpacing.xs),
       TextField(
-        onChanged: onChanged,
+        controller: _controller,
+        onChanged: widget.onChanged,
         decoration: InputDecoration(
-          hintText: hint,
+          hintText: widget.hint,
           prefixIcon: const Icon(Icons.search_rounded, size: 20),
           isDense: true,
         ),
@@ -2044,7 +2336,7 @@ class _WarehouseDropdown<T> extends StatelessWidget {
   );
 }
 
-class _InventoryTable extends StatelessWidget {
+class _InventoryTable extends StatefulWidget {
   const _InventoryTable({
     required this.items,
     required this.language,
@@ -2057,8 +2349,25 @@ class _InventoryTable extends StatelessWidget {
   final ValueChanged<YorksV1LogisticsInventoryItem>? onAdjust;
 
   @override
+  State<_InventoryTable> createState() => _InventoryTableState();
+}
+
+class _InventoryTableState extends State<_InventoryTable> {
+  final _horizontal = ScrollController();
+  List<YorksV1LogisticsInventoryItem> get items => widget.items;
+  AppLanguage get language => widget.language;
+  ValueChanged<YorksV1LogisticsInventoryItem> get onItem => widget.onItem;
+  ValueChanged<YorksV1LogisticsInventoryItem>? get onAdjust => widget.onAdjust;
+  @override
+  void dispose() {
+    _horizontal.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) => SingleChildScrollView(
+      controller: _horizontal,
       scrollDirection: Axis.horizontal,
       child: SizedBox(
         // Keep the controlled desktop grid readable instead of squeezing
@@ -2068,7 +2377,7 @@ class _InventoryTable extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _InventoryTableRow(language: language),
+            _InventoryTableRow(language: language, horizontal: _horizontal),
             const Divider(height: 1),
             SizedBox(
               height: math.min(640, math.max(82, items.length * 83).toDouble()),
@@ -2080,6 +2389,7 @@ class _InventoryTable extends StatelessWidget {
                   final item = items[index];
                   return _InventoryTableRow(
                     language: language,
+                    horizontal: _horizontal,
                     item: item,
                     onTap: () => onItem(item),
                     onAdjust: onAdjust == null ? null : () => onAdjust!(item),
@@ -2097,11 +2407,13 @@ class _InventoryTable extends StatelessWidget {
 class _InventoryTableRow extends StatelessWidget {
   const _InventoryTableRow({
     required this.language,
+    required this.horizontal,
     this.item,
     this.onTap,
     this.onAdjust,
   });
   final AppLanguage language;
+  final ScrollController horizontal;
   final YorksV1LogisticsInventoryItem? item;
   final VoidCallback? onTap;
   final VoidCallback? onAdjust;
@@ -2323,9 +2635,38 @@ class _InventoryTableRow extends StatelessWidget {
               ),
             ],
     );
+    final identity = (content.children.first as Expanded).child;
+    final scrollable = Row(
+      children: [
+        const Expanded(flex: 24, child: SizedBox()),
+        ...content.children.skip(1),
+      ],
+    );
+    final frozen = LayoutBuilder(
+      builder: (context, constraints) => AnimatedBuilder(
+        animation: horizontal,
+        builder: (context, _) => Stack(
+          children: [
+            scrollable,
+            PositionedDirectional(
+              start: horizontal.hasClients ? horizontal.offset : 0,
+              top: 0,
+              bottom: 0,
+              width: constraints.maxWidth * .24,
+              child: ColoredBox(
+                color: header
+                    ? AppColors.surfaceContainerLow
+                    : AppColors.surface,
+                child: identity,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
     return header
-        ? ColoredBox(color: AppColors.surfaceContainerLow, child: content)
-        : InkWell(onTap: onTap, child: content);
+        ? ColoredBox(color: AppColors.surfaceContainerLow, child: frozen)
+        : InkWell(onTap: onTap, child: frozen);
   }
 }
 
@@ -2506,6 +2847,7 @@ class _PagedInventoryHistoryState
   final _previous = <YorksV1InventoryHistoryQuery>[];
   Timer? _debounce;
   bool _exporting = false;
+  DateTimeRange? _dates;
   @override
   void dispose() {
     _debounce?.cancel();
@@ -2518,6 +2860,10 @@ class _PagedInventoryHistoryState
       itemId: widget.itemId,
       search: search ?? _query.search,
       kind: kind ?? _query.kind,
+      fromAt: _dates?.start,
+      untilAt: _dates == null
+          ? null
+          : DateTime(_dates!.end.year, _dates!.end.month, _dates!.end.day + 1),
     );
   });
 
@@ -2544,6 +2890,47 @@ class _PagedInventoryHistoryState
             });
           },
           onExport: _exporting ? () {} : _export,
+        ),
+        Wrap(
+          spacing: AppSpacing.sm,
+          children: [
+            TextButton.icon(
+              onPressed: _exporting ? null : () => _export(print: true),
+              icon: const Icon(Icons.print_outlined),
+              label: Text(
+                YorksV1InventoryStrings.printMovements.active(widget.language),
+              ),
+            ),
+            TextButton.icon(
+              icon: const Icon(Icons.date_range_outlined),
+              label: Text(
+                _dates == null
+                    ? YorksV1InventoryStrings.dateRange.active(widget.language)
+                    : '${DateFormat.yMMMd().format(_dates!.start)} – ${DateFormat.yMMMd().format(_dates!.end)}',
+              ),
+              onPressed: () async {
+                final dates = await showDateRangePicker(
+                  context: context,
+                  firstDate: DateTime(2000),
+                  lastDate: DateTime.now().add(const Duration(days: 1)),
+                  initialDateRange: _dates,
+                );
+                if (!mounted || dates == null) return;
+                _dates = dates;
+                _filter();
+              },
+            ),
+            if (_dates != null)
+              TextButton(
+                onPressed: () {
+                  _dates = null;
+                  _filter();
+                },
+                child: Text(
+                  YorksV1InventoryStrings.allDates.active(widget.language),
+                ),
+              ),
+          ],
         ),
         if (_exporting) const LinearProgressIndicator(),
         const SizedBox(height: AppSpacing.md),
@@ -2604,7 +2991,7 @@ class _PagedInventoryHistoryState
     );
   }
 
-  Future<void> _export() async {
+  Future<void> _export({bool print = false}) async {
     if (_exporting) return;
     final repository = ref.read(yorksV1LogisticsRepositoryProvider);
     final files = ref.read(yorksV1InventoryWorkbookFileServiceProvider);
@@ -2616,6 +3003,8 @@ class _PagedInventoryHistoryState
       itemId: widget.itemId,
       search: _query.search,
       kind: _query.kind,
+      fromAt: _query.fromAt,
+      untilAt: _query.untilAt,
       limit: 500,
     );
     final exportUser = ref.read(yorksV1AuthUserIdProvider);
@@ -2644,8 +3033,11 @@ class _PagedInventoryHistoryState
         }
         query = query.after(page.items.last);
       }
-      final saved = await (files as YorksV1InventoryMovementFileService)
-          .saveMovementRegister(rows);
+      final saved = print
+          ? await (files as YorksV1InventoryMovementPrintService)
+                .printMovementRegister(rows, canPrint: sameAuthority)
+          : await (files as YorksV1InventoryMovementFileService)
+                .saveMovementRegister(rows);
       if (mounted && saved) {
         YorksAppToast.show(
           context,

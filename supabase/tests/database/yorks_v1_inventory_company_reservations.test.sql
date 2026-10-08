@@ -119,7 +119,7 @@ select is((select sum(reserved_qty-consumed_qty) from public.v1_inventory_reserv
   where request_kind='company' and request_id='c3000000-0000-4000-8000-000000000010'),
   2::numeric,'Company demand reserves the shared warehouse pool');
 set local role authenticated;
-select is((select count(*)::integer from jsonb_array_elements(public.v1_inventory_workspace_projection(null)->'reservations') r where r->>'request_id'='c3000000-0000-4000-8000-000000000010'),1,'AUDIT: company reservation must appear in Inventory reservations');
+select is((select count(*)::integer from jsonb_array_elements(public.v1_inventory_register_page(p_register=>'reservations')->'reservations') r where r->>'request_id'='c3000000-0000-4000-8000-000000000010'),1,'Company reservation appears in the paged Inventory register');
 select is(public.v1_save_company_material_supply_plan(
   jsonb_build_object('request_id','c3000000-0000-4000-8000-000000000010',
     'expected_version',3,'lines',jsonb_build_array(jsonb_build_object(

@@ -2033,6 +2033,30 @@ class _SupplierHero extends StatelessWidget {
       ),
     ];
 
+    final metricsPanel = LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 820 ? 5 : 2;
+        final width =
+            (constraints.maxWidth - (columns - 1) * AppSpacing.sm) / columns;
+        return Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: [
+            for (var index = 0; index < metrics.length; index++)
+              SizedBox(
+                width: columns == 2 && index == metrics.length - 1
+                    ? constraints.maxWidth
+                    : width,
+                child: _HeroMetric(
+                  label: metrics[index].label,
+                  value: metrics[index].value,
+                ),
+              ),
+          ],
+        );
+      },
+    );
+
     return DecoratedBox(
       decoration: BoxDecoration(
         color: AppColors.navy,
@@ -2098,30 +2122,28 @@ class _SupplierHero extends StatelessWidget {
               ),
             ],
             const SizedBox(height: AppSpacing.lg),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final columns = constraints.maxWidth >= 820 ? 5 : 2;
-                final width =
-                    (constraints.maxWidth - (columns - 1) * AppSpacing.sm) /
-                    columns;
-                return Wrap(
-                  spacing: AppSpacing.sm,
-                  runSpacing: AppSpacing.sm,
-                  children: [
-                    for (var index = 0; index < metrics.length; index++)
-                      SizedBox(
-                        width: columns == 2 && index == metrics.length - 1
-                            ? constraints.maxWidth
-                            : width,
-                        child: _HeroMetric(
-                          label: metrics[index].label,
-                          value: metrics[index].value,
-                        ),
-                      ),
-                  ],
-                );
-              },
-            ),
+            if (compact)
+              Theme(
+                data: Theme.of(
+                  context,
+                ).copyWith(dividerColor: Colors.transparent),
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: ExpansionTile(
+                    tilePadding: EdgeInsets.zero,
+                    iconColor: Colors.white,
+                    collapsedIconColor: Colors.white,
+                    textColor: Colors.white,
+                    collapsedTextColor: Colors.white,
+                    title: Text(
+                      YorksV1InventorySupplierStrings.overview.active(language),
+                    ),
+                    children: [metricsPanel],
+                  ),
+                ),
+              )
+            else
+              metricsPanel,
           ],
         ),
       ),

@@ -1,3 +1,4 @@
+import 'yorks_v1_inventory_import_recovery_provider.dart';
 import 'yorks_v1_identity_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -21,7 +22,10 @@ final yorksV1InventoryImportControllerProvider =
     >((ref) {
       ref.watch(yorksV1AuthUserIdProvider);
       ref.watch(yorksV1CurrentRoleProvider);
+      final recovery = ref.watch(yorksV1InventoryImportRecoveryProvider);
       final controller = YorksV1InventoryImportController(
+        persistPending: recovery?.persist,
+        canExecute: recovery == null ? null : () => recovery.active,
         repository: ref.watch(yorksV1LogisticsRepositoryProvider),
         fileService: ref.watch(yorksV1InventoryWorkbookFileServiceProvider),
         r38_9Commit: ref.watch(yorksV1FeatureFlagsProvider).inventorySuppliers
@@ -70,6 +74,7 @@ final yorksV1InventoryImportControllerProvider =
         }
         if (state.status == YorksV1InventoryImportStatus.succeeded) {
           ref.invalidate(yorksV1InventoryWorkspaceProvider);
+          ref.invalidate(yorksV1InventoryRegisterProvider);
           ref.invalidate(yorksV1InventoryItemDetailProvider);
           ref.invalidate(yorksV1InventoryHistoryProvider);
           ref.invalidate(yorksV1InventorySupplierDirectoryProvider);

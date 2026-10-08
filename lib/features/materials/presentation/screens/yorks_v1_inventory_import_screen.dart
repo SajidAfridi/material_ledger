@@ -1,3 +1,5 @@
+import '../../../../shared/providers/yorks_v1_inventory_import_recovery_provider.dart';
+import 'yorks_v1_inventory_recovery_panel.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -121,7 +123,20 @@ class _YorksV1InventoryImportScreenState
       return _RestrictedImportSurface(language: language);
     }
 
-    ref.watch(yorksV1InventoryImportControllerProvider);
+    final importState = ref.watch(yorksV1InventoryImportControllerProvider);
+    final pending = ref.watch(yorksV1InventoryImportRecoveryProvider);
+    if (pending?.exists == true &&
+        importState.status == YorksV1InventoryImportStatus.idle) {
+      return Scaffold(
+        body: SafeArea(
+          child: YorksV1InventoryImportRecoveryPanel(
+            onResolved: () {
+              if (mounted) setState(() {});
+            },
+          ),
+        ),
+      );
+    }
     final unitsAsync = ref.watch(yorksV1ConfigurationUnitCodesProvider);
     if (unitsAsync.isLoading && !unitsAsync.hasError) {
       return const _ImportLoadingSurface();

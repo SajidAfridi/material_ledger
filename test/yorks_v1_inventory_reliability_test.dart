@@ -1,3 +1,6 @@
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:material_ledger/shared/controllers/yorks_v1_inventory_import_recovery.dart';
+import 'package:material_ledger/shared/models/yorks_v1_inventory_history.dart';
 import 'dart:convert';
 import 'package:archive/archive.dart';
 import 'package:material_ledger/shared/services/yorks_v1_inventory_workbook_service.dart';
@@ -9,6 +12,85 @@ import 'package:material_ledger/shared/models/yorks_v1_logistics.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_logistics_repository.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  test('import recovery survives recreation and isolates owners', () async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final first = YorksV1InventoryImportRecovery(prefs, 'owner-a');
+    final record = <String, Object?>{
+      'key': 'original',
+      'supplier': true,
+      'payload': {'rows': [], 'file_name': 'witness.xlsx'},
+    };
+    await first.persist(record);
+    final restored = YorksV1InventoryImportRecovery(prefs, 'owner-a');
+    final other = YorksV1InventoryImportRecovery(prefs, 'owner-b');
+    expect(restored.read(), record);
+    expect(other.exists, isFalse);
+    await expectLater(
+      restored.persist({...record, 'key': 'replacement'}),
+      throwsStateError,
+    );
+    expect(restored.read()['key'], 'original');
+    restored.active = false;
+    await expectLater(restored.persist(record), throwsStateError);
+    await first.persist(null);
+    expect(restored.exists, isFalse);
+  });
+
+  test('large import recovery is compressed and restores every row', () async {
+    SharedPreferences.setMockInitialValues({});
+    final preferences = await SharedPreferences.getInstance();
+    final recovery = YorksV1InventoryImportRecovery(
+      preferences,
+      'large-import',
+    );
+    final rows = [
+      for (var i = 0; i < 20000; i++)
+        {
+          'item_code': 'ITEM-$i',
+          'item_description': 'Galvanized duct sheet',
+          'unit': 'Nos',
+          'quantity': '10',
+          'reason': 'External supplier receipt',
+          'supplier_name': 'Test Supplier',
+          'reference': 'DELIVERY-2026',
+        },
+    ];
+    await recovery.persist({
+      'key': 'large-key',
+      'supplier': true,
+      'payload': {'rows': rows},
+    });
+    expect(preferences.getString('large-import')!.startsWith('gz1:'), isTrue);
+    expect(preferences.getString('large-import')!.length, lessThan(1000000));
+    final restored = recovery.read()['payload']['rows'] as List;
+    expect(restored.length, 20000);
+    expect(restored.last['item_code'], 'ITEM-19999');
+  });
+
+  test('history dates persist across cursor pages and export queries', () {
+    final query = YorksV1InventoryHistoryQuery(
+      fromAt: DateTime.utc(2026, 10, 1),
+      untilAt: DateTime.utc(2026, 10, 2),
+    );
+    expect(query.toRpc()['p_until_at'], '2026-10-02T00:00:00.000Z');
+    expect(query, isNot(const YorksV1InventoryHistoryQuery()));
+  });
+
+  test('print PDF builds from the same row values as the workbook', () async {
+    final rows = <YorksV1InventoryMovement>[];
+    final bytes =
+        await YorksV1PlatformInventoryWorkbookFileService.buildMovementPdf(
+          rows,
+        );
+    expect(ascii.decode(bytes.take(4).toList()), '%PDF');
+    expect(
+      YorksV1PlatformInventoryWorkbookFileService.movementHeadings,
+      contains('Quantity Change'),
+    );
+  });
+
   YorksV1InventoryAdjustmentInput input(String key, [String quantity = '1']) =>
       YorksV1InventoryAdjustmentInput(
         quantityDelta: quantity,
@@ -96,6 +178,71 @@ void main() {
       await command.save(repo, () => input('corrected', '-1'));
       expect(repo.inputs.last.idempotencyKey, 'corrected');
       expect(repo.inputs.last.quantityDelta, '-1');
+    },
+  );
+
+  test(
+    'reload replays serialized command and clears only after confirmation',
+    () async {
+      String? stored;
+      Future<void> persist(YorksV1InventoryAdjustmentInput? input) async {
+        stored = input == null ? null : jsonEncode(input.toRecoveryJson());
+      }
+
+      final repo = _Repository()..failure = StateError('lost response');
+      final first = YorksV1InventoryStockCommand(persist: persist);
+      await expectLater(
+        first.save(repo, () => input('durable', '-2')),
+        throwsStateError,
+      );
+      expect(stored, isNotNull);
+      final restored = YorksV1InventoryStockCommand(
+        recovered: YorksV1InventoryAdjustmentInput.fromRecoveryJson(
+          jsonDecode(stored!),
+        ),
+        persist: persist,
+      );
+      repo.failure = null;
+      await restored.save(repo, () => input('must-not-use'));
+      expect(repo.inputs.last.idempotencyKey, 'durable');
+      expect(repo.inputs.last.quantityDelta, '-2');
+      expect(repo.inputs.last.expectedVersion, 3);
+      expect(stored, isNull);
+    },
+  );
+
+  test(
+    'failed persistence and changed authority prevent a stock write',
+    () async {
+      final repo = _Repository();
+      final blocked = YorksV1InventoryStockCommand(
+        persist: (_) async => throw StateError('storage unavailable'),
+      );
+      await expectLater(
+        blocked.save(repo, () => input('key')),
+        throwsStateError,
+      );
+      expect(repo.inputs, isEmpty);
+      final changed = YorksV1InventoryStockCommand(canExecute: () => false);
+      await expectLater(
+        changed.save(repo, () => input('key')),
+        throwsStateError,
+      );
+      expect(repo.inputs, isEmpty);
+      expect(changed.unresolved, isTrue);
+    },
+  );
+
+  test(
+    'unknown recovery fields are preserved for review, not replayed incompletely',
+    () {
+      expect(
+        () => YorksV1InventoryAdjustmentInput.fromRecoveryJson({
+          ...input('key').toRecoveryJson(),
+          'futureField': 'retain me',
+        }),
+        throwsFormatException,
+      );
     },
   );
 
