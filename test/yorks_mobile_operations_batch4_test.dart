@@ -77,19 +77,18 @@ void main() {
         find.byKey(const ValueKey('mobile-arrangement-line')),
         findsOneWidget,
       );
-      expect(find.text('Cannot Provide Now'), findsOneWidget);
-      for (final decision in YorksV1ArrangementDecision.values) {
-        expect(
-          tester
-              .getSize(
-                find.byKey(
-                  ValueKey('mobile-arrangement-decision-${decision.name}'),
-                ),
-              )
-              .height,
-          greaterThanOrEqualTo(AppSpacing.minTapTarget),
-        );
-      }
+      expect(find.text('Full'), findsOneWidget);
+      expect(find.text('Cannot Provide Now'), findsNothing);
+      expect(
+        find.byType(DropdownButtonFormField<YorksV1ArrangementDecision>),
+        findsNothing,
+      );
+      expect(
+        tester
+            .getSize(find.byKey(const ValueKey('arranged-arrangement-line-1')))
+            .height,
+        greaterThanOrEqualTo(AppSpacing.minTapTarget),
+      );
       await _golden(tester, '30_arrangement_line_$suffix');
     });
 
@@ -229,6 +228,54 @@ void main() {
       expect((lines.first as Map)['arranged_qty'], '1.');
       expect(find.text('Progress saved to your account'), findsOneWidget);
       expect(find.text('Save arrangement'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'quantity drives status without losing focus or source selection',
+    (tester) async {
+      await _setViewport(tester, const Size(360, 800));
+      final progress = await _pumpArrangement(
+        tester,
+        _workingArrangementWorkspace,
+      );
+      await tester.tap(find.text('Motorized smoke damper'));
+      await tester.pumpAndSettle();
+      final quantity = find.byKey(
+        const ValueKey('arranged-arrangement-line-1'),
+      );
+      await tester.enterText(quantity, '4');
+      await tester.pumpAndSettle();
+      expect(find.text('Partial'), findsOneWidget);
+      final editable = tester.widget<EditableText>(
+        find.descendant(of: quantity, matching: find.byType(EditableText)),
+      );
+      expect(editable.focusNode.hasFocus, isTrue);
+      await tester.enterText(quantity, '0');
+      await tester.pumpAndSettle();
+      expect(find.text('Cannot Provide Now'), findsOneWidget);
+      expect(tester.widget<TextFormField>(quantity).enabled, isTrue);
+      await tester.enterText(quantity, '');
+      await tester.pumpAndSettle();
+      expect(find.text('Cannot Provide Now'), findsNothing);
+      expect(find.text('Enter quantity'), findsOneWidget);
+      await tester.enterText(quantity, '1.');
+      await tester.pumpAndSettle();
+      expect(find.text('Partial'), findsNothing);
+      expect(find.text('Enter quantity'), findsOneWidget);
+      await tester.enterText(quantity, '11');
+      await tester.pumpAndSettle();
+      expect(find.text('Full'), findsOneWidget);
+      final save = find.text('Save progress');
+      await Scrollable.ensureVisible(tester.element(save), alignment: .5);
+      await tester.pumpAndSettle();
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+      final line = (progress.saved!.inputs['lines'] as List).first as Map;
+      expect(line['decision'], 'full');
+      expect(line['inventory_item_id'], 'inventory-1');
+      expect(line['source_kind'], 'warehouse');
       expect(tester.takeException(), isNull);
     },
   );

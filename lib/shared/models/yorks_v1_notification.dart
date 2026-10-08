@@ -462,6 +462,20 @@ const _eventCopy = <String, YorksV1NotificationCopy>{
     hindiTitle: 'टीम चैट में आपका उल्लेख हुआ',
     hindiBody: 'एक साथी ने बातचीत में आपका उल्लेख किया।',
   ),
+  'arrangement_preparation_completed': YorksV1NotificationCopy(
+    type: NotificationType.info,
+    englishTitle: 'Materials prepared',
+    englishBody:
+        'Procurement completed preparation. Open the request to see the quantities.',
+    arabicTitle: 'تم تجهيز المواد',
+    arabicBody: 'أكملت المشتريات التجهيز. افتح الطلب للاطلاع على الكميات.',
+    urduTitle: 'مٹیریل تیار ہے',
+    urduBody:
+        'پروکیورمنٹ نے تیاری مکمل کر لی ہے۔ مقداریں دیکھنے کے لیے درخواست کھولیں۔',
+    hindiTitle: 'सामग्री तैयार है',
+    hindiBody:
+        'खरीद टीम ने तैयारी पूरी कर ली है। मात्राएँ देखने के लिए अनुरोध खोलें।',
+  ),
   'arrangement_ready_for_dispatch': YorksV1NotificationCopy(
     type: NotificationType.request,
     englishTitle: 'Materials ready for dispatch',

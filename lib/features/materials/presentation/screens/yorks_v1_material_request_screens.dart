@@ -1,3 +1,4 @@
+import '../../../../shared/widgets/yorks_v1_sourcing_progress_panel.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -11554,6 +11555,13 @@ class _RequestDetailBody extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    if (request.timing ==
+                            YorksV1MaterialRequestTiming.scheduled &&
+                        request.state ==
+                            YorksV1MaterialRequestState.arranging) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      _scheduledSourcingProgress(request, language),
+                    ],
                     if (replacementCard != null) ...[
                       replacementCard,
                       const SizedBox(height: AppSpacing.lg),
@@ -16128,6 +16136,11 @@ class _RequestRecordContent extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
+      if (request.timing == YorksV1MaterialRequestTiming.scheduled &&
+          request.state == YorksV1MaterialRequestState.arranging) ...[
+        _scheduledSourcingProgress(request, language),
+        const SizedBox(height: AppSpacing.md),
+      ],
       _R35RecordSectionHeading(
         title: YorksV1MaterialRequestStrings.materialItems.primary,
         description:
@@ -19249,3 +19262,15 @@ Future<String?> _arrangementReturnReason(BuildContext context) async {
 
 void _snack(BuildContext context, String message) =>
     YorksAppToast.show(context, title: message);
+
+Widget _scheduledSourcingProgress(
+  YorksV1MaterialRequest request,
+  AppLanguage language,
+) => YorksV1SourcingProgressPanel(
+  scope: (requestId: request.id, arrangementId: null),
+  language: language,
+  itemLabels: {
+    for (final line in request.lines)
+      line.id: '${line.description} · ${line.unit}',
+  },
+);

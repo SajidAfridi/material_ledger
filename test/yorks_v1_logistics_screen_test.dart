@@ -192,7 +192,7 @@ void main() {
   );
 
   testWidgets(
-    'dispatch refreshes the Delivery Order workspace before receipt review',
+    'dispatch needs no supplier reference and refreshes Delivery Order before receipt review',
     (tester) async {
       final preferences = await SharedPreferences.getInstance();
       final repository = _FakeLogisticsRepository();
@@ -215,7 +215,10 @@ void main() {
       expect(find.text('Delivery Order pending'), findsOneWidget);
       expect(repository.returnsWorkspaceCalls, 1);
 
-      await tester.enterText(find.byType(TextField).first, 'DN-REF-001');
+      expect(
+        find.text('Supplier delivery reference (optional)'),
+        findsOneWidget,
+      );
       final dispatchButton = find.text('Review dispatch').last;
       await tester.ensureVisible(dispatchButton);
       await tester.tap(dispatchButton);
@@ -227,6 +230,10 @@ void main() {
       expect(find.text('Delivery Order ready'), findsOneWidget);
       expect(repository.returnsWorkspaceCalls, greaterThanOrEqualTo(2));
       expect(find.text('Dispatch committed'), findsOneWidget);
+      expect(
+        repository.lastDispatchInput?.toRpcPayload()['delivery_reference'],
+        isNull,
+      );
       expect(
         find.textContaining('Y-001-DSP001 · 1 line committed'),
         findsOneWidget,
@@ -523,22 +530,122 @@ void main() {
       );
       await tester.tap(find.text('Open Delivery Order'));
       await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField), 'DO-RETRY-001');
+      expect(find.byType(TextField), findsNothing);
+      expect(
+        find.text('Delivery number assigned automatically'),
+        findsOneWidget,
+      );
 
       await tester.tap(find.text('Download PDF'));
       await tester.pumpAndSettle();
       expect(repository.generationCalls, 1);
       expect(documents.shareAttempts, 1);
-      expect(find.text('Delivery Order reference'), findsOneWidget);
+      expect(find.text('DO-RETRY-001'), findsOneWidget);
+      expect(repository.lastInput?.deliveryOrderReference, isEmpty);
       await tester.pump(const Duration(seconds: 6));
 
       await tester.tap(find.text('Download PDF'));
       await tester.pumpAndSettle();
       expect(repository.generationCalls, 1);
       expect(documents.shareAttempts, 2);
-      expect(find.text('Delivery Order reference'), findsNothing);
+      expect(find.text('Delivery number assigned automatically'), findsNothing);
     },
   );
+  testWidgets('a new Delivery Order revision keeps its confirmed number', (
+    tester,
+  ) async {
+    final preferences = await SharedPreferences.getInstance();
+    final repository = _DeliveryOrderRetryRepository();
+    final documents = _SelectedRevisionDocuments();
+    final workspace = _confirmedDeliveryOrderWorkspace('delivery-revision');
+    tester.view.physicalSize = const Size(1366, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    await tester.pumpWidget(
+      _testApp(
+        preferences: preferences,
+        repository: repository,
+        child: Scaffold(
+          body: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => showYorksV1DeliveryOrderGenerationDialog(
+                context,
+                workspace: workspace,
+                dispatch: workspace.deliveryOrderDispatches.single,
+                documents: documents,
+                canGenerate: true,
+              ),
+              child: const Text('Open revision'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open revision'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Create new revision'));
+    await tester.pumpAndSettle();
+    expect(find.byType(TextField), findsNothing);
+    expect(find.text('DO-RETRY-001'), findsOneWidget);
+    await tester.tap(find.text('Print / PDF'));
+    await tester.pumpAndSettle();
+    expect(repository.lastInput?.deliveryOrderReference, 'DO-RETRY-001');
+    expect(repository.generationCalls, 1);
+    expect(documents.printed, ['revision-1']);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final size in [const Size(1366, 900), const Size(360, 800)]) {
+    testWidgets('automatic delivery number ${size.width.toInt()} visual', (
+      tester,
+    ) async {
+      final preferences = await SharedPreferences.getInstance();
+      final workspace = _postDispatchDeliveryWorkspace('delivery-auto');
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      await tester.pumpWidget(
+        _testApp(
+          preferences: preferences,
+          useAppTheme: true,
+          child: Scaffold(
+            body: Builder(
+              builder: (context) => TextButton(
+                onPressed: () => showYorksV1DeliveryOrderGenerationDialog(
+                  context,
+                  workspace: workspace,
+                  dispatch: workspace.deliveryOrderDispatches.single,
+                  documents: _SelectedRevisionDocuments(),
+                  canGenerate: true,
+                ),
+                child: const Text('Open delivery'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Open delivery'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TextField), findsNothing);
+      expect(
+        find.text('Delivery number assigned automatically'),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile(
+          'goldens/r35/procurement_automatic_delivery_${size.width.toInt()}.png',
+        ),
+      );
+    });
+  }
   for (final size in [const Size(1366, 900), const Size(360, 800)]) {
     testWidgets('dispatch preparation workspace ${size.width.toInt()} visual', (
       tester,
@@ -604,7 +711,11 @@ Widget _testApp({
         request.id,
       ).overrideWith((ref) async => request),
   ],
-  child: MaterialApp(theme: useAppTheme ? AppTheme.light : null, home: child),
+  child: MaterialApp(
+    debugShowCheckedModeBanner: false,
+    theme: useAppTheme ? AppTheme.light : null,
+    home: child,
+  ),
 );
 
 final _informationRequest = YorksV1MaterialRequest(
@@ -733,6 +844,7 @@ class _FakeLogisticsRepository
 
   YorksV1InventoryItemMetadataInput? metadataInput;
   bool _dispatchCommitted = false;
+  YorksV1DispatchInput? lastDispatchInput;
   int returnsWorkspaceCalls = 0;
 
   @override
@@ -842,6 +954,7 @@ class _FakeLogisticsRepository
   @override
   Future<YorksV1LogisticsWorkspace> dispatch(YorksV1DispatchInput input) async {
     _dispatchCommitted = true;
+    lastDispatchInput = input;
     return getWorkspace(input.requestId);
   }
 
@@ -892,12 +1005,14 @@ class _FakeLogisticsRepository
 
 class _DeliveryOrderRetryRepository extends _FakeLogisticsRepository {
   int generationCalls = 0;
+  YorksV1DeliveryOrderGenerationInput? lastInput;
 
   @override
   Future<YorksV1ReturnsDocumentsWorkspace> generateDeliveryOrder(
     YorksV1DeliveryOrderGenerationInput input,
   ) async {
     generationCalls++;
+    lastInput = input;
     return _confirmedDeliveryOrderWorkspace(input.requestId);
   }
 }

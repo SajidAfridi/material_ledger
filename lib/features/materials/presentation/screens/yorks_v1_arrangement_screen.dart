@@ -21,6 +21,9 @@ import '../../../../shared/models/yorks_v1_material_request_strings.dart';
 import '../../../../shared/models/yorks_v1_permission_management.dart';
 import '../../../../shared/models/yorks_v1_quantity.dart';
 import '../../../../shared/models/yorks_v1_shell_strings.dart';
+import '../../../../shared/models/yorks_v1_sourcing_strings.dart';
+import '../../../../shared/providers/yorks_v1_sourcing_progress_provider.dart';
+import '../../../../shared/widgets/yorks_v1_sourcing_progress_panel.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/permissions_provider.dart';
 import '../../../../shared/providers/yorks_v1_arrangement_provider.dart';
@@ -135,6 +138,7 @@ class YorksV1ArrangementScreen extends ConsumerWidget {
           language: language,
           child: Column(
             children: [
+              _ArrangementTiming(workspace: value, language: language),
               YorksV1RequestInformationToolbar(
                 request: requestValue,
                 language: language,
@@ -884,7 +888,7 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
             for (final line in _lines.values)
               {
                 'arrangement_line_id': line.arrangementLineId,
-                'decision': line.decision.wireValue,
+                'decision': line.decision?.wireValue ?? '',
                 'source_kind': line.source.wireValue,
                 'inventory_item_id': line.inventoryItemId,
                 'arranged_qty':
@@ -935,17 +939,14 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
         final id = row['arrangement_line_id'] as String;
         final line = _lines[id];
         if (line == null) continue;
-        final decision = YorksV1ArrangementDecision.fromWireValue(
-          row['decision'],
-        );
         final source = YorksV1ArrangementSource.values
             .where((value) => value.wireValue == row['source_kind'])
             .firstOrNull;
-        if (decision == null || source == null) {
+        if (source == null) {
           _incompleteRestoredChoices.add(id);
         }
         _lines[id] = line.copyWith(
-          decision: decision ?? line.decision,
+          arrangedQuantity: row['arranged_qty']?.toString() ?? '',
           source: source ?? line.source,
           inventoryItemId: row['inventory_item_id'] as String?,
           externalSourceReady: row['external_ready'] == true,
@@ -1000,6 +1001,172 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
         onConfirmed: _completeRecovered,
         onCommandAbandoned: _releaseAbandoned,
       );
+
+  bool get _scheduled =>
+      widget.workspace.timing == YorksV1MaterialRequestTiming.scheduled;
+  YorksV1SourcingScope get _sourcingScope =>
+      (requestId: widget.workspace.requestId, arrangementId: _arrangement.id);
+
+  Widget _sourcingPanel(bool editable) => YorksV1SourcingProgressPanel(
+    scope: _sourcingScope,
+    language: widget.language,
+    itemLabels: {
+      for (final line in _arrangement.lines)
+        line.requestLineId: '${line.description} · ${line.unit}',
+    },
+    onUpdate: editable && !_busy ? _shareSourcingProgress : null,
+  );
+
+  bool _sharingPreview = false;
+  Future<void> _shareSourcingProgress() async {
+    if (_sharingPreview) return;
+    _sharingPreview = true;
+    try {
+      await _prepareSourcingProgress();
+    } finally {
+      _sharingPreview = false;
+    }
+  }
+
+  Future<void> _prepareSourcingProgress() async {
+    if (_busy || !_canSave || !_progress.state.canEdit) return;
+    _editorChanged();
+    final lines = <YorksV1SourcingLine>[];
+    for (final item in _arrangement.lines) {
+      final draft = _lines[item.id]!;
+      final raw = _arrangedQuantities[item.id]!.text.trim();
+      final quantity = YorksV1DecimalQuantity.tryParse(raw.isEmpty ? '0' : raw);
+      final requested = YorksV1DecimalQuantity.tryParse(
+        item.requestedQuantity,
+      )!;
+      final date = draft.externalExpectedDate;
+      if (quantity == null ||
+          quantity.isNegative ||
+          quantity.compareTo(requested) > 0 ||
+          (draft.source == YorksV1ArrangementSource.externalSupplier &&
+              date != null &&
+              !yorksV1SourcingDateIsValid(date)) ||
+          (quantity.isPositive &&
+              draft.source == YorksV1ArrangementSource.warehouse &&
+              draft.inventoryItemId == null)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              YorksV1SourcingStrings.invalid.active(widget.language),
+            ),
+          ),
+        );
+        return;
+      }
+      final ready =
+          draft.source == YorksV1ArrangementSource.externalSupplier &&
+              !draft.externalSourceReady
+          ? YorksV1DecimalQuantity.zero
+          : quantity;
+      lines.add(
+        YorksV1SourcingLine(
+          requestLineId: item.requestLineId,
+          readyQuantity: ready.canonicalText,
+          requestedQuantity: requested.canonicalText,
+          sourceKind: draft.source.wireValue,
+          inventoryItemId: draft.source == YorksV1ArrangementSource.warehouse
+              ? draft.inventoryItemId
+              : null,
+          expectedDate:
+              draft.source == YorksV1ArrangementSource.externalSupplier
+              ? date
+              : null,
+        ),
+      );
+    }
+    var dialogClosed = false;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(YorksV1SourcingStrings.confirm.active(widget.language)),
+        content: SizedBox(
+          width: 560,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  YorksV1SourcingStrings.explanation.active(widget.language),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                for (final line in lines)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      _arrangement.lines
+                          .firstWhere(
+                            (item) => item.requestLineId == line.requestLineId,
+                          )
+                          .description,
+                    ),
+                    subtitle: Text(
+                      '${YorksV1SourcingStrings.ready.active(widget.language)} ${line.readyQuantity} / ${line.requestedQuantity} ${_arrangement.lines.firstWhere((item) => item.requestLineId == line.requestLineId).unit}${line.expectedDate == null ? '' : ' · ${YorksV1SourcingStrings.expected.active(widget.language)} ${line.expectedDate}'}',
+                    ),
+                  ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  YorksV1SourcingStrings.externalWaiting.active(
+                    widget.language,
+                  ),
+                  style: AppTypography.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              if (dialogClosed) return;
+              dialogClosed = true;
+              Navigator.pop(dialogContext, false);
+            },
+            child: Text(AppStrings.cancel.active(widget.language)),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (dialogClosed) return;
+              dialogClosed = true;
+              Navigator.pop(dialogContext, true);
+            },
+            child: Text(
+              YorksV1SourcingStrings.updateTeam.active(widget.language),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true || !_progress.state.canEdit) return;
+    setState(() => _busy = true);
+    final saved = await ref
+        .read(yorksV1SourcingProgressProvider(_sourcingScope).notifier)
+        .save(
+          requestVersion: _requestRecordVersion,
+          arrangementVersion: _arrangement.recordVersion,
+          lines: lines,
+        );
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (saved) {
+      ref.invalidate(
+        yorksV1SourcingProgressProvider((
+          requestId: widget.workspace.requestId,
+          arrangementId: null,
+        )),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(YorksV1SourcingStrings.failed.active(widget.language)),
+        ),
+      );
+    }
+  }
 
   String _query = '';
   YorksV1ArrangementDecision? _decisionFilter;
@@ -1140,7 +1307,12 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
           }
         },
         child: _MobileArrangementFlow(
-          progressPanel: _progressPanel(mobile: true),
+          progressPanel: Column(
+            children: [
+              _progressPanel(mobile: true),
+              if (_scheduled) _sourcingPanel(editable),
+            ],
+          ),
           workspace: widget.workspace,
           arrangement: _arrangement,
           inventoryItems: _inventoryItems,
@@ -1184,6 +1356,10 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _progressPanel(),
+            if (_scheduled) ...[
+              _sourcingPanel(editable),
+              const SizedBox(height: AppSpacing.sm),
+            ],
             if (_clarificationReviewRequired) ...[
               _ClarificationReviewBanner(language: widget.language),
               const SizedBox(height: AppSpacing.md),
@@ -1282,7 +1458,9 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
                         lineKeys: _lineKeys,
                         language: widget.language,
                         readinessRequired:
-                            widget.workspace.externalSourceReadinessRequired,
+                            (widget.workspace.externalSourceReadinessRequired ||
+                            widget.workspace.timing ==
+                                YorksV1MaterialRequestTiming.scheduled),
                       )
                     : ListView(
                         children: [
@@ -1307,9 +1485,11 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
                               validationMessages:
                                   _validationIssues[line.id] ?? const [],
                               language: widget.language,
-                              readinessRequired: widget
-                                  .workspace
-                                  .externalSourceReadinessRequired,
+                              readinessRequired:
+                                  (widget
+                                      .workspace
+                                      .externalSourceReadinessRequired ||
+                                  _scheduled),
                               key: _lineKeys[line.id],
                             ),
                             const SizedBox(height: AppSpacing.md),
@@ -1369,11 +1549,6 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
   void _replace(_EditableArrangementLine value) {
     if (!_canSave) return;
     _incompleteRestoredChoices.remove(value.arrangementLineId);
-    final previous = _lines[value.arrangementLineId];
-    if (value.decision == YorksV1ArrangementDecision.unavailable &&
-        previous?.decision != YorksV1ArrangementDecision.unavailable) {
-      _arrangedQuantities[value.arrangementLineId]?.text = '0';
-    }
     setState(() {
       _lines = {..._lines, value.arrangementLineId: value};
       _validationIssues = {..._validationIssues}
@@ -1418,6 +1593,7 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
       availableQuantity: created.availableQuantity,
       recordVersion: created.recordVersion,
       brandOrigin: created.brandOrigin,
+      locationBin: created.locationBin,
     );
     setState(() {
       _inventoryItems = [
@@ -1856,6 +2032,17 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
         _reasons[line.arrangementLineId]!,
       ]) {
         controller.addListener(() {
+          if (!_syncingProgress && mounted) {
+            final current = _lines[line.arrangementLineId]!;
+            final raw = _arrangedQuantities[line.arrangementLineId]!.text;
+            if (raw != current.arrangedQuantity) {
+              setState(
+                () => _lines[line.arrangementLineId] = current.copyWith(
+                  arrangedQuantity: raw,
+                ),
+              );
+            }
+          }
           _clearValidationForLine(line.arrangementLineId);
           _editorChanged();
         });
@@ -1938,6 +2125,7 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
           itemCode: item.itemCode,
           description: item.description,
           brandOrigin: item.brandOrigin,
+          locationBin: item.locationBin,
           unit: item.unit,
           onHandQuantity: item.onHandQuantity,
           reservedQuantity: item.reservedQuantity,
@@ -2066,7 +2254,9 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
             quantity;
       }
       if (line.source == YorksV1ArrangementSource.externalSupplier &&
-          widget.workspace.externalSourceReadinessRequired &&
+          (widget.workspace.externalSourceReadinessRequired ||
+              widget.workspace.timing ==
+                  YorksV1MaterialRequestTiming.scheduled) &&
           !line.externalSourceReady) {
         add(
           line.arrangementLineId,
@@ -2757,7 +2947,7 @@ class _MobileArrangementFlowState extends State<_MobileArrangementFlow> {
         ),
         YorksMobileStickyActions(
           summary: YorksV1ArrangementStrings.linesDecided(
-            widget.lines.length,
+            widget.lines.values.where((line) => line.decision != null).length,
             widget.arrangement.lines.length,
           ).active(widget.language),
           children: [
@@ -2780,9 +2970,6 @@ class _MobileArrangementFlowState extends State<_MobileArrangementFlow> {
   Widget _buildLine() {
     final line = widget.arrangement.lines[_lineIndex];
     final draft = widget.lines[line.id]!;
-    final inventoryItem = widget.inventoryItems
-        .where((item) => item.id == draft.inventoryItemId)
-        .firstOrNull;
     return Column(
       key: const ValueKey('mobile-arrangement-line'),
       children: [
@@ -2831,16 +3018,15 @@ class _MobileArrangementFlowState extends State<_MobileArrangementFlow> {
                   ),
                   const SizedBox(height: 14),
                 ],
-                _MobileFieldLabel(
-                  label: YorksV1ArrangementStrings.decision.active(
-                    widget.language,
-                  ),
-                ),
-                _MobileArrangementDecisionSelector(
-                  selected: draft.decision,
+                _QuantityField(
+                  value: draft,
+                  controller: widget.arrangedQuantities[line.id]!,
                   enabled: widget.enabled && !widget.busy,
-                  language: widget.language,
-                  onSelected: (decision) => _selectDecision(draft, decision),
+                ),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: _ArrangementDecisionChip(decision: draft.decision),
                 ),
                 const SizedBox(height: 14),
                 _SourcePicker(
@@ -2877,37 +3063,15 @@ class _MobileArrangementFlowState extends State<_MobileArrangementFlow> {
                       enabled: widget.enabled && !widget.busy,
                       language: widget.language,
                       requiredByPolicy:
-                          widget.workspace.externalSourceReadinessRequired,
+                          (widget.workspace.externalSourceReadinessRequired ||
+                          widget.workspace.timing ==
+                              YorksV1MaterialRequestTiming.scheduled),
                       onChanged: (value) {
                         widget.onChanged(value);
                         setState(() {});
                       },
                     ),
                   ],
-                  const SizedBox(height: 14),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: _QuantityField(
-                          value: draft,
-                          controller: widget.arrangedQuantities[line.id]!,
-                          enabled: widget.enabled && !widget.busy,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _MobileReadOnlyField(
-                          label: YorksV1ArrangementStrings.available.active(
-                            widget.language,
-                          ),
-                          value: inventoryItem == null
-                              ? '—'
-                              : '${yorksV1DisplayQuantity(inventoryItem.availableQuantity)} ${inventoryItem.unit}',
-                        ),
-                      ),
-                    ],
-                  ),
                   const SizedBox(height: 14),
                   if (widget.canManageCommercials) ...[
                     _UnitCostField(
@@ -2967,36 +3131,6 @@ class _MobileArrangementFlowState extends State<_MobileArrangementFlow> {
         ),
       ],
     );
-  }
-
-  void _selectDecision(
-    _EditableArrangementLine draft,
-    YorksV1ArrangementDecision decision,
-  ) {
-    widget.onChanged(
-      draft.copyWith(
-        decision: decision,
-        arrangedQuantity: decision == YorksV1ArrangementDecision.unavailable
-            ? '0'
-            : draft.arrangedQuantity,
-        inventoryItemId: decision == YorksV1ArrangementDecision.unavailable
-            ? null
-            : _keep,
-        externalSupplier: decision == YorksV1ArrangementDecision.unavailable
-            ? null
-            : _keep,
-        externalSourceReady: decision == YorksV1ArrangementDecision.unavailable
-            ? false
-            : null,
-        externalExpectedDate: decision == YorksV1ArrangementDecision.unavailable
-            ? null
-            : _keep,
-        externalReference: decision == YorksV1ArrangementDecision.unavailable
-            ? null
-            : _keep,
-      ),
-    );
-    setState(() {});
   }
 
   Widget _buildReview() {
@@ -3143,6 +3277,8 @@ class _MobileArrangementFlowState extends State<_MobileArrangementFlow> {
           partial++;
         case YorksV1ArrangementDecision.unavailable:
           unavailable++;
+        case null:
+          break;
       }
     }
     return (full: full, partial: partial, unavailable: unavailable);
@@ -3162,74 +3298,6 @@ class _MobileArrangementFlowState extends State<_MobileArrangementFlow> {
       return;
     }
     setState(() => _lineIndex++);
-  }
-}
-
-class _MobileArrangementDecisionSelector extends StatelessWidget {
-  const _MobileArrangementDecisionSelector({
-    required this.selected,
-    required this.enabled,
-    required this.language,
-    required this.onSelected,
-  });
-
-  final YorksV1ArrangementDecision selected;
-  final bool enabled;
-  final AppLanguage language;
-  final ValueChanged<YorksV1ArrangementDecision> onSelected;
-
-  @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      Row(
-        children: [
-          Expanded(child: _option(YorksV1ArrangementDecision.full)),
-          const SizedBox(width: 8),
-          Expanded(child: _option(YorksV1ArrangementDecision.partial)),
-        ],
-      ),
-      const SizedBox(height: 8),
-      _option(YorksV1ArrangementDecision.unavailable),
-    ],
-  );
-
-  Widget _option(YorksV1ArrangementDecision decision) {
-    final isSelected = selected == decision;
-    return Semantics(
-      button: true,
-      selected: isSelected,
-      child: SizedBox(
-        key: ValueKey('mobile-arrangement-decision-${decision.name}'),
-        height: AppSpacing.minTapTarget,
-        child: Material(
-          color: isSelected
-              ? AppColors.blueContainer
-              : AppColors.surfaceContainerLow,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-            side: BorderSide(
-              color: isSelected ? AppColors.blue : AppColors.line,
-            ),
-          ),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-            onTap: enabled ? () => onSelected(decision) : null,
-            child: Center(
-              child: Text(
-                yorksV1ArrangementDecisionCopy(decision).active(language),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.labelLarge.copyWith(
-                  color: isSelected ? AppColors.blue : AppColors.muted,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }
 
@@ -3427,7 +3495,7 @@ class _MobileArrangementReviewLine extends StatelessWidget {
 class _ArrangementDecisionChip extends StatelessWidget {
   const _ArrangementDecisionChip({required this.decision});
 
-  final YorksV1ArrangementDecision decision;
+  final YorksV1ArrangementDecision? decision;
 
   @override
   Widget build(BuildContext context) {
@@ -3435,11 +3503,13 @@ class _ArrangementDecisionChip extends StatelessWidget {
       YorksV1ArrangementDecision.full => AppColors.success,
       YorksV1ArrangementDecision.partial => AppColors.warning,
       YorksV1ArrangementDecision.unavailable => AppColors.error,
+      null => AppColors.muted,
     };
     final background = switch (decision) {
       YorksV1ArrangementDecision.full => AppColors.successContainer,
       YorksV1ArrangementDecision.partial => AppColors.warningContainer,
       YorksV1ArrangementDecision.unavailable => AppColors.errorContainer,
+      null => AppColors.surfaceContainerLow,
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
@@ -3448,7 +3518,9 @@ class _ArrangementDecisionChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
       ),
       child: Text(
-        yorksV1ArrangementDecisionCopy(decision).primary,
+        decision == null
+            ? YorksV1ArrangementStrings.quantityNeeded.primary
+            : yorksV1ArrangementDecisionCopy(decision!).primary,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: AppTypography.labelSmall.copyWith(color: color),
@@ -3465,31 +3537,6 @@ class _MobileFieldLabel extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(bottom: 6),
     child: Text(label, style: AppTypography.labelLarge),
-  );
-}
-
-class _MobileReadOnlyField extends StatelessWidget {
-  const _MobileReadOnlyField({required this.label, required this.value});
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      _MobileFieldLabel(label: label),
-      Container(
-        height: 56,
-        alignment: Alignment.centerLeft,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceContainerLowest,
-          border: Border.all(color: AppColors.line),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Text(value, style: AppTypography.bodyMedium),
-      ),
-    ],
   );
 }
 
@@ -4155,17 +4202,16 @@ class _ArrangementTableHeader extends StatelessWidget {
           YorksV1ArrangementStrings.requestedItem,
           flex: 30,
         ),
-        _ArrangementTableHeading(YorksV1ArrangementStrings.decision, flex: 17),
         _ArrangementTableHeading(
           YorksV1ArrangementStrings.supplierSource,
-          flex: 21,
+          flex: 35,
         ),
         _ArrangementTableHeading(YorksV1ArrangementStrings.requested, flex: 10),
-        _ArrangementTableHeading(YorksV1ArrangementStrings.arranged, flex: 10),
+        _ArrangementTableHeading(YorksV1ArrangementStrings.arranged, flex: 15),
         if (showCommercials)
           const _ArrangementTableHeading(
             YorksV1ArrangementStrings.unitCost,
-            flex: 12,
+            flex: 10,
           ),
       ],
     ),
@@ -4247,6 +4293,7 @@ class _ArrangementTableRow extends StatelessWidget {
         AppColors.warningContainer.withValues(alpha: .32),
       YorksV1ArrangementDecision.unavailable =>
         AppColors.errorContainer.withValues(alpha: .28),
+      null => AppColors.surfaceContainerLowest,
     };
     return Container(
       decoration: BoxDecoration(
@@ -4276,17 +4323,7 @@ class _ArrangementTableRow extends StatelessWidget {
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
-                flex: 17,
-                child: _DecisionPicker(
-                  value: draft,
-                  enabled: enabled,
-                  compact: true,
-                  onChanged: onChanged,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                flex: 21,
+                flex: 35,
                 child: _ArrangementSourceEditor(
                   line: line,
                   value: draft,
@@ -4312,18 +4349,25 @@ class _ArrangementTableRow extends StatelessWidget {
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
-                flex: 10,
-                child: _QuantityField(
-                  value: draft,
-                  controller: arrangedQuantity,
-                  enabled: enabled,
-                  compact: true,
+                flex: 15,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _QuantityField(
+                      value: draft,
+                      controller: arrangedQuantity,
+                      enabled: enabled,
+                      compact: true,
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    _ArrangementDecisionChip(decision: draft.decision),
+                  ],
                 ),
               ),
               if (showCommercials) ...[
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
-                  flex: 12,
+                  flex: 10,
                   child: _UnitCostField(
                     value: draft,
                     controller: unitCost,
@@ -4585,7 +4629,7 @@ class _MobileArrangementEditor extends StatelessWidget {
           style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
         ),
         const SizedBox(height: AppSpacing.md),
-        _DecisionPicker(value: draft, enabled: enabled, onChanged: onChanged),
+        _ArrangementDecisionChip(decision: draft.decision),
         const SizedBox(height: AppSpacing.md),
         _SourcePicker(value: draft, enabled: enabled, onChanged: onChanged),
         const SizedBox(height: AppSpacing.md),
@@ -4627,79 +4671,6 @@ class _MobileArrangementEditor extends StatelessWidget {
       ],
     ),
   );
-}
-
-class _DecisionPicker extends StatelessWidget {
-  const _DecisionPicker({
-    required this.value,
-    required this.enabled,
-    required this.onChanged,
-    this.compact = false,
-  });
-
-  final _EditableArrangementLine value;
-  final bool enabled;
-  final ValueChanged<_EditableArrangementLine> onChanged;
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) =>
-      DropdownButtonFormField<YorksV1ArrangementDecision>(
-        initialValue: value.decision,
-        isExpanded: true,
-        decoration: InputDecoration(
-          labelText: compact
-              ? null
-              : YorksV1ArrangementStrings.decision.primary,
-          contentPadding: compact
-              ? const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm,
-                  vertical: AppSpacing.xs,
-                )
-              : null,
-        ),
-        items: [
-          for (final decision in YorksV1ArrangementDecision.values)
-            DropdownMenuItem(
-              value: decision,
-              child: Text(yorksV1ArrangementDecisionCopy(decision).primary),
-            ),
-        ],
-        onChanged: !enabled
-            ? null
-            : (decision) {
-                if (decision == null) return;
-                onChanged(
-                  value.copyWith(
-                    decision: decision,
-                    arrangedQuantity:
-                        decision == YorksV1ArrangementDecision.unavailable
-                        ? '0'
-                        : value.arrangedQuantity,
-                    inventoryItemId:
-                        decision == YorksV1ArrangementDecision.unavailable
-                        ? null
-                        : _keep,
-                    externalSupplier:
-                        decision == YorksV1ArrangementDecision.unavailable
-                        ? null
-                        : _keep,
-                    externalSourceReady:
-                        decision == YorksV1ArrangementDecision.unavailable
-                        ? false
-                        : null,
-                    externalExpectedDate:
-                        decision == YorksV1ArrangementDecision.unavailable
-                        ? null
-                        : _keep,
-                    externalReference:
-                        decision == YorksV1ArrangementDecision.unavailable
-                        ? null
-                        : _keep,
-                  ),
-                );
-              },
-      );
 }
 
 class _SourcePicker extends StatelessWidget {
@@ -4783,16 +4754,14 @@ class _QuantityField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-    width: 112,
+    width: compact ? 112 : null,
     child: TextFormField(
-      key: ValueKey(
-        'arranged-${value.arrangementLineId}-${value.decision.wireValue}',
-      ),
+      key: ValueKey('arranged-${value.arrangementLineId}'),
       controller: controller,
-      enabled:
-          enabled && value.decision != YorksV1ArrangementDecision.unavailable,
+      enabled: enabled,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       decoration: InputDecoration(
+        constraints: const BoxConstraints(minHeight: AppSpacing.minTapTarget),
         labelText: compact ? null : YorksV1ArrangementStrings.arranged.primary,
         contentPadding: compact
             ? const EdgeInsets.symmetric(
@@ -4822,9 +4791,7 @@ class _UnitCostField extends StatelessWidget {
   Widget build(BuildContext context) => SizedBox(
     width: 116,
     child: TextFormField(
-      key: ValueKey(
-        'unit-cost-${value.arrangementLineId}-${value.decision.wireValue}',
-      ),
+      key: ValueKey('unit-cost-${value.arrangementLineId}'),
       controller: controller,
       enabled:
           enabled && value.decision != YorksV1ArrangementDecision.unavailable,
@@ -4920,7 +4887,7 @@ class _InventoryOrSupplierFieldState extends State<_InventoryOrSupplierField> {
           Expanded(
             child: TextFormField(
               key: ValueKey(
-                'supplier-${widget.value.arrangementLineId}-${widget.value.source.wireValue}-${widget.value.decision.wireValue}',
+                'supplier-${widget.value.arrangementLineId}-${widget.value.source.wireValue}',
               ),
               controller: widget.supplier,
               enabled: widget.enabled,
@@ -5099,6 +5066,13 @@ class _WarehouseItemAutocompleteState
     return 4;
   }
 
+  String _inventoryItemContext(YorksV1InventoryItem item) => [
+    '${YorksV1ArrangementStrings.available.primary}: ${yorksV1DisplayQuantity(item.availableQuantity)} ${item.unit}',
+    if (item.locationBin?.trim().isNotEmpty == true)
+      '${YorksV1ArrangementStrings.shelfLocation.primary}: ${item.locationBin}',
+    if (item.brandOrigin?.trim().isNotEmpty == true) item.brandOrigin!,
+  ].join(' · ');
+
   @override
   Widget build(BuildContext context) {
     final selected = widget.inventoryItems
@@ -5134,8 +5108,8 @@ class _WarehouseItemAutocompleteState
                   ? YorksV1ArrangementStrings.noMatchingWarehouse.primary
                   : selected == null
                   ? null
-                  : '${YorksV1ArrangementStrings.available.primary}: ${yorksV1DisplayQuantity(selected.availableQuantity)} ${selected.unit}',
-              helperMaxLines: 2,
+                  : _inventoryItemContext(selected),
+              helperMaxLines: 3,
               prefixIcon: const Icon(Icons.search_rounded),
               suffixIcon: widget.value.inventoryItemId == null
                   ? null
@@ -5188,8 +5162,8 @@ class _WarehouseItemAutocompleteState
                         style: AppTypography.titleSmall,
                       ),
                       subtitle: Text(
-                        '${YorksV1ArrangementStrings.available.primary}: ${yorksV1DisplayQuantity(item.availableQuantity)} ${item.unit}${item.brandOrigin?.trim().isNotEmpty == true ? ' · ${item.brandOrigin}' : ''}',
-                        maxLines: 1,
+                        _inventoryItemContext(item),
+                        maxLines: 3,
                         overflow: TextOverflow.ellipsis,
                         style: AppTypography.bodySmall.copyWith(
                           color: AppColors.muted,
@@ -5913,9 +5887,7 @@ class _ReasonField extends StatelessWidget {
   Widget build(BuildContext context) => SizedBox(
     width: 180,
     child: TextFormField(
-      key: ValueKey(
-        'reason-${value.arrangementLineId}-${value.decision.wireValue}',
-      ),
+      key: ValueKey('reason-${value.arrangementLineId}'),
       controller: controller,
       enabled: enabled,
       decoration: InputDecoration(
@@ -6282,7 +6254,7 @@ class _EditableArrangementLine {
   const _EditableArrangementLine({
     required this.arrangementLineId,
     required this.source,
-    required this.decision,
+    required this.requestedQuantity,
     required this.arrangedQuantity,
     this.externalSupplier,
     this.externalSourceReady = false,
@@ -6295,8 +6267,13 @@ class _EditableArrangementLine {
 
   final String arrangementLineId;
   final YorksV1ArrangementSource source;
-  final YorksV1ArrangementDecision decision;
+  final String requestedQuantity;
   final String arrangedQuantity;
+  YorksV1ArrangementDecision? get decision =>
+      yorksV1ArrangementDecisionForQuantity(
+        requestedQuantity: requestedQuantity,
+        arrangedQuantity: arrangedQuantity,
+      );
   final String? externalSupplier;
   final bool externalSourceReady;
   final String? externalExpectedDate;
@@ -6309,27 +6286,20 @@ class _EditableArrangementLine {
     YorksV1ArrangementLine line,
     List<YorksV1InventoryItem> inventory,
   ) {
-    final matchingItem = inventory.where(
-      (item) =>
-          item.unit == line.unit &&
-          item.description == line.description &&
-          YorksV1DecimalQuantity.tryParse(item.availableQuantity)?.isPositive ==
-              true,
-    );
+    final matchingItem = yorksV1ArrangementInventoryMatch(line, inventory);
+    final isFresh =
+        line.decision == null &&
+        line.arrangedQuantity == null &&
+        line.inventoryItemId == null &&
+        line.externalSupplier == null &&
+        line.source == YorksV1ArrangementSource.warehouse;
     return _EditableArrangementLine(
       arrangementLineId: line.id,
-      // A fresh deployment may not have warehouse opening stock yet. Choosing
-      // Warehouse in that state makes a valid arrangement impossible because
-      // every non-unavailable line must reserve a real item. Default to the
-      // explicit external-supplier route instead. The supplier name is useful
-      // context when known but remains optional in the approved V1 workflow.
-      source: line.inventoryItemId == null && inventory.isEmpty
+      requestedQuantity: line.requestedQuantity,
+      source: isFresh && matchingItem == null
           ? YorksV1ArrangementSource.externalSupplier
           : line.source,
-      decision: line.decision ?? YorksV1ArrangementDecision.full,
-      arrangedQuantity: yorksV1DisplayQuantity(
-        line.arrangedQuantity ?? line.requestedQuantity,
-      ),
+      arrangedQuantity: yorksV1DisplayQuantity(line.arrangedQuantity ?? ''),
       externalSupplier: line.externalSupplier,
       externalSourceReady: line.externalSourceReady,
       externalExpectedDate: line.externalExpectedDate
@@ -6338,8 +6308,7 @@ class _EditableArrangementLine {
           .first,
       externalReference: line.externalReference,
       inventoryItemId:
-          line.inventoryItemId ??
-          (matchingItem.isEmpty ? null : matchingItem.first.id),
+          line.inventoryItemId ?? (isFresh ? matchingItem?.id : null),
       reason: line.reason,
       unitCost: line.unitCost,
     );
@@ -6347,7 +6316,6 @@ class _EditableArrangementLine {
 
   _EditableArrangementLine copyWith({
     YorksV1ArrangementSource? source,
-    YorksV1ArrangementDecision? decision,
     String? arrangedQuantity,
     Object? externalSupplier = _keep,
     bool? externalSourceReady,
@@ -6359,7 +6327,7 @@ class _EditableArrangementLine {
   }) => _EditableArrangementLine(
     arrangementLineId: arrangementLineId,
     source: source ?? this.source,
-    decision: decision ?? this.decision,
+    requestedQuantity: requestedQuantity,
     arrangedQuantity: arrangedQuantity ?? this.arrangedQuantity,
     externalSupplier: identical(externalSupplier, _keep)
         ? this.externalSupplier
@@ -6381,15 +6349,23 @@ class _EditableArrangementLine {
   YorksV1ArrangementLineInput toInput() => YorksV1ArrangementLineInput(
     arrangementLineId: arrangementLineId,
     source: source,
-    decision: decision,
+    // Invalid raw input is rejected before command preparation. A wire value
+    // is still required by this immutable command DTO.
+    decision: decision ?? YorksV1ArrangementDecision.full,
     arrangedQuantity: arrangedQuantity,
-    externalSupplier: externalSupplier,
+    externalSupplier: decision == YorksV1ArrangementDecision.unavailable
+        ? null
+        : externalSupplier,
     externalSourceReady: externalSourceReady,
     externalExpectedDate: externalExpectedDate,
     externalReference: externalReference,
-    inventoryItemId: inventoryItemId,
+    inventoryItemId: decision == YorksV1ArrangementDecision.unavailable
+        ? null
+        : inventoryItemId,
     reason: reason,
-    unitCost: unitCost,
+    unitCost: decision == YorksV1ArrangementDecision.unavailable
+        ? null
+        : unitCost,
   );
 }
 
@@ -6470,4 +6446,46 @@ class _ActiveText extends StatelessWidget {
     maxLines: maxLines,
     overflow: overflow,
   );
+}
+
+class _ArrangementTiming extends StatelessWidget {
+  const _ArrangementTiming({required this.workspace, required this.language});
+  final YorksV1ArrangementWorkspace workspace;
+  final AppLanguage language;
+  @override
+  Widget build(BuildContext context) {
+    final urgent = workspace.timing == YorksV1MaterialRequestTiming.urgent;
+    return Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.xs,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              urgent
+                  ? Icons.priority_high_rounded
+                  : workspace.timing == YorksV1MaterialRequestTiming.scheduled
+                  ? Icons.event_outlined
+                  : Icons.schedule_outlined,
+              size: 18,
+              color: urgent ? AppColors.error : AppColors.muted,
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            Flexible(
+              child: Text(
+                '${yorksV1MaterialRequestTimingCopy(workspace.timing).active(language)}${workspace.scheduledDate == null ? '' : ' · ${MaterialLocalizations.of(context).formatMediumDate(workspace.scheduledDate!)}'}',
+                style: AppTypography.labelLarge.copyWith(
+                  color: urgent ? AppColors.error : AppColors.ink,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

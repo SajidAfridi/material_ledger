@@ -161,6 +161,30 @@ Deno.test("coordination assignment has specific non-commercial copy", () => {
   assertEquals(copy.body.includes("quantity"), false);
 });
 
+Deno.test("Engineering preparation completion is informational in every language", () => {
+  for (const language of ["en", "ar", "ur", "hi"]) {
+    const copy = safePushCopy("arrangement_preparation_completed", language);
+    assertEquals(copy.type, "info");
+    assertEquals(
+      copy.title === safePushCopy("unknown_event", language).title,
+      false,
+    );
+    assertEquals(copy.body.trim().length > 0, true);
+  }
+  assertEquals(
+    safePushCopy("arrangement_preparation_completed").title,
+    "Materials prepared",
+  );
+  assertEquals(
+    routeFor({
+      ...claim("14000000-0000-4000-8000-000000000001"),
+      eventCode: "arrangement_preparation_completed",
+      entityType: "procurement_arrangement",
+    }),
+    "/yorks/material-requests/14000000-0000-4000-8000-000000000001",
+  );
+});
+
 Deno.test("all-unavailable alert preserves the editable or cancellable state", () => {
   const copy = safePushCopy("arrangement_completed_unavailable");
   assertEquals(copy.title, "All items currently unavailable");

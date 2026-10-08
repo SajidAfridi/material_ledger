@@ -45,6 +45,149 @@ void main() {
   });
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
+  for (final entry in [
+    (
+      name:
+          'fresh unmatched custom item selects external despite stocked catalogue',
+      description: 'Custom pump',
+      source: YorksV1ArrangementSource.warehouse,
+      quantity: null,
+      expectedSource: YorksV1ArrangementSource.externalSupplier,
+    ),
+    (
+      name: 'fresh exact match selects warehouse without claiming readiness',
+      description: 'Motorized smoke damper',
+      source: YorksV1ArrangementSource.warehouse,
+      quantity: null,
+      expectedSource: YorksV1ArrangementSource.warehouse,
+    ),
+    (
+      name: 'explicit warehouse selection survives absent match',
+      description: 'Custom pump',
+      source: YorksV1ArrangementSource.warehouse,
+      quantity: '2',
+      expectedSource: YorksV1ArrangementSource.warehouse,
+    ),
+    (
+      name: 'explicit external selection survives a warehouse match',
+      description: 'Motorized smoke damper',
+      source: YorksV1ArrangementSource.externalSupplier,
+      quantity: '2',
+      expectedSource: YorksV1ArrangementSource.externalSupplier,
+    ),
+  ]) {
+    testWidgets(entry.name, (tester) async {
+      tester.view.physicalSize = const Size(1366, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final preferences = await SharedPreferences.getInstance();
+      final workspace = YorksV1ArrangementWorkspace(
+        requestId: 'request-1',
+        requestState: 'arranging',
+        requestRecordVersion: 2,
+        canBegin: false,
+        canSave: true,
+        canDecide: false,
+        arrangements: [
+          YorksV1ProcurementArrangement(
+            id: 'arrangement-1',
+            version: 1,
+            status: YorksV1ArrangementStatus.working,
+            isCurrent: true,
+            recordVersion: 1,
+            startedByDisplayName: 'Procurement',
+            startedAt: DateTime.utc(2026, 10, 9),
+            lines: [
+              YorksV1ArrangementLine(
+                id: 'arrangement-line-1',
+                requestLineId: 'request-line-1',
+                displayOrder: 1,
+                description: entry.description,
+                requestedQuantity: '11',
+                unit: 'Nos',
+                source: entry.source,
+                arrangedQuantity: entry.quantity,
+              ),
+            ],
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            yorksV1AuthUserIdProvider.overrideWithValue(
+              'procurement-test-user',
+            ),
+            yorksV1ProcurementProgressRepositoryProvider.overrideWithValue(
+              FakeRepository(),
+            ),
+            sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+              (ref) => YorksV1TestPermissionController(
+                yorksV1TrustedFeaturePermissionState(),
+              ),
+            ),
+            yorksV1MaterialRequestDetailProvider(
+              'request-1',
+            ).overrideWith((ref) async => _request),
+            yorksV1ArrangementRepositoryProvider.overrideWithValue(
+              _ArrangementRepository(),
+            ),
+            yorksV1ArrangementWorkspaceProvider(
+              'request-1',
+            ).overrideWith((ref) async => workspace),
+            yorksV1ArrangementInventoryProvider.overrideWith(
+              (ref) async => _inventoryItems,
+            ),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.light,
+            home: const YorksV1ArrangementScreen(
+              requestId: 'request-1',
+              embedded: true,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<ChoiceChip>(
+              find.byKey(
+                ValueKey(
+                  'source-arrangement-line-1-${entry.expectedSource.wireValue}',
+                ),
+              ),
+            )
+            .selected,
+        isTrue,
+      );
+      expect(
+        tester
+            .widget<TextFormField>(
+              find.byKey(const ValueKey('arranged-arrangement-line-1')),
+            )
+            .controller!
+            .text,
+        entry.quantity ?? '',
+      );
+      if (entry.quantity == null) {
+        expect(find.text('Enter quantity'), findsOneWidget);
+      }
+      if (entry.description == 'Motorized smoke damper' &&
+          entry.expectedSource == YorksV1ArrangementSource.warehouse) {
+        expect(
+          find.textContaining('Shelf / bin: Rack B / Shelf 3'),
+          findsOneWidget,
+        );
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets(
     'procurement can edit item details in the unsaved arrangement editor',
     (tester) async {
@@ -1495,6 +1638,7 @@ const _inventoryItems = [
   YorksV1InventoryItem(
     id: 'inventory-1',
     itemCode: 'MSD-600',
+    locationBin: 'Rack B / Shelf 3',
     description: 'Motorized smoke damper',
     unit: 'Nos',
     onHandQuantity: '12',

@@ -671,9 +671,14 @@ Sequences start at `001`, are never reused and use:
 - `{PROJECT_REF}-DSP{NNN}`
 - `{PROJECT_REF}-RTN{NNN}`
 
-The Delivery Order reference is entered by an authorized user, normalized and
-globally unique. Historical references are never renumbered; collisions are
-reported and retained through a migration alias/exception.
+Owner-approved Procurement simplification (October 2026) supersedes manual
+entry as the default: a new Delivery Order receives `{PROJECT_REF}-DO{NNN}`
+from the server under a project lock. Existing/historical references remain
+unchanged; an existing document's blank-reference revision reuses its identity.
+The allocator skips existing references, and retries reuse the original result.
+Authorized explicit references remain supported for compatibility. The optional
+supplier delivery reference belongs to the dispatch and is separate from the
+Yorks Delivery Order number.
 
 ## 16. Deletion, correction and audit
 
@@ -1849,3 +1854,27 @@ Local verification: 2,556 Flutter tests passed with four retained skips; analyze
 clean. Focused navigation and 1366px/360px golden checks passed after the final
 layout adjustment. CI web/startup-budget and ephemeral-signed APK builds are
 verification artifacts only. This navigation update was deployed with owner authorization on 8 October 2026; see [release evidence](NAVIGATION_PRODUCTION_UPDATE_20261008.md).
+
+
+## Procurement preparation refinement — October 2026
+
+The owner's later usability direction simplifies Project MR arrangement:
+
+- Full, Partial and Cannot Provide Now are derived from valid provided quantity.
+  Blank, incomplete, negative and over-request values are not decisions. Reasons
+  for shortages remain required at final submission.
+- A unique exact catalogue match may preselect Warehouse; unmatched custom items
+  default to External supplier. Explicit selections and saved inputs are retained.
+  Warehouse results expose shelf/bin when present.
+- Scheduled requests support a separate server-confirmed shared preparation
+  update. It records ready quantities and expected availability without reserving
+  stock, changing workflow ownership or submitting an arrangement. Private draft
+  recovery stays private. Shared updates are versioned, authorized and audited.
+- Shared readiness is an observation at its timestamp. Final arrangement still
+  rechecks current stock and every workflow invariant. Completing a Scheduled
+  arrangement requires positive external quantities to be confirmed available;
+  Normal/Urgent retain their current adoption policy. Partial completion retains
+  existing reasons and outstanding-quantity behavior.
+- Final readiness notifies the authorized current project team and requester
+  through the existing notification outbox, once. Interim updates do not generate
+  notification spam. Existing discussion and audit remain available.

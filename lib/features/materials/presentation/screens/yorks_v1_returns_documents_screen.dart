@@ -1382,7 +1382,6 @@ class _DeliveryOrderGenerationDialog extends ConsumerStatefulWidget {
 
 class _DeliveryOrderGenerationDialogState
     extends ConsumerState<_DeliveryOrderGenerationDialog> {
-  late final TextEditingController _reference;
   late final String _idempotencyKey;
   bool _working = false;
   String? _selectedRevisionId;
@@ -1394,16 +1393,7 @@ class _DeliveryOrderGenerationDialogState
   @override
   void initState() {
     super.initState();
-    _reference = TextEditingController(
-      text: widget.dispatch.deliveryOrder?.reference ?? '',
-    );
     _idempotencyKey = const Uuid().v4();
-  }
-
-  @override
-  void dispose() {
-    _reference.dispose();
-    super.dispose();
   }
 
   @override
@@ -1502,17 +1492,7 @@ class _DeliveryOrderGenerationDialogState
                             ),
                           ]
                         : [
-                            TextField(
-                              controller: _reference,
-                              enabled: !_working && widget.canGenerate,
-                              textCapitalization: TextCapitalization.characters,
-                              decoration: InputDecoration(
-                                labelText: YorksV1LogisticsStrings
-                                    .deliveryOrderReference
-                                    .primary,
-                                border: const OutlineInputBorder(),
-                              ),
-                            ),
+                            _numberingSummary(),
                             const SizedBox(height: AppSpacing.md),
                             _DeliveryOrderSnapshotCallout(),
                           ],
@@ -1659,18 +1639,7 @@ class _DeliveryOrderGenerationDialogState
                     ),
                     const SizedBox(height: 14),
                     if (!showingPreview) ...[
-                      YorksMobileCard(
-                        child: TextField(
-                          controller: _reference,
-                          enabled: !_working && widget.canGenerate,
-                          textCapitalization: TextCapitalization.characters,
-                          decoration: InputDecoration(
-                            labelText: YorksV1LogisticsStrings
-                                .deliveryOrderReference
-                                .primary,
-                          ),
-                        ),
-                      ),
+                      YorksMobileCard(child: _numberingSummary()),
                       const SizedBox(height: 12),
                     ] else ...[
                       _revisionPicker(order!, revision),
@@ -1877,14 +1846,33 @@ class _DeliveryOrderGenerationDialogState
     revision: revision,
   );
 
+  Widget _numberingSummary() {
+    final language = ref.watch(languageProvider);
+    final reference =
+        _confirmedDispatch?.deliveryOrder?.reference ??
+        widget.dispatch.deliveryOrder?.reference;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          reference ??
+              YorksV1LogisticsStrings.automaticDeliveryNumber.active(language),
+          style: AppTypography.titleMedium,
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          (reference == null
+                  ? YorksV1LogisticsStrings.automaticDeliveryNumberHelp
+                  : YorksV1LogisticsStrings.reusedDeliveryNumberHelp)
+              .active(language),
+          style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+        ),
+      ],
+    );
+  }
+
   Future<void> _generateAndOpen(_DeliveryOrderOutput output) async {
-    if (!widget.canGenerate) return;
-    if (_reference.text.trim().isEmpty) {
-      _showFailure(
-        YorksV1LogisticsStrings.deliveryOrderReferenceRequired.primary,
-      );
-      return;
-    }
+    if (!widget.canGenerate || _working) return;
     setState(() => _working = true);
     try {
       if (_confirmedRevision == null) {
@@ -1896,7 +1884,8 @@ class _DeliveryOrderGenerationDialogState
                 dispatchId: widget.dispatch.dispatchId,
                 expectedRequestVersion: widget.workspace.requestRecordVersion,
                 expectedDispatchVersion: widget.dispatch.dispatchRecordVersion,
-                deliveryOrderReference: _reference.text,
+                deliveryOrderReference:
+                    widget.dispatch.deliveryOrder?.reference ?? '',
                 idempotencyKey: _idempotencyKey,
               ),
             );

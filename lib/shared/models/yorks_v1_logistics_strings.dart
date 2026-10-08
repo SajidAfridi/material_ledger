@@ -564,6 +564,12 @@ abstract final class YorksV1LogisticsStrings {
     ur: 'ڈیلیوری نوٹ / ڈسپیچ حوالہ',
     hi: 'डिलीवरी नोट / डिस्पैच रेफ़रेंस',
   );
+  static const optionalSupplierReference = TranslatableString(
+    en: 'Supplier delivery reference (optional)',
+    ar: 'مرجع تسليم المورد (اختياري)',
+    ur: 'سپلائر ڈیلیوری حوالہ (اختیاری)',
+    hi: 'आपूर्तिकर्ता डिलीवरी संदर्भ (वैकल्पिक)',
+  );
   static const deliveryReferenceRequired = TranslatableString(
     en: 'Enter the Delivery Note / Dispatch Reference before dispatching.',
     ar: 'أدخل مرجع إذن التسليم / الإرسال قبل الإرسال.',
@@ -803,6 +809,24 @@ abstract final class YorksV1LogisticsStrings {
     ar: 'مرجع أمر التسليم',
     ur: 'ڈیلیوری آرڈر حوالہ',
     hi: 'डिलीवरी ऑर्डर संदर्भ',
+  );
+  static const automaticDeliveryNumber = TranslatableString(
+    en: 'Delivery number assigned automatically',
+    ar: 'يتم تعيين رقم التسليم تلقائيًا',
+    ur: 'ڈیلیوری نمبر خود بخود دیا جائے گا',
+    hi: 'डिलीवरी नंबर अपने आप दिया जाएगा',
+  );
+  static const automaticDeliveryNumberHelp = TranslatableString(
+    en: 'Generate once. The same number is used for every print, download and revision.',
+    ar: 'أنشئه مرة واحدة. يُستخدم الرقم نفسه لكل طباعة وتنزيل ومراجعة.',
+    ur: 'ایک بار بنائیں۔ ہر پرنٹ، ڈاؤن لوڈ اور نظرثانی میں یہی نمبر استعمال ہوگا۔',
+    hi: 'एक बार बनाएं। हर प्रिंट, डाउनलोड और संशोधन में वही नंबर उपयोग होगा।',
+  );
+  static const reusedDeliveryNumberHelp = TranslatableString(
+    en: 'This delivery number is kept for every print, download and revision.',
+    ar: 'يُحفظ رقم التسليم هذا لكل طباعة وتنزيل ومراجعة.',
+    ur: 'یہ ڈیلیوری نمبر ہر پرنٹ، ڈاؤن لوڈ اور نظرثانی میں برقرار رہتا ہے۔',
+    hi: 'यह डिलीवरी नंबर हर प्रिंट, डाउनलोड और संशोधन में बना रहता है।',
   );
   static const deliveryOrderReferenceRequired = TranslatableString(
     en: 'Enter the official Delivery Order reference.',

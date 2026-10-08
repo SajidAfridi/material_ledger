@@ -734,7 +734,6 @@ class _DispatchEditorState extends ConsumerState<_DispatchEditor> {
       widget.enabled && !_saving && (_progress?.state.canEdit ?? false);
 
   Map<String, YorksV1DispatchQuantityIssue> _quantityErrors = {};
-  bool _referenceError = false;
   String t(TranslatableString text) => text.active(ref.read(languageProvider));
 
   @override
@@ -835,7 +834,6 @@ class _DispatchEditorState extends ConsumerState<_DispatchEditor> {
     _progress?.update(_snapshot());
     setState(() {
       _quantityErrors = {};
-      _referenceError = false;
     });
   }
 
@@ -962,7 +960,7 @@ class _DispatchEditorState extends ConsumerState<_DispatchEditor> {
       requestId: payload['request_id'] as String,
       expectedRequestVersion: payload['expected_version'] as int,
       dispatchDate: DateTime.parse(payload['dispatch_date'] as String),
-      deliveryReference: payload['delivery_reference'] as String,
+      deliveryReference: payload['delivery_reference'] as String? ?? '',
       driverName: payload['driver_name'] as String?,
       vehicleReference: payload['vehicle_reference'] as String?,
       lines: [
@@ -1022,7 +1020,6 @@ class _DispatchEditorState extends ConsumerState<_DispatchEditor> {
               onChanged: () => setState(() {}),
               onDispatch: _reviewDispatch,
               errors: _quantityErrors,
-              referenceError: _referenceError,
               language: ref.watch(languageProvider),
             ),
           );
@@ -1066,15 +1063,10 @@ class _DispatchEditorState extends ConsumerState<_DispatchEditor> {
                               child: _TextInput(
                                 controller: _deliveryReference,
                                 label: t(
-                                  YorksV1LogisticsStrings.deliveryReference,
+                                  YorksV1LogisticsStrings
+                                      .optionalSupplierReference,
                                 ),
                                 enabled: _editable,
-                                errorText: _referenceError
-                                    ? t(
-                                        YorksV1LogisticsStrings
-                                            .deliveryReferenceRequired,
-                                      )
-                                    : null,
                               ),
                             ),
                             SizedBox(
@@ -1185,9 +1177,8 @@ class _DispatchEditorState extends ConsumerState<_DispatchEditor> {
     );
     setState(() {
       _quantityErrors = errors;
-      _referenceError = _deliveryReference.text.trim().isEmpty;
     });
-    if (_referenceError || errors.isNotEmpty) return;
+    if (errors.isNotEmpty) return;
     final lines = _selectedLines();
     if (lines.isEmpty) {
       _showError(t(YorksV1LogisticsStrings.invalidDispatch));
@@ -1212,7 +1203,11 @@ class _DispatchEditorState extends ConsumerState<_DispatchEditor> {
                 Text(widget.workspace.scopeName),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
-                  '${_deliveryReference.text.trim()} · ${_dateLabel(_dispatchDate)}',
+                  [
+                    if (_deliveryReference.text.trim().isNotEmpty)
+                      _deliveryReference.text.trim(),
+                    _dateLabel(_dispatchDate),
+                  ].join(' · '),
                 ),
                 if (_driver.text.trim().isNotEmpty ||
                     _vehicle.text.trim().isNotEmpty)
@@ -1317,10 +1312,9 @@ class _DispatchEditorState extends ConsumerState<_DispatchEditor> {
       widget.workspace.dispatchCandidates,
       {for (final entry in _quantities.entries) entry.key: entry.value.text},
     );
-    if (errors.isNotEmpty || _deliveryReference.text.trim().isEmpty) {
+    if (errors.isNotEmpty) {
       setState(() {
         _quantityErrors = errors;
-        _referenceError = _deliveryReference.text.trim().isEmpty;
       });
       return;
     }
@@ -1445,7 +1439,6 @@ class _MobileDispatchEditor extends StatelessWidget {
     required this.onChanged,
     required this.onDispatch,
     required this.errors,
-    required this.referenceError,
     required this.progressPanel,
     required this.onSaveProgress,
     required this.canSaveProgress,
@@ -1464,7 +1457,6 @@ class _MobileDispatchEditor extends StatelessWidget {
   final VoidCallback onChanged;
   final VoidCallback onDispatch;
   final Map<String, YorksV1DispatchQuantityIssue> errors;
-  final bool referenceError;
   final Widget progressPanel;
   final VoidCallback onSaveProgress;
   final bool canSaveProgress;
@@ -1505,13 +1497,8 @@ class _MobileDispatchEditor extends StatelessWidget {
                   children: [
                     _TextInput(
                       controller: deliveryReference,
-                      errorText: referenceError
-                          ? YorksV1LogisticsStrings.deliveryReferenceRequired
-                                .active(language)
-                          : null,
-                      label: YorksV1LogisticsStrings.deliveryReference.active(
-                        language,
-                      ),
+                      label: YorksV1LogisticsStrings.optionalSupplierReference
+                          .active(language),
                       enabled: enabled && !saving,
                       onChanged: (_) => onChanged(),
                     ),
@@ -3856,13 +3843,11 @@ class _TextInput extends StatelessWidget {
     required this.label,
     this.enabled = true,
     this.onChanged,
-    this.errorText,
   });
   final TextEditingController controller;
   final String label;
   final bool enabled;
   final ValueChanged<String>? onChanged;
-  final String? errorText;
 
   @override
   Widget build(BuildContext context) => TextField(
@@ -3871,8 +3856,6 @@ class _TextInput extends StatelessWidget {
     onChanged: onChanged,
     decoration: InputDecoration(
       labelText: label,
-      errorText: errorText,
-      errorMaxLines: 3,
       border: const OutlineInputBorder(),
     ),
   );

@@ -3,6 +3,18 @@ import 'yorks_v1_arrangement.dart';
 
 /// Centralized user-facing copy for the Batch 6 arrangement workflow.
 abstract final class YorksV1ArrangementStrings {
+  static const quantityNeeded = TranslatableString(
+    en: 'Enter quantity',
+    ar: 'أدخل الكمية',
+    ur: 'مقدار درج کریں',
+    hi: 'मात्रा दर्ज करें',
+  );
+  static const shelfLocation = TranslatableString(
+    en: 'Shelf / bin',
+    ar: 'الرف / الموقع',
+    ur: 'شیلف / خانہ',
+    hi: 'शेल्फ / बिन',
+  );
   static const searchItems = TranslatableString(
     en: 'Search items',
     ar: 'بحث عن المواد',
@@ -59,10 +71,10 @@ abstract final class YorksV1ArrangementStrings {
     hi: 'अनुरोधित सामग्री व्यवस्थित करें',
   );
   static const decideEveryLine = TranslatableString(
-    en: 'Decide each line before saving the arrangement.',
-    ar: 'حدّد قرار كل بند قبل حفظ الترتيب.',
-    ur: 'انتظام محفوظ کرنے سے پہلے ہر لائن کا فیصلہ کریں۔',
-    hi: 'व्यवस्था सहेजने से पहले प्रत्येक पंक्ति तय करें।',
+    en: 'Enter the quantity you can provide for each item.',
+    ar: 'أدخل الكمية التي يمكنك توفيرها لكل صنف.',
+    ur: 'ہر آئٹم کی دستیاب مقدار درج کریں۔',
+    hi: 'हर वस्तु की उपलब्ध मात्रा दर्ज करें।',
   );
   static const arrangeItem = TranslatableString(
     en: 'Arrange Item',
@@ -83,10 +95,10 @@ abstract final class YorksV1ArrangementStrings {
     hi: 'पिछला',
   );
   static const saveAndNext = TranslatableString(
-    en: 'Save & Next',
-    ar: 'حفظ والتالي',
-    ur: 'محفوظ کریں اور اگلا',
-    hi: 'सहेजें और अगला',
+    en: 'Next item',
+    ar: 'البند التالي',
+    ur: 'اگلی شے',
+    hi: 'अगला आइटम',
   );
   static const arrangementReview = TranslatableString(
     en: 'Arrangement Summary',
@@ -663,10 +675,10 @@ abstract final class YorksV1ArrangementStrings {
 
   static TranslatableString linesDecided(int decided, int total) =>
       TranslatableString(
-        en: '$decided / $total lines decided',
-        ar: 'تم تحديد $decided من $total بنداً',
-        ur: '$decided / $total لائنز کا فیصلہ',
-        hi: '$decided / $total पंक्तियाँ तय',
+        en: '$decided / $total quantities entered',
+        ar: 'تم إدخال $decided من $total كمية',
+        ur: '$decided / $total مقدار درج',
+        hi: '$decided / $total मात्राएँ दर्ज',
       );
 
   static TranslatableString exceptionsRequireAttention(int count) =>
