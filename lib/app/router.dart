@@ -54,7 +54,8 @@ import '../features/inventory/presentation/screens/inventory_screen.dart';
 import '../features/inventory/presentation/screens/stock_history_screen.dart';
 import '../features/materials/presentation/screens/materials_hub_screen.dart';
 import '../features/materials/presentation/screens/material_line_grid_demo_screen.dart';
-import '../features/materials/presentation/screens/yorks_v1_arrangement_screen.dart';
+import '../features/materials/presentation/screens/yorks_v1_arrangement_screen.dart'
+    deferred as procurement_arrangement;
 import '../features/materials/presentation/screens/yorks_v1_inventory_import_screen.dart';
 import '../features/materials/presentation/screens/yorks_v1_inventory_screen.dart';
 import '../features/materials/presentation/screens/yorks_v1_inventory_supplier_screens.dart';
@@ -2005,7 +2006,7 @@ GoRouter createAppRouter({
             true,
         pageBuilder: (context, state) => _yorksV1Slide(
           state.pageKey,
-          YorksV1ArrangementScreen(
+          _DeferredProcurementArrangementScreen(
             requestId: state.pathParameters['requestId'] ?? '',
             onCompleted: () {
               if (context.canPop()) {
@@ -2730,4 +2731,60 @@ bool _isLegacyProjectOrRequestRoute(String path) {
       path.startsWith('/request/') ||
       path.startsWith('/receipt/') ||
       path.startsWith('/admin/dispatch/');
+}
+
+/// Loads the Procurement editor only after its guarded route opens. Shared
+/// navigation and domain providers remain available during the download.
+class _DeferredProcurementArrangementScreen extends StatefulWidget {
+  const _DeferredProcurementArrangementScreen({
+    required this.requestId,
+    required this.onCompleted,
+  });
+
+  final String requestId;
+  final VoidCallback onCompleted;
+
+  @override
+  State<_DeferredProcurementArrangementScreen> createState() =>
+      _DeferredProcurementArrangementScreenState();
+}
+
+class _DeferredProcurementArrangementScreenState
+    extends State<_DeferredProcurementArrangementScreen> {
+  static Future<void>? _sharedLoad;
+  late Future<void> _load;
+
+  @override
+  void initState() {
+    super.initState();
+    _load = _sharedLoad ??= procurement_arrangement.loadLibrary();
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<void>(
+    future: _load,
+    builder: (context, snapshot) {
+      if (snapshot.connectionState == ConnectionState.done &&
+          !snapshot.hasError) {
+        return procurement_arrangement.YorksV1ArrangementScreen(
+          requestId: widget.requestId,
+          onCompleted: widget.onCompleted,
+        );
+      }
+      if (snapshot.hasError) {
+        return Center(
+          child: IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            tooltip: MaterialLocalizations.of(
+              context,
+            ).refreshIndicatorSemanticLabel,
+            onPressed: () => setState(() {
+              _load = _sharedLoad = procurement_arrangement.loadLibrary();
+            }),
+          ),
+        );
+      }
+      return const Center(child: CircularProgressIndicator());
+    },
+  );
 }

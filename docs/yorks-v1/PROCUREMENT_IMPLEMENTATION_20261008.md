@@ -55,3 +55,7 @@ Post-migration checks confirm RLS and denied direct table reads for all three ne
 This implements the core stock, recovery, editing and document changes from the [approved review](PROCUREMENT_WORKSPACE_REVIEW_20261008.md). The larger proposal also described future catalogue/server pagination, richer row details and staff timing studies. Those are not claimed as completed or measured here. Project and Company backend stock protection is tested; Company Use retains its separate editor and does not acquire this Project MR progress UI.
 
 Named Procurement-persona acceptance, physical-device/network-loss exercises, large-catalogue runtime profiling and long-running monitoring remain review activities. Automated tests are not a claim that every real user scenario has been exercised. Staging browser and deployment evidence follows below once verified.
+
+### Startup performance correction
+
+The first staging-configured build exceeded the unchanged 2,900,000-byte gzip startup budget by 1,692 bytes. Arrangement now loads through the existing deferred-route pattern with a retry action if its library cannot download. This avoids downloading the editor at application startup. The guarded route and domain providers are retained. The 39 routing and arrangement tests passed after this change; final staging build measurement is recorded with deployment evidence.
