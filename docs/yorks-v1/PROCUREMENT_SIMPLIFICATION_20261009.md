@@ -3,7 +3,9 @@
 Owner direction: quantity-led arrangement, shelf locations, sensible sourcing,
 automatic Delivery Order numbering and gradual preparation of Scheduled work.
 Scope: Project Material Requests; Engineer request/approval/receipt flows and
-Company Use remain intact. Production deployment is not authorized for this slice.
+Company Use remain intact. This was initially staging-only; the owner's later
+production authorization and release are recorded in
+[production release evidence](PROCUREMENT_PRODUCTION_RELEASE_20261009.md).
 
 ## Usability decisions
 

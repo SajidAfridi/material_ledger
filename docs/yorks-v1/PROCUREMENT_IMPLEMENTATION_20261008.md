@@ -1,7 +1,9 @@
 # Procurement workspace implementation and staging release
 
 Date: 8 October 2026
-Scope: owner-authorized implementation and staging review. Production is excluded.
+Scope: initially owner-authorized implementation and staging review. The later
+owner-authorized production release is recorded in
+[release evidence](PROCUREMENT_PRODUCTION_RELEASE_20261009.md).
 Source branch: `codex/procurement-workspace-staging`.
 
 ## Implemented
