@@ -97,3 +97,23 @@ existing behavior. Values are retained in the open editor, not as durable drafts
 across explicit dismissal or browser closure. Full inherited-copy localization,
 physical-device and real-user acceptance are not claimed. No migrations or
 hosted business-data mutations are part of this slice.
+
+### Second-slice verification and staging
+
+- Source: `39478ff` (save recovery: `0373eef`).
+- Full Flutter gate: 2,565 passed, four retained skips. Local database reset and
+  pgTAP: 125 files, 3,661 tests passed. Analyzer, format and diff checks passed.
+- CI web and ephemeral-signed APK builds passed before the final mobile field
+  minimum-height adjustment. After that small visual change, the 17-test rental
+  suite, analyzer and staging web build were rerun and passed.
+- Mobile text and dropdown fields have a minimum 48px interaction height.
+- Final staging deployment: `dpl_6yuZXKMrqpnbSgRd3HWnexymCrMH`, immutable URL
+  `https://yorks-r35-7ka2qjrcm-sajid-alis-projects-0ec775a2.vercel.app`.
+- Production is unchanged; this record does not authorize production promotion.
+- Candidate and staging alias each passed all 27 route/asset hash checks.
+- Authenticated staging browser checks covered the empty portfolio and property
+  editor at desktop and 360px. Screenshot evidence is in
+  `/private/tmp/yorks-rentals-evidence-20261008/final-editor-desktop.jpg` and
+  `/private/tmp/yorks-rentals-evidence-20261008/final-editor-mobile.jpg`.
+  Populated property details and save-failure paths were fixture-tested locally;
+  no live property, lease, cheque or payment was created during verification.
