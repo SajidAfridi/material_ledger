@@ -13,7 +13,7 @@ abstract interface class YorksV1RentalRepository {
 
   Future<YorksV1RentalPropertyDetail> getProperty(String propertyId);
 
-  Future<YorksV1RentalPropertyDetail> saveProperty(
+  Future<String> saveProperty(
     YorksV1RentalPropertyInput input, {
     required int? expectedVersion,
     required String idempotencyKey,
@@ -93,7 +93,7 @@ class YorksV1SupabaseRentalRepository implements YorksV1RentalRepository {
   }
 
   @override
-  Future<YorksV1RentalPropertyDetail> saveProperty(
+  Future<String> saveProperty(
     YorksV1RentalPropertyInput input, {
     required int? expectedVersion,
     required String idempotencyKey,
@@ -114,7 +114,9 @@ class YorksV1SupabaseRentalRepository implements YorksV1RentalRepository {
         YorksV1DomainErrorCode.unexpectedResponse,
       );
     }
-    return getProperty(propertyId);
+    // The command response confirms the write. Detail loading has its own
+    // error/retry state and must never turn a committed save into a failure.
+    return propertyId;
   }
 
   @override

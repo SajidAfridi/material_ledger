@@ -73,3 +73,27 @@ remain separate from browser and automated evidence.
 - Production remains unchanged. This is the first UI refinement, not completion
   of the wider save-recovery, detail-form and full localization work identified
   above.
+
+## Second slice: property forms and save recovery
+
+- Property detail now uses the universal navigation instead of a duplicate back
+  control. Every detail section is available in the mobile dropdown.
+- Vacant-property creation starts with property facts. Tenant, contract and rent
+  sections expand on demand; occupied properties and existing leases expose them.
+- Save keeps the editor open with its values until the command is confirmed.
+  Submission disables duplicate clicks and dismissal while in flight.
+- The repository returns the confirmed property ID directly; a subsequent detail
+  read failure cannot masquerade as a failed write.
+- An uncertain result locks the submitted values and offers Confirm save using
+  the same payload and idempotency key. A corrected rejected payload gets a new
+  key. Conflicts retain the values and instruct the user to reload current data.
+- New command messages and detail navigation labels use EN/AR/UR/HI resources.
+- Regression tests cover rejected saves, corrected retries, uncertain outcomes,
+  duplicate clicks, confirmed writes without detail reads, and editor goldens at
+  1200px and 360px. The focused suite now has 17 tests.
+
+This recovery is scoped to property saves. Payment and cheque dialogs retain
+existing behavior. Values are retained in the open editor, not as durable drafts
+across explicit dismissal or browser closure. Full inherited-copy localization,
+physical-device and real-user acceptance are not claimed. No migrations or
+hosted business-data mutations are part of this slice.

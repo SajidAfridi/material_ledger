@@ -60,22 +60,24 @@ class YorksV1RentalCommandController extends StateNotifier<AsyncValue<void>> {
   final Ref _ref;
   static const _uuid = Uuid();
 
-  Future<YorksV1RentalPropertyDetail?> saveProperty(
+  Future<String?> saveProperty(
     YorksV1RentalPropertyInput input, {
     required int? expectedVersion,
+    required String idempotencyKey,
   }) async {
+    if (state.isLoading) return null;
     state = const AsyncValue.loading();
     try {
-      final detail = await _ref
+      final propertyId = await _ref
           .read(yorksV1RentalRepositoryProvider)
           .saveProperty(
             input,
             expectedVersion: expectedVersion,
-            idempotencyKey: _uuid.v4(),
+            idempotencyKey: idempotencyKey,
           );
-      _invalidate(detail.property.id);
+      _invalidate(propertyId);
       state = const AsyncValue.data(null);
-      return detail;
+      return propertyId;
     } catch (error, stack) {
       state = AsyncValue.error(error, stack);
       return null;

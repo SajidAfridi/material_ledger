@@ -1,4 +1,10 @@
 import 'dart:io';
+import 'dart:async';
+import 'package:go_router/go_router.dart';
+import 'package:material_ledger/shared/models/yorks_v1_domain_error.dart';
+import 'package:material_ledger/shared/models/yorks_v1_feature_flags.dart';
+import 'package:material_ledger/shared/repositories/yorks_v1_material_request_repository.dart';
+import 'package:material_ledger/shared/sync/connectivity_service.dart';
 
 import 'package:archive/archive.dart';
 import 'package:flutter/material.dart';
@@ -326,6 +332,107 @@ void main() {
     },
   );
 
+  for (final size in [const Size(1200, 900), const Size(360, 800)]) {
+    testWidgets('property editor fits $size with optional sections', (
+      tester,
+    ) async {
+      await _openRentalEditor(tester, _RentalFixtureRepository(), size: size);
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+      expect(find.text('Create property').hitTestable(), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile(
+          'goldens/r38_4/rental_editor_${size.width.toInt()}.png',
+        ),
+      );
+    });
+  }
+
+  testWidgets(
+    'failed property save keeps values and corrected payload gets a new key',
+    (tester) async {
+      final repo = _RentalFixtureRepository()
+        ..saveFailure = const YorksV1DomainException(
+          YorksV1DomainErrorCode.invalidInput,
+        );
+      await _openRentalEditor(tester, repo);
+      await tester.tap(find.text('Create property'));
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('The property was not saved.'),
+        findsOneWidget,
+      );
+      expect(find.text('Shop trial'), findsOneWidget);
+      expect(find.byType(Dialog), findsOneWidget);
+      final firstKey = repo.saveKeys.single;
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Property Name'),
+        'Shop corrected',
+      );
+      repo.saveFailure = null;
+      await tester.tap(find.text('Create property'));
+      await tester.pumpAndSettle();
+      expect(repo.saveKeys, hasLength(2));
+      expect(repo.saveKeys.last, isNot(firstKey));
+      expect(repo.saveInputs.last.propertyName, 'Shop corrected');
+      expect(find.text('Confirmed property'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'uncertain property save retries the exact command and blocks double submission',
+    (tester) async {
+      final repo = _RentalFixtureRepository()
+        ..pendingSave = Completer<String>();
+      await _openRentalEditor(tester, repo);
+      await tester.tap(find.text('Create property'));
+      await tester.pump();
+      expect(find.text('Saving…'), findsOneWidget);
+      await tester.tap(find.text('Saving…'));
+      await tester.pump();
+      expect(repo.saveKeys, hasLength(1));
+      repo.pendingSave!.completeError(
+        const YorksV1DomainException(YorksV1DomainErrorCode.backendUnavailable),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Shop trial'), findsOneWidget);
+      expect(find.text('Confirm save'), findsOneWidget);
+      repo.pendingSave = null;
+      await tester.tap(find.text('Confirm save'));
+      await tester.pumpAndSettle();
+      expect(repo.saveKeys, hasLength(2));
+      expect(repo.saveKeys.first, repo.saveKeys.last);
+      expect(
+        repo.saveInputs.first.toRpcPayload(),
+        repo.saveInputs.last.toRpcPayload(),
+      );
+      expect(find.text('Confirmed property'), findsOneWidget);
+    },
+  );
+
+  test(
+    'confirmed property command does not depend on a follow-up read',
+    () async {
+      final rpc = _RentalSaveRpc();
+      final connectivity = DefaultConnectivity();
+      addTearDown(connectivity.dispose);
+      final repo = YorksV1SupabaseRentalRepository(
+        featureFlags: const YorksV1FeatureFlags(foundation: true),
+        connectivity: connectivity,
+        rpcClient: rpc,
+      );
+      final id = await repo.saveProperty(
+        _rentalSaveInput,
+        expectedVersion: null,
+        idempotencyKey: 'same-command',
+      );
+      expect(id, 'confirmed-property');
+      expect(rpc.calls, ['v1_save_rental_property']);
+    },
+  );
+
   testWidgets('lease documents use the controlled Yorks document workspace', (
     tester,
   ) async {
@@ -644,6 +751,10 @@ final rentalPropertyDetailFixture = YorksV1RentalPropertyDetail.fromJson({
 
 class _RentalFixtureRepository implements YorksV1RentalRepository {
   final importCalls = <Map<String, Object?>>[];
+  final saveKeys = <String>[];
+  final saveInputs = <YorksV1RentalPropertyInput>[];
+  Object? saveFailure;
+  Completer<String>? pendingSave;
 
   @override
   Future<YorksV1RentalPortfolio> getPortfolio() async => rentalPortfolioFixture;
@@ -653,11 +764,17 @@ class _RentalFixtureRepository implements YorksV1RentalRepository {
       rentalPropertyDetailFixture;
 
   @override
-  Future<YorksV1RentalPropertyDetail> saveProperty(
+  Future<String> saveProperty(
     YorksV1RentalPropertyInput input, {
     required int? expectedVersion,
     required String idempotencyKey,
-  }) async => rentalPropertyDetailFixture;
+  }) async {
+    saveKeys.add(idempotencyKey);
+    saveInputs.add(input);
+    if (saveFailure != null) throw saveFailure!;
+    if (pendingSave != null) return pendingSave!.future;
+    return rentalPropertyDetailFixture.property.id;
+  }
 
   @override
   Future<void> recordPayment({
@@ -729,4 +846,84 @@ class _RentalFixtureDocumentsRepository
     required String bucketId,
     required String objectPath,
   }) async => Uint8List(0);
+}
+
+Future<void> _openRentalEditor(
+  WidgetTester tester,
+  _RentalFixtureRepository repository, {
+  Size size = const Size(1200, 900),
+}) async {
+  await _setViewport(tester, size);
+  final router = GoRouter(
+    initialLocation: '/rentals',
+    routes: [
+      GoRoute(
+        path: '/rentals',
+        builder: (_, _) => const YorksV1RentalDashboardScreen(),
+      ),
+      GoRoute(
+        path: '/rentals/:id',
+        builder: (_, _) => const Scaffold(body: Text('Confirmed property')),
+      ),
+    ],
+  );
+  addTearDown(router.dispose);
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        yorksV1RentalRepositoryProvider.overrideWithValue(repository),
+      ],
+      child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
+    ),
+  );
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Add property'));
+  await tester.pumpAndSettle();
+  await tester.enterText(
+    find.widgetWithText(TextFormField, 'Unit Code'),
+    'TRIAL-1',
+  );
+  await tester.enterText(
+    find.widgetWithText(TextFormField, 'Property Name'),
+    'Shop trial',
+  );
+  await tester.enterText(
+    find.widgetWithText(TextFormField, 'Location'),
+    'Abu Dhabi',
+  );
+}
+
+const _rentalSaveInput = YorksV1RentalPropertyInput(
+  unitCode: 'TRIAL-1',
+  propertyName: 'Shop trial',
+  propertyType: 'Shop',
+  location: 'Abu Dhabi',
+  occupancy: YorksV1RentalOccupancy.vacant,
+  contractNumber: '',
+  contractType: 'Tenancy Contract',
+  contractStatus: 'Draft',
+  monthlyRent: 0,
+  securityDeposit: 0,
+  monthlyDueDay: 1,
+  gracePeriodDays: 0,
+  defaultPaymentMethod: 'PDC',
+  paymentFrequency: 'Monthly',
+  contractCheques: 0,
+  annualEscalationPercent: 0,
+  renewalNoticeDays: 90,
+);
+
+class _RentalSaveRpc implements YorksV1MaterialRequestRpcClient {
+  final calls = <String>[];
+  @override
+  Future<Object?> invoke({
+    required String functionName,
+    required Map<String, Object?> parameters,
+  }) async {
+    calls.add(functionName);
+    if (functionName != 'v1_save_rental_property') {
+      throw StateError('Detail read unavailable');
+    }
+    return {'property_id': 'confirmed-property'};
+  }
 }

@@ -10,6 +10,98 @@ abstract final class RentalWorkspaceStrings {
   }
 
   static const _copy = {
+    'schedule': {
+      'en': 'Rent Schedule',
+      'ar': 'جدول الإيجار',
+      'ur': 'کرایہ شیڈول',
+      'hi': 'किराया अनुसूची',
+    },
+    'documents': {
+      'en': 'Documents',
+      'ar': 'المستندات',
+      'ur': 'دستاویزات',
+      'hi': 'दस्तावेज़',
+    },
+    'activity': {
+      'en': 'Activity',
+      'ar': 'النشاط',
+      'ur': 'سرگرمی',
+      'hi': 'गतिविधि',
+    },
+    'edit': {
+      'en': 'Edit property',
+      'ar': 'تعديل العقار',
+      'ur': 'جائیداد میں ترمیم',
+      'hi': 'संपत्ति संपादित करें',
+    },
+    'archive': {
+      'en': 'Archive',
+      'ar': 'أرشفة',
+      'ur': 'محفوظات',
+      'hi': 'संग्रह करें',
+    },
+
+    'saved': {
+      'en': 'Rental property saved.',
+      'ar': 'تم حفظ العقار.',
+      'ur': 'جائیداد محفوظ ہو گئی۔',
+      'hi': 'संपत्ति सहेज दी गई।',
+    },
+    'saving': {
+      'en': 'Saving…',
+      'ar': 'جارٍ الحفظ…',
+      'ur': 'محفوظ ہو رہا ہے…',
+      'hi': 'सहेजा जा रहा है…',
+    },
+    'retrySave': {
+      'en': 'Confirm save',
+      'ar': 'تأكيد الحفظ',
+      'ur': 'محفوظ کرنے کی تصدیق',
+      'hi': 'सहेजने की पुष्टि करें',
+    },
+    'create': {
+      'en': 'Create property',
+      'ar': 'إنشاء عقار',
+      'ur': 'جائیداد بنائیں',
+      'hi': 'संपत्ति बनाएँ',
+    },
+    'save': {
+      'en': 'Save property',
+      'ar': 'حفظ العقار',
+      'ur': 'جائیداد محفوظ کریں',
+      'hi': 'संपत्ति सहेजें',
+    },
+    'unconfirmed': {
+      'en':
+          'The save could not be confirmed. Your entries are kept here. Confirm save retries the same request safely before further changes.',
+      'ar':
+          'تعذر تأكيد الحفظ. بياناتك محفوظة هنا. أعد تأكيد الطلب نفسه بأمان قبل إجراء تغييرات أخرى.',
+      'ur':
+          'محفوظ ہونے کی تصدیق نہیں ہوئی۔ آپ کی معلومات یہاں موجود ہیں۔ مزید تبدیلی سے پہلے اسی درخواست کی دوبارہ تصدیق کریں۔',
+      'hi':
+          'सहेजने की पुष्टि नहीं हो सकी। आपकी जानकारी यहाँ रखी गई है। बदलाव से पहले उसी अनुरोध की सुरक्षित पुष्टि करें।',
+    },
+    'conflict': {
+      'en':
+          'This property changed since you opened it. Your entries are kept here. Close and reload the property before applying changes.',
+      'ar':
+          'تغير العقار منذ فتحه. بياناتك موجودة هنا. أغلق وأعد تحميل العقار قبل تطبيق التغييرات.',
+      'ur':
+          'کھولنے کے بعد جائیداد تبدیل ہوئی ہے۔ معلومات یہاں موجود ہیں۔ تبدیلی سے پہلے بند کر کے دوبارہ کھولیں۔',
+      'hi':
+          'खोलने के बाद संपत्ति बदल गई है। आपकी जानकारी यहाँ है। बदलाव से पहले बंद करके फिर लोड करें।',
+    },
+    'saveFailed': {
+      'en':
+          'The property was not saved. Your entries are kept here. Check the details and your connection, then try again.',
+      'ar':
+          'لم يتم حفظ العقار. بياناتك موجودة هنا. تحقق من التفاصيل والاتصال ثم حاول مجدداً.',
+      'ur':
+          'جائیداد محفوظ نہیں ہوئی۔ معلومات یہاں موجود ہیں۔ تفصیلات اور رابطہ دیکھ کر دوبارہ کوشش کریں۔',
+      'hi':
+          'संपत्ति सहेजी नहीं गई। जानकारी यहाँ है। विवरण और कनेक्शन जाँचकर फिर कोशिश करें।',
+    },
+
     'title': {
       'en': 'Rental Properties',
       'ar': 'العقارات المؤجرة',
