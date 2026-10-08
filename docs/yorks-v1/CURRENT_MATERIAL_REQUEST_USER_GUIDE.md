@@ -26,8 +26,10 @@ evidence of their original releases, not current workflow authority.
    approval. An arrangement editor who already has the page open must refresh
    before saving the changed lines. The
    original decision and every edit remain visible in Request History.
-3. **Procurement arranges every line.** Enter the quantity being provided; Full,
-   Partial or Cannot Provide Now follows automatically. Choose Warehouse or
+3. **Procurement arranges every line.** New rows start with the requested
+   quantity; reduce it when supplying less, or enter zero when unavailable.
+   Full, Partial or Cannot Provide Now follows automatically. Existing saved
+   progress is preserved. Choose Warehouse or
    External Supplier; a safe catalogue match selects Warehouse and unmatched
    custom items start with External Supplier. Saving a
    complete arrangement makes its positive quantities ready for controlled
@@ -184,7 +186,8 @@ Implementation definitions and security boundaries are recorded in
 ## Preparing scheduled work
 
 The arrangement workspace displays Normal, Urgent or Scheduled and the scheduled
-date. Warehouse selection shows shelf/bin alongside availability when recorded.
+date. Warehouse selection clearly shows shelf/bin alongside availability, or
+“Shelf / bin not set” when that Inventory record has no location.
 
 - **Save progress** keeps incomplete work privately, including unfinished fields.
 - **Update team** previews ready quantities and expected dates, then publishes

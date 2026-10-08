@@ -172,3 +172,44 @@ not durable hosted artifacts.
 - CI web startup budget and ephemeral-signed APK compilation passed. The native
   artifact is CI build evidence, not a production-signed release.
 - No remote database or function change is part of this follow-up.
+
+### Follow-up staging release
+
+- Deployed source: `babb259` (9 October 2026).
+- Review alias: <https://yorks-r35-staging.vercel.app>.
+- Immutable preview: <https://yorks-r35-p4h1kldlh-sajid-alis-projects-0ec775a2.vercel.app>.
+- Deployment ID: `dpl_EsJV27AEj7MzaE6eXJjcRK1sftFR`.
+- Isolated artifact: `/tmp/yorks-arrangement-presentation-staging-20261009`.
+  Main JavaScript is 9,949,845 bytes; startup-budget gzip is 2,864,653 bytes,
+  within the unchanged 2,900,000-byte budget. SHA-256:
+  `ca0eb5d22ac2ee4de1336348256d793841aa2589d5ea2bd9e1da60d41cf555b1`.
+- All 28 route/asset checks matched the artifact on both preview and staging
+  alias. The compiled client references the staging backend and contains neither
+  the production backend nor the CI placeholder.
+- Live browser verification in a separate tab using the existing Local Admin
+  session opened MR005: the first requested quantities, 87 and 117 Meter, were
+  prefilled, with derived Full states and External Supplier for unmatched items.
+  Desktop showed the consolidated timing/header row and aligned table. At
+  360×800, the card list and focused item editor showed 87 / 87 Meter.
+- That request already had device recovery data differing from account progress.
+  Its existing recovery choice correctly blocked editing pending a user choice.
+  Neither copy was chosen or discarded. No progress save, final arrangement,
+  stock, dispatch or document command was submitted. Editable quantity changes,
+  shelf display, missing shelves and source switching have widget/regression
+  evidence; the live request used external items, so warehouse shelf visibility
+  was verified in fixtures rather than by changing the user's draft.
+- Browser error logs were empty. The temporary viewport was reset and the
+  verification tab closed; the user's original tab was left untouched.
+- Live screenshots: `/tmp/yorks-arrangement-presentation-evidence/staging-desktop.png`,
+  `/tmp/yorks-arrangement-presentation-evidence/staging-mobile.png` and
+  `/tmp/yorks-arrangement-presentation-evidence/staging-mobile-item.png`.
+- Production remained on `dpl_BzugN8M8Wawfa2rUU2zhdWLN9EC1`, verified before and
+  after this staging release. No remote database or function was changed.
+- Staging rollback target: `dpl_8worXrmaJt66v7Y7Gy5HMbRkAvLg`,
+  <https://yorks-r35-mx1nma2f1-sajid-alis-projects-0ec775a2.vercel.app>.
+
+Release logs: `/tmp/arrangement-presentation-staging-build.log`,
+`/tmp/arrangement-presentation-deploy.log`,
+`/tmp/arrangement-presentation-preview-verify.log` and
+`/tmp/arrangement-presentation-alias-verify.log`. Logs and screenshots under
+`/tmp` are local temporary evidence, not durable hosted artifacts.
