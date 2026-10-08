@@ -56,8 +56,53 @@ Post-migration checks confirm RLS and denied direct table reads for all three ne
 
 This implements the core stock, recovery, editing and document changes from the [approved review](PROCUREMENT_WORKSPACE_REVIEW_20261008.md). The larger proposal also described future catalogue/server pagination, richer row details and staff timing studies. Those are not claimed as completed or measured here. Project and Company backend stock protection is tested; Company Use retains its separate editor and does not acquire this Project MR progress UI.
 
-Named Procurement-persona acceptance, physical-device/network-loss exercises, large-catalogue runtime profiling and long-running monitoring remain review activities. Automated tests are not a claim that every real user scenario has been exercised. Staging browser and deployment evidence follows below once verified.
+Named Procurement-persona acceptance, physical-device/network-loss exercises, large-catalogue runtime profiling and long-running monitoring remain review activities. Automated tests are not a claim that every real user scenario has been exercised. The staging browser and deployment checks below cover the named interactions only.
 
 ### Startup performance correction
 
 The first staging-configured build exceeded the unchanged 2,900,000-byte gzip startup budget by 1,692 bytes. Arrangement now loads through the existing deferred-route pattern with a retry action if its library cannot download. This avoids downloading the editor at application startup. The guarded route and domain providers are retained. The 39 routing and arrangement tests passed after this change; final staging build measurement is recorded with deployment evidence.
+
+
+## Verified staging deployment
+
+- Staging: <https://yorks-r35-staging.vercel.app>.
+- Source: `2b8520f48241c350bd298c47d45fce74543e3ac8` (clean before artifact build).
+- Deployment: `dpl_6HpsAjCpbszRbwuVs8TMuPnW5UeS`.
+- Immutable preview: <https://yorks-r35-cb6okkxb3-sajid-alis-projects-0ec775a2.vercel.app>.
+- Isolated upload: `/tmp/yorks-procurement-staging-final-20261008`; 62 application files plus local Vercel project metadata; nine deferred JavaScript parts.
+- Startup measurement: `main.dart.js` 9,934,646 bytes; level-6 gzip 2,861,422 bytes, below the unchanged 2,900,000-byte budget.
+- Main bundle SHA-256: `c69deb87d8fc4e49f5fdf6fbbbf143e24cd1f1701e37214b3af2a8d138ed92fe`.
+- The compiled JavaScript includes the staging backend reference and excludes the production and CI backend references.
+- All **28 route/asset byte checks passed** for both the immutable preview and staging alias, including every deferred part.
+- The final mobile correction also passed the ephemeral CI APK build. It is compilation evidence, not a signed production-native release.
+- Production remains `dpl_BzugN8M8Wawfa2rUU2zhdWLN9EC1` / `yorks-r35-lcw7nigzf-sajid-alis-projects-0ec775a2.vercel.app`, matching the pre-deployment observation.
+
+### Browser evidence
+
+Checked the staging Local Admin session at 1456px desktop and 360x800 mobile:
+
+1. Arrangement opens within the existing office shell via the deferred editor.
+2. Save progress confirms an account checkpoint; shared Back/reopen and a full reload restore it.
+3. Review blocks the existing three invalid rows, including the two lines jointly requiring 32 against 27 available from the same inventory item.
+4. Mobile list and line editor expose Save progress. The real line-editor save transitions from Saving progress to Progress saved to your account.
+5. Dispatch Centre renders its server-backed queue and opens an existing delivery's dispatch/receipt history.
+6. No browser console errors were captured in these checks. The temporary viewport override was reset.
+
+Only the existing demo arrangement's private checkpoint was saved; no final arrangement, dispatch, stock movement or delivery snapshot was committed during browser verification. Delivery revision selection/output is covered by widget and document tests; physical printing and a new end-to-end delivery were not exercised in this browser session.
+
+Local screenshots:
+
+- `/tmp/yorks-procurement-evidence-20261008/staging-arrangement-desktop.png`
+- `/tmp/yorks-procurement-evidence-20261008/staging-arrangement-mobile.png`
+
+Local build/release logs:
+
+- `/tmp/procurement-staging-final-build.log`
+- `/tmp/procurement-staging-final-deploy.log`
+- `/tmp/procurement-final-candidate-verify.log`
+- `/tmp/procurement-final-alias-verify.log`
+- `/tmp/procurement-mobile-save-regression.log`
+- `/tmp/procurement-mobile-analyze.log`
+- `/tmp/procurement-mobile-final-apk.log`
+
+Frontend rollback target before this task: `dpl_6yuZXKMrqpnbSgRd3HWnexymCrMH` / `yorks-r35-7ka2qjrcm-sajid-alis-projects-0ec775a2.vercel.app`. Retain the additive database changes as described above.
