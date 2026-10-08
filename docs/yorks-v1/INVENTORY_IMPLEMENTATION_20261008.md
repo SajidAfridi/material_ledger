@@ -93,3 +93,47 @@ A rollback-only local Postgres probe inserted 2,500 items and 10,000 movements. 
 Apply all three Inventory read migrations before this client: `20261008062343_inventory_reliability.sql`, [20261008072819_inventory_history_date_range.sql](../../supabase/migrations/20261008072819_inventory_history_date_range.sql), and `20261008080029_inventory_register_pages.sql`. Existing RPCs remain compatible. Roll back the client first and retain additive read functions; do not reverse stock movements or delete historical data.
 
 Remaining validation is multi-person browser reconnect testing, constrained-device import profiling and warehouse-staff task testing. Further separation of summary computation from the full internal projection should follow measured production scale needs. No hosted migration, staging deployment, production promotion or real stock mutation was performed.
+
+## Authorized production release — 8 October 2026
+
+The owner explicitly requested “deploy to production please”. Clean source
+`baa4f118e0ae5b5b493f3a153dbd8c343522ce0b` was built with the existing production
+configuration, preserving previously enabled modules. Production backend binding,
+source stamp and absence of staging/CI placeholders were checked in the artifact.
+
+The three tracked SQL files were applied unchanged through the hosted migration
+API, first to staging and then production. Hosted ledger IDs differ from local
+filenames, as in earlier releases:
+
+| Migration | Staging ledger | Production ledger |
+| --- | --- | --- |
+| inventory_reliability | 20261008110049 | 20261008110234 |
+| inventory_history_date_range | 20261008110053 | 20261008110237 |
+| inventory_register_pages | 20261008110056 | 20261008110242 |
+
+- Read-only database smoke checks passed for stock, reservations and history.
+  Anonymous execution is denied for the new page RPCs. An initial production
+  probe using a nonexistent fixture identity was correctly denied; the read-only
+  probe then passed using an existing Admin identity without changing that user.
+- Deployment: `dpl_BzugN8M8Wawfa2rUU2zhdWLN9EC1`.
+- Immutable URL: https://yorks-r35-lcw7nigzf-sajid-alis-projects-0ec775a2.vercel.app
+- Public URL: https://yorks-r35.vercel.app
+- Candidate and public alias each passed 26 asset/route SHA-256 checks, plus
+  Inventory and Import deep-route checks. The authenticated CLI verification
+  timed out; direct public verification succeeded without changing protection.
+- Production build and startup budget passed (main JavaScript 10,000,402 bytes;
+  gzip 2,883,635 bytes). Flutter clean stalled resolving unrelated Xcode packages;
+  the generated web directory was cleared explicitly before the successful build.
+- Authenticated live browser checks confirmed stock cards with freshness status
+  on mobile and movement history with date/print/export controls on desktop.
+  The bounded browser console error check returned no errors. No real stock,
+  import, reservation or business record was written during verification.
+- Local artifact: `/tmp/yorks-inventory-production-20261008`; browser screenshots:
+  `/tmp/yorks-inventory-evidence-20261008/production-mobile.png` and
+  `/tmp/yorks-inventory-evidence-20261008/production-history-desktop.png`.
+- Rollback deployment: `dpl_ATbb2j7yzeGgc3ggwMPEhFa2woc3`, immutable URL
+  https://yorks-r35-ovnt890ju-sajid-alis-projects-0ec775a2.vercel.app.
+  Restore that client if needed and retain the backward-compatible read migrations.
+
+This supersedes the earlier undeployed status. Physical-device staff acceptance,
+real multi-user reconnect exercises and long-running monitoring remain unverified.
