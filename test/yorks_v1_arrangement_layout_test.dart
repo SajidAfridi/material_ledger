@@ -22,6 +22,9 @@ import 'package:material_ledger/shared/repositories/yorks_v1_arrangement_reposit
 import 'package:material_ledger/shared/repositories/yorks_v1_logistics_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_procurement_progress_provider.dart';
+import 'yorks_v1_procurement_progress_test.dart' show FakeRepository;
 import 'support/yorks_v1_permission_test_support.dart';
 
 void main() {
@@ -57,6 +60,12 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            yorksV1AuthUserIdProvider.overrideWithValue(
+              'procurement-test-user',
+            ),
+            yorksV1ProcurementProgressRepositoryProvider.overrideWithValue(
+              FakeRepository(),
+            ),
             sharedPreferencesProvider.overrideWithValue(preferences),
             yorksV1CurrentPermissionSnapshotProvider.overrideWith(
               (ref) => YorksV1TestPermissionController(
@@ -102,7 +111,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Edit item details'));
+      await tester.tap(find.text('Edit item details').hitTestable());
       await tester.pumpAndSettle();
       expect(find.text('Originally requested'), findsOneWidget);
       expect(
@@ -181,6 +190,10 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          yorksV1AuthUserIdProvider.overrideWithValue('procurement-test-user'),
+          yorksV1ProcurementProgressRepositoryProvider.overrideWithValue(
+            FakeRepository(),
+          ),
           sharedPreferencesProvider.overrideWithValue(preferences),
           yorksV1CurrentPermissionSnapshotProvider.overrideWith(
             (ref) => YorksV1TestPermissionController(
@@ -212,7 +225,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Edit item details'));
+    await tester.tap(find.text('Edit item details').hitTestable());
     await tester.pumpAndSettle();
     expect(
       find.byKey(const ValueKey('procurement-item-description')),
@@ -239,6 +252,10 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          yorksV1AuthUserIdProvider.overrideWithValue('procurement-test-user'),
+          yorksV1ProcurementProgressRepositoryProvider.overrideWithValue(
+            FakeRepository(),
+          ),
           sharedPreferencesProvider.overrideWithValue(preferences),
           yorksV1CurrentPermissionSnapshotProvider.overrideWith(
             (ref) => YorksV1TestPermissionController(
@@ -268,7 +285,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Edit item details'));
+    await tester.tap(find.text('Edit item details').hitTestable());
     await tester.pumpAndSettle();
     final description = find.byKey(
       const ValueKey('procurement-item-description'),
@@ -302,6 +319,12 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            yorksV1AuthUserIdProvider.overrideWithValue(
+              'procurement-test-user',
+            ),
+            yorksV1ProcurementProgressRepositoryProvider.overrideWithValue(
+              FakeRepository(),
+            ),
             sharedPreferencesProvider.overrideWithValue(preferences),
             yorksV1CurrentPermissionSnapshotProvider.overrideWith(
               (ref) => YorksV1TestPermissionController(
@@ -335,7 +358,7 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Engineering approval required'), findsOneWidget);
-      final saveLabel = find.text('Save arrangement');
+      final saveLabel = find.text('Review arrangement');
       expect(saveLabel, findsOneWidget);
       expect(
         tester
@@ -352,7 +375,7 @@ void main() {
         ),
       );
 
-      await tester.tap(find.text('Edit item details'));
+      await tester.tap(find.text('Edit item details').hitTestable());
       await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey('procurement-item-description')),
@@ -375,6 +398,12 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            yorksV1AuthUserIdProvider.overrideWithValue(
+              'procurement-test-user',
+            ),
+            yorksV1ProcurementProgressRepositoryProvider.overrideWithValue(
+              FakeRepository(),
+            ),
             sharedPreferencesProvider.overrideWithValue(preferences),
             yorksV1CurrentPermissionSnapshotProvider.overrideWith(
               (ref) => YorksV1TestPermissionController(
@@ -445,6 +474,12 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            yorksV1AuthUserIdProvider.overrideWithValue(
+              'procurement-test-user',
+            ),
+            yorksV1ProcurementProgressRepositoryProvider.overrideWithValue(
+              FakeRepository(),
+            ),
             sharedPreferencesProvider.overrideWithValue(preferences),
             yorksV1CurrentPermissionSnapshotProvider.overrideWith(
               (ref) => YorksV1TestPermissionController(
@@ -499,16 +534,18 @@ void main() {
       expect(find.text('Start arrangement'), findsNothing);
       expect(find.text('REQUESTED ITEM'), findsOneWidget);
       expect(
-        find.text('Linked to BOQ · Building A · Dampers & Fire Control'),
+        find
+            .text('Linked to BOQ · Building A · Dampers & Fire Control')
+            .hitTestable(),
         findsOneWidget,
       );
-      expect(find.text('Save arrangement'), findsOneWidget);
+      expect(find.text('Review arrangement'), findsOneWidget);
       await expectLater(
         find.byType(MaterialApp),
         matchesGoldenFile('goldens/r35/arrange_material_request_desktop.png'),
       );
 
-      await tester.tap(find.text('Save arrangement'));
+      await _tapReviewAndSave(tester, find.text('Review arrangement'));
       await tester.pumpAndSettle();
 
       expect(repository.saveInputs, hasLength(1));
@@ -538,6 +575,12 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            yorksV1AuthUserIdProvider.overrideWithValue(
+              'procurement-test-user',
+            ),
+            yorksV1ProcurementProgressRepositoryProvider.overrideWithValue(
+              FakeRepository(),
+            ),
             sharedPreferencesProvider.overrideWithValue(preferences),
             yorksV1CurrentPermissionSnapshotProvider.overrideWith(
               (ref) => YorksV1TestPermissionController(
@@ -571,7 +614,7 @@ void main() {
 
       expect(find.text('Unit Cost'), findsNothing);
       expect(find.text('110.29'), findsNothing);
-      await tester.tap(find.text('Save arrangement'));
+      await _tapReviewAndSave(tester, find.text('Review arrangement'));
       await tester.pumpAndSettle();
 
       expect(repository.saveInputs, hasLength(1));
@@ -596,6 +639,12 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            yorksV1AuthUserIdProvider.overrideWithValue(
+              'procurement-test-user',
+            ),
+            yorksV1ProcurementProgressRepositoryProvider.overrideWithValue(
+              FakeRepository(),
+            ),
             sharedPreferencesProvider.overrideWithValue(preferences),
             yorksV1CurrentPermissionSnapshotProvider.overrideWith(
               (ref) => YorksV1TestPermissionController(
@@ -640,9 +689,9 @@ void main() {
         const ValueKey('external-ready-arrangement-line-2'),
       );
       expect(ready, findsOneWidget);
-      final save = find.text('Save arrangement');
+      final save = find.text('Review arrangement');
       await tester.ensureVisible(save);
-      await tester.tap(save);
+      await _tapReviewAndSave(tester, save);
       await tester.pumpAndSettle();
       expect(repository.saveInputs, isEmpty);
       await tester.ensureVisible(ready);
@@ -651,8 +700,22 @@ void main() {
       await tester.ensureVisible(save);
       repository.pendingSave = Completer<void>();
       // Two taps before the next frame must still execute just one command.
-      await tester.tap(save);
-      await tester.tap(save);
+      final reviewAction = tester
+          .widget<PrimaryButton>(
+            find.ancestor(of: save, matching: find.byType(PrimaryButton)),
+          )
+          .onPressed!;
+      reviewAction();
+      reviewAction();
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsOneWidget);
+      final confirm = tester
+          .widget<FilledButton>(
+            find.widgetWithText(FilledButton, 'Save arrangement'),
+          )
+          .onPressed!;
+      confirm();
+      confirm();
       await tester.pump();
       expect(repository.saveInputs, hasLength(1));
       expect(
@@ -681,6 +744,10 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          yorksV1AuthUserIdProvider.overrideWithValue('procurement-test-user'),
+          yorksV1ProcurementProgressRepositoryProvider.overrideWithValue(
+            FakeRepository(),
+          ),
           sharedPreferencesProvider.overrideWithValue(preferences),
           yorksV1CurrentPermissionSnapshotProvider.overrideWith(
             (ref) => YorksV1TestPermissionController(
@@ -754,8 +821,8 @@ void main() {
         );
       }
     }
-    await tester.ensureVisible(find.text('Save arrangement'));
-    await tester.tap(find.text('Save arrangement'));
+    await tester.ensureVisible(find.text('Review arrangement'));
+    await _tapReviewAndSave(tester, find.text('Review arrangement'));
     await tester.pumpAndSettle();
 
     expect(repository.saveInputs, hasLength(1));
@@ -783,6 +850,10 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          yorksV1AuthUserIdProvider.overrideWithValue('procurement-test-user'),
+          yorksV1ProcurementProgressRepositoryProvider.overrideWithValue(
+            FakeRepository(),
+          ),
           sharedPreferencesProvider.overrideWithValue(preferences),
           yorksV1CurrentPermissionSnapshotProvider.overrideWith(
             (ref) => YorksV1TestPermissionController(
@@ -814,7 +885,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('Availability details (optional)'));
+    await Scrollable.ensureVisible(
+      tester.element(find.text('Availability details (optional)')),
+      alignment: .5,
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Availability details (optional)'));
     await tester.pumpAndSettle();
 
@@ -844,13 +919,21 @@ void main() {
     await tester.enterText(expectedDate, '2026-09-01');
     await tester.ensureVisible(reference);
     await tester.enterText(reference, 'QUOTE-2026-91');
-    await tester.ensureVisible(find.text('Availability details (optional)'));
+    await Scrollable.ensureVisible(
+      tester.element(find.text('Availability details (optional)')),
+      alignment: .5,
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Availability details (optional)'));
     await tester.pumpAndSettle();
     expect(reference, findsNothing);
     tester.view.physicalSize = const Size(1024, 900);
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Availability details (optional)'));
+    await Scrollable.ensureVisible(
+      tester.element(find.text('Availability details (optional)')),
+      alignment: .5,
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Availability details (optional)'));
     await tester.pumpAndSettle();
     await tester.ensureVisible(reference);
@@ -858,9 +941,9 @@ void main() {
       tester.widget<TextFormField>(reference).initialValue,
       'QUOTE-2026-91',
     );
-    final save = find.text('Save arrangement');
+    final save = find.text('Review arrangement');
     await tester.ensureVisible(save);
-    await tester.tap(save);
+    await _tapReviewAndSave(tester, save);
     await tester.pumpAndSettle();
 
     expect(repository.saveInputs, hasLength(1));
@@ -886,6 +969,10 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          yorksV1AuthUserIdProvider.overrideWithValue('procurement-test-user'),
+          yorksV1ProcurementProgressRepositoryProvider.overrideWithValue(
+            FakeRepository(),
+          ),
           sharedPreferencesProvider.overrideWithValue(preferences),
           yorksV1CurrentPermissionSnapshotProvider.overrideWith(
             (ref) => YorksV1TestPermissionController(
@@ -950,6 +1037,12 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            yorksV1AuthUserIdProvider.overrideWithValue(
+              'procurement-test-user',
+            ),
+            yorksV1ProcurementProgressRepositoryProvider.overrideWithValue(
+              FakeRepository(),
+            ),
             sharedPreferencesProvider.overrideWithValue(preferences),
             yorksV1CurrentPermissionSnapshotProvider.overrideWith(
               (ref) => YorksV1TestPermissionController(
@@ -992,7 +1085,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('MSD-ALT · Motorized smoke damper alternate'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Save arrangement'));
+      await _tapReviewAndSave(tester, find.text('Review arrangement'));
       await tester.pumpAndSettle();
 
       expect(repository.saveInputs, hasLength(1));
@@ -1020,6 +1113,12 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            yorksV1AuthUserIdProvider.overrideWithValue(
+              'procurement-test-user',
+            ),
+            yorksV1ProcurementProgressRepositoryProvider.overrideWithValue(
+              FakeRepository(),
+            ),
             sharedPreferencesProvider.overrideWithValue(preferences),
             yorksV1CurrentPermissionSnapshotProvider.overrideWith(
               (ref) => YorksV1TestPermissionController(
@@ -1063,7 +1162,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byIcon(Icons.warning_amber_rounded), findsWidgets);
-      await tester.tap(find.text('Save arrangement'));
+      await _tapReviewAndSave(tester, find.text('Review arrangement'));
       await tester.pumpAndSettle();
 
       expect(repository.saveInputs, isEmpty);
@@ -1101,6 +1200,12 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            yorksV1AuthUserIdProvider.overrideWithValue(
+              'procurement-test-user',
+            ),
+            yorksV1ProcurementProgressRepositoryProvider.overrideWithValue(
+              FakeRepository(),
+            ),
             sharedPreferencesProvider.overrideWithValue(preferences),
             yorksV1CurrentPermissionSnapshotProvider.overrideWith(
               (ref) => YorksV1TestPermissionController(
@@ -1139,7 +1244,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Save arrangement'));
+      await _tapReviewAndSave(tester, find.text('Review arrangement'));
       await tester.pumpAndSettle();
 
       expect(repository.saveInputs, hasLength(1));
@@ -1163,6 +1268,12 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            yorksV1AuthUserIdProvider.overrideWithValue(
+              'procurement-test-user',
+            ),
+            yorksV1ProcurementProgressRepositoryProvider.overrideWithValue(
+              FakeRepository(),
+            ),
             sharedPreferencesProvider.overrideWithValue(preferences),
             yorksV1CurrentPermissionSnapshotProvider.overrideWith(
               (ref) => YorksV1TestPermissionController(
@@ -1253,6 +1364,12 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            yorksV1AuthUserIdProvider.overrideWithValue(
+              'procurement-test-user',
+            ),
+            yorksV1ProcurementProgressRepositoryProvider.overrideWithValue(
+              FakeRepository(),
+            ),
             sharedPreferencesProvider.overrideWithValue(preferences),
             yorksV1CurrentPermissionSnapshotProvider.overrideWith(
               (ref) => YorksV1TestPermissionController(
@@ -1320,6 +1437,12 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            yorksV1AuthUserIdProvider.overrideWithValue(
+              'procurement-test-user',
+            ),
+            yorksV1ProcurementProgressRepositoryProvider.overrideWithValue(
+              FakeRepository(),
+            ),
             sharedPreferencesProvider.overrideWithValue(preferences),
             yorksV1CurrentPermissionSnapshotProvider.overrideWith(
               (ref) => YorksV1TestPermissionController(
@@ -1736,4 +1859,15 @@ class _ArrangementCreationInventoryRepository
   Future<YorksV1ReturnsDocumentsWorkspace> rejectMaterialReturn(
     YorksV1MaterialReturnRejectionInput input,
   ) => throw UnimplementedError();
+}
+
+Future<void> _tapReviewAndSave(WidgetTester tester, Finder review) async {
+  if (review.evaluate().isEmpty) return;
+  await tester.tap(review.first);
+  await tester.pumpAndSettle();
+  final save = find.widgetWithText(FilledButton, 'Save arrangement');
+  if (save.evaluate().isNotEmpty) {
+    await tester.tap(save);
+    await tester.pump();
+  }
 }

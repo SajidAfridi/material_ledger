@@ -63,7 +63,6 @@ import '../../../../shared/services/yorks_v1_logistics_document_service.dart';
 import '../../../../shared/providers/session_provider.dart';
 import '../../../../shared/repositories/yorks_v1_material_request_repository.dart';
 
-import 'yorks_v1_arrangement_screen.dart';
 import 'yorks_v1_controlled_unit_field.dart';
 import 'yorks_v1_logistics_screen.dart';
 import 'yorks_v1_material_request_centre.dart';
@@ -11763,37 +11762,8 @@ class _RequestDetailBody extends ConsumerWidget {
       }
     }
     if (!context.mounted) return;
-    if (MediaQuery.sizeOf(context).width <
-        AppSpacing.yorksV1DesktopBreakpoint) {
-      context.push(RoutePaths.yorksV1MaterialRequestArrangementPath(requestId));
-      return;
-    }
-    await showDialog<void>(
-      context: context,
-      animationStyle: AnimationStyle.noAnimation,
-      barrierColor: AppColors.scrim.withValues(alpha: .42),
-      builder: (dialogContext) {
-        final size = MediaQuery.sizeOf(dialogContext);
-        return Dialog(
-          insetPadding: const EdgeInsets.all(AppSpacing.xxxl),
-          clipBehavior: Clip.antiAlias,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
-          ),
-          child: SizedBox(
-            width: 1320,
-            height: (size.height - AppSpacing.colossal * 2)
-                .clamp(520.0, 820.0)
-                .toDouble(),
-            child: YorksV1ArrangementScreen(
-              requestId: requestId,
-              embedded: true,
-              onClose: () => Navigator.of(dialogContext).pop(),
-              onCompleted: () => Navigator.of(dialogContext).pop(),
-            ),
-          ),
-        );
-      },
+    await context.push(
+      RoutePaths.yorksV1MaterialRequestArrangementPath(requestId),
     );
   }
 

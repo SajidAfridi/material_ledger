@@ -23,6 +23,9 @@ import 'package:material_ledger/shared/repositories/yorks_v1_logistics_repositor
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/yorks_v1_permission_test_support.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_procurement_progress_provider.dart';
+import 'yorks_v1_procurement_progress_test.dart' show FakeRepository;
 
 late SharedPreferences _preferences;
 
@@ -285,11 +288,15 @@ void main() {
     final repository = _OperationsRepository()..dispatchFailures = 1;
     await _pumpLogistics(tester, requestId: 'dispatch', repository: repository);
     await tester.enterText(find.byType(TextField).first, 'DN-100');
-    await tester.tap(find.widgetWithText(FilledButton, 'Dispatch now'));
+    await tester.tap(find.text('Review dispatch'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('confirm-dispatch')));
     await tester.pumpAndSettle();
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Dispatch now'));
+    await tester.tap(find.text('Check status'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Retry saved submission'));
     await tester.pumpAndSettle();
 
     expect(repository.dispatches, hasLength(2));
@@ -508,6 +515,10 @@ Widget _app({required List<Override> overrides, required Widget child}) =>
     ProviderScope(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(_preferences),
+        yorksV1AuthUserIdProvider.overrideWithValue('procurement-test-user'),
+        yorksV1ProcurementProgressRepositoryProvider.overrideWithValue(
+          FakeRepository(),
+        ),
         yorksV1CurrentPermissionSnapshotProvider.overrideWith(
           (ref) => YorksV1TestPermissionController(
             yorksV1TrustedFeaturePermissionState(),

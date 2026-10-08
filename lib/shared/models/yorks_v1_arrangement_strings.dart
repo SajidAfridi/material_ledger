@@ -3,6 +3,37 @@ import 'yorks_v1_arrangement.dart';
 
 /// Centralized user-facing copy for the Batch 6 arrangement workflow.
 abstract final class YorksV1ArrangementStrings {
+  static const searchItems = TranslatableString(
+    en: 'Search items',
+    ar: 'بحث عن المواد',
+    ur: 'اشیاء تلاش کریں',
+    hi: 'आइटम खोजें',
+  );
+  static const allItems = TranslatableString(
+    en: 'All items',
+    ar: 'كل المواد',
+    ur: 'تمام اشیاء',
+    hi: 'सभी आइटम',
+  );
+  static const reviewArrangement = TranslatableString(
+    en: 'Review arrangement',
+    ar: 'مراجعة الترتيب',
+    ur: 'انتظام کا جائزہ',
+    hi: 'व्यवस्था की समीक्षा',
+  );
+  static const reviewBeforeSave = TranslatableString(
+    en: 'Check quantities and sources. Saving commits this arrangement and reserves warehouse stock.',
+    ar: 'تحقق من الكميات والمصادر. يؤدي الحفظ إلى اعتماد هذا الترتيب وحجز مخزون المستودع.',
+    ur: 'مقدار اور ذرائع چیک کریں۔ محفوظ کرنے سے انتظام اور گودام اسٹاک کا ریزرویشن مکمل ہوگا۔',
+    hi: 'मात्राएँ और स्रोत जाँचें। सहेजने से व्यवस्था पूरी होगी और गोदाम स्टॉक आरक्षित होगा।',
+  );
+  static const noMatchingWarehouse = TranslatableString(
+    en: 'No matching items',
+    ar: 'لا توجد مواد مطابقة',
+    ur: 'کوئی متعلقہ آئٹم نہیں',
+    hi: 'कोई मिलान नहीं',
+  );
+
   static const arrangement = TranslatableString(
     en: 'Procurement arrangement',
     ar: 'ترتيب المشتريات',

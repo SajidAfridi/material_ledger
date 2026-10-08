@@ -1,3 +1,4 @@
+import '../shared/providers/yorks_v1_procurement_progress_provider.dart';
 import '../shared/providers/yorks_v1_inventory_stock_command_provider.dart';
 import '../shared/providers/yorks_v1_inventory_workbook_provider.dart';
 import '../shared/controllers/yorks_v1_inventory_import_controller.dart';
@@ -1996,16 +1997,38 @@ GoRouter createAppRouter({
         ),
       GoRoute(
         path: RoutePaths.yorksV1MaterialRequestArrangement,
+        onExit: (context, state) async =>
+            await ProviderScope.containerOf(
+              context,
+              listen: false,
+            ).read(yorksV1ProcurementExitGuardProvider).check?.call() ??
+            true,
         pageBuilder: (context, state) => _yorksV1Slide(
           state.pageKey,
           YorksV1ArrangementScreen(
             requestId: state.pathParameters['requestId'] ?? '',
-            onCompleted: () => context.pop(),
+            onCompleted: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(
+                  RoutePaths.yorksV1MaterialRequestPath(
+                    state.pathParameters['requestId'] ?? '',
+                  ),
+                );
+              }
+            },
           ),
         ),
       ),
       GoRoute(
         path: RoutePaths.yorksV1MaterialRequestLogistics,
+        onExit: (context, state) async =>
+            await ProviderScope.containerOf(
+              context,
+              listen: false,
+            ).read(yorksV1ProcurementExitGuardProvider).check?.call() ??
+            true,
         pageBuilder: (context, state) => _yorksV1Slide(
           state.pageKey,
           YorksV1LogisticsScreen(

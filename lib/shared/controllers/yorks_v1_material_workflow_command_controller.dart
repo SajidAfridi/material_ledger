@@ -80,9 +80,13 @@ class YorksV1MaterialWorkflowCommandController {
   );
 
   Future<YorksV1ArrangementWorkspace> saveArrangement(
-    YorksV1SaveArrangementInput input,
-  ) => _run(
+    YorksV1SaveArrangementInput input, {
+    Future<void> Function(String key)? beforeInvoke,
+    String? recoveredIdempotencyKey,
+  }) => _run(
     operation: 'save_arrangement',
+    beforeInvoke: beforeInvoke,
+    recoveredIdempotencyKey: recoveredIdempotencyKey,
     entityId: input.arrangementId,
     payload: input.toRpcPayload(),
     invoke: (key) => _arrangements.save(
@@ -190,24 +194,29 @@ class YorksV1MaterialWorkflowCommandController {
     ),
   );
 
-  Future<YorksV1LogisticsWorkspace> dispatch(YorksV1DispatchInput input) =>
-      _run(
-        operation: 'dispatch_materials',
-        entityId: input.requestId,
-        payload: input.toRpcPayload(),
-        invoke: (key) => _logistics.dispatch(
-          YorksV1DispatchInput(
-            requestId: input.requestId,
-            expectedRequestVersion: input.expectedRequestVersion,
-            dispatchDate: input.dispatchDate,
-            deliveryReference: input.deliveryReference,
-            lines: input.lines,
-            idempotencyKey: key,
-            driverName: input.driverName,
-            vehicleReference: input.vehicleReference,
-          ),
-        ),
-      );
+  Future<YorksV1LogisticsWorkspace> dispatch(
+    YorksV1DispatchInput input, {
+    Future<void> Function(String key)? beforeInvoke,
+    String? recoveredIdempotencyKey,
+  }) => _run(
+    operation: 'dispatch_materials',
+    beforeInvoke: beforeInvoke,
+    recoveredIdempotencyKey: recoveredIdempotencyKey,
+    entityId: input.requestId,
+    payload: input.toRpcPayload(),
+    invoke: (key) => _logistics.dispatch(
+      YorksV1DispatchInput(
+        requestId: input.requestId,
+        expectedRequestVersion: input.expectedRequestVersion,
+        dispatchDate: input.dispatchDate,
+        deliveryReference: input.deliveryReference,
+        lines: input.lines,
+        idempotencyKey: key,
+        driverName: input.driverName,
+        vehicleReference: input.vehicleReference,
+      ),
+    ),
+  );
 
   Future<YorksV1LogisticsInventoryItem> createInventoryItem({
     required String requestLineId,
@@ -265,17 +274,33 @@ class YorksV1MaterialWorkflowCommandController {
     ),
   );
 
+  /// Release a command key only after the server fenced its prepared attempt.
+  Future<void> releaseRejectedPreparedCommand({
+    required String operation,
+    required String entityId,
+    required String idempotencyKey,
+  }) => _commandKeys.confirm(
+    operation: operation,
+    entityId: entityId,
+    idempotencyKey: idempotencyKey,
+  );
+
   Future<T> _run<T>({
     required String operation,
     required String entityId,
     required Map<String, Object?> payload,
     required Future<T> Function(String idempotencyKey) invoke,
+    Future<void> Function(String key)? beforeInvoke,
+    String? recoveredIdempotencyKey,
   }) async {
-    final key = await _commandKeys.acquire(
-      operation: operation,
-      entityId: entityId,
-      payload: payload,
-    );
+    final key =
+        recoveredIdempotencyKey ??
+        await _commandKeys.acquire(
+          operation: operation,
+          entityId: entityId,
+          payload: payload,
+        );
+    await beforeInvoke?.call(key);
     final result = await invoke(key);
     await _commandKeys.confirm(
       operation: operation,

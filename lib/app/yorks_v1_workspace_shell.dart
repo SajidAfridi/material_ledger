@@ -1,3 +1,4 @@
+import '../shared/providers/yorks_v1_procurement_progress_provider.dart';
 import '../shared/models/yorks_v1_calculator_strings.dart';
 import '../shared/providers/yorks_v1_calculator_provider.dart';
 import 'package:flutter/material.dart';
@@ -257,6 +258,12 @@ class _YorksV1WorkspaceShellState extends ConsumerState<YorksV1WorkspaceShell> {
     );
 
     Future<void> navigateBack() async {
+      final procurementGuard = ref
+          .read(yorksV1ProcurementExitGuardProvider)
+          .beforeNavigation;
+      if (procurementGuard != null && !await procurementGuard()) return;
+      if (!context.mounted) return;
+
       if (location.startsWith('${RoutePaths.yorksV1Calculators}/')) {
         final before = ref
             .read(yorksCalculatorExitGuardProvider)
@@ -273,6 +280,12 @@ class _YorksV1WorkspaceShellState extends ConsumerState<YorksV1WorkspaceShell> {
     }
 
     Future<void> navigateForward() async {
+      final procurementGuard = ref
+          .read(yorksV1ProcurementExitGuardProvider)
+          .beforeNavigation;
+      if (procurementGuard != null && !await procurementGuard()) return;
+      if (!context.mounted) return;
+
       if (location.startsWith('${RoutePaths.yorksV1Calculators}/')) {
         final before = ref
             .read(yorksCalculatorExitGuardProvider)

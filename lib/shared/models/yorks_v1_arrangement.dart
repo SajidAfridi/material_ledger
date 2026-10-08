@@ -429,7 +429,7 @@ class YorksV1ArrangementLineInput {
     'decision': decision.wireValue,
     'arranged_qty': arrangedQuantity.trim(),
     'reason': _trimToNull(reason),
-    'unit_cost': _trimToNull(unitCost),
+    if (_trimToNull(unitCost) != null) 'unit_cost': _trimToNull(unitCost),
   };
 }
 

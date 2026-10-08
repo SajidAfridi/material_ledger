@@ -1,7 +1,7 @@
 # Procurement workspace review and improvement plan
 
 Date: 8 October 2026
-Status: **audit and proposal; application changes and release are not performed**
+Status: **historical audit and approved proposal**. Subsequent implementation and staging evidence are tracked in [PROCUREMENT_IMPLEMENTATION_20261008.md](PROCUREMENT_IMPLEMENTATION_20261008.md).
 Reviewed source: `2290cf5` on `codex/workforce-mobile-attendance`
 Priority confirmed by the product owner: **desktop for both arrangement and dispatch**.
 

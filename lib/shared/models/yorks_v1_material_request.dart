@@ -339,6 +339,7 @@ class YorksV1MaterialRequestSummary {
     this.currentActionAgeHours = 0,
     this.requiredOnSiteOverdue = false,
     this.actorCanAct = false,
+    this.dispatchReady = false,
     this.exceptionCodes = const [],
     this.submittedAt,
   });
@@ -366,6 +367,9 @@ class YorksV1MaterialRequestSummary {
   final double currentActionAgeHours;
   final bool requiredOnSiteOverdue;
   final bool actorCanAct;
+
+  /// Trusted stock-work availability, including approved replacement demand.
+  final bool dispatchReady;
   final List<YorksV1MaterialRequestExceptionCode> exceptionCodes;
   final int itemCount;
   final DateTime? submittedAt;
@@ -409,6 +413,7 @@ class YorksV1MaterialRequestSummary {
       ),
       requiredOnSiteOverdue: json['required_on_site_overdue'] == true,
       actorCanAct: json['actor_can_act'] == true,
+      dispatchReady: json['dispatch_ready'] == true,
       exceptionCodes: _exceptionCodes(json['exception_codes']),
       itemCount: _nonNegativeInt(json['item_count']),
       submittedAt: _nullableDate(json['submitted_at']),
@@ -1327,6 +1332,7 @@ class YorksV1MaterialRequest {
     this.currentActionAgeHours = 0,
     this.requiredOnSiteOverdue = false,
     this.actorCanAct = false,
+    this.dispatchReady = false,
     this.exceptionCodes = const [],
     this.submittedAt,
     this.cancelledAt,
@@ -1375,6 +1381,9 @@ class YorksV1MaterialRequest {
   final double currentActionAgeHours;
   final bool requiredOnSiteOverdue;
   final bool actorCanAct;
+
+  /// Trusted stock-work availability, including approved replacement demand.
+  final bool dispatchReady;
   final List<YorksV1MaterialRequestExceptionCode> exceptionCodes;
   final DateTime? submittedAt;
   final DateTime? cancelledAt;
@@ -1452,6 +1461,7 @@ class YorksV1MaterialRequest {
       ),
       requiredOnSiteOverdue: json['required_on_site_overdue'] == true,
       actorCanAct: json['actor_can_act'] == true,
+      dispatchReady: json['dispatch_ready'] == true,
       exceptionCodes: _exceptionCodes(json['exception_codes']),
       submittedAt: _nullableDate(json['submitted_at']),
       cancelledAt: _nullableDate(json['cancelled_at']),
@@ -1493,6 +1503,7 @@ extension YorksV1MaterialRequestSummaryRegisterAdapter
     currentActionAgeHours: currentActionAgeHours,
     requiredOnSiteOverdue: requiredOnSiteOverdue,
     actorCanAct: actorCanAct,
+    dispatchReady: dispatchReady,
     exceptionCodes: exceptionCodes,
     submittedAt: submittedAt,
   );

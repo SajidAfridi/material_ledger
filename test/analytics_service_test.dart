@@ -176,7 +176,7 @@ void main() {
 
   test('taxonomy stays bounded, stable, and unique', () {
     final names = AnalyticsEvent.values.map((event) => event.wireName).toList();
-    expect(names, hasLength(96));
+    expect(names, hasLength(100));
     expect(names.toSet(), hasLength(names.length));
     expect(names, everyElement(matches(RegExp(r'^[a-z0-9]+(?: [a-z0-9]+)*$'))));
     expect(names, isNot(contains('material_request_opened')));
