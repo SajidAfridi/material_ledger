@@ -117,3 +117,33 @@ hosted business-data mutations are part of this slice.
   `/private/tmp/yorks-rentals-evidence-20261008/final-editor-mobile.jpg`.
   Populated property details and save-failure paths were fixture-tested locally;
   no live property, lease, cheque or payment was created during verification.
+
+## Owner-authorized production release — 8 October 2026
+
+The owner explicitly requested “update production” after reviewing the completed
+staging slice. The production artifact was rebuilt from clean source `1a503cf`
+with the existing production configuration. Accounts, Company Use, Workforce,
+Calculator Workspace and Project Setup enablement were preserved. No database
+migration or live business-record mutation was required.
+
+- Production candidate: `dpl_ATbb2j7yzeGgc3ggwMPEhFa2woc3`.
+- Immutable URL: `https://yorks-r35-ovnt890ju-sajid-alis-projects-0ec775a2.vercel.app`.
+- Local artifact: `/private/tmp/yorks-rentals-production-20261008`.
+- Previous production, retained for rollback:
+  `dpl_5jsSC2katbrBQnFoXxyb4CUVTAgV`,
+  `https://yorks-r35-l86ndm73j-sajid-alis-projects-0ec775a2.vercel.app`.
+- Production backend binding, absence of CI/staging placeholders and required
+  Flutter/PWA assets were checked before upload. The artifact was deployed with
+  `--prod --skip-domain`, then verified before promotion.
+- Promotion succeeded. Candidate and `https://yorks-r35.vercel.app` each passed
+  all 26 production route/asset hash checks (production deferred bundles differ
+  from the staging build).
+- Authenticated production browser verification confirmed the new Rentals home
+  and property editor at desktop and 360px. Console error scan returned none;
+  Vercel's bounded 10-minute error query returned no logs. This static-host scan
+  is not proof of all backend/runtime behavior or long-term monitoring.
+- Screenshots: `/private/tmp/yorks-rentals-evidence-20261008/production-home.jpg`,
+  `production-editor-desktop.jpg`, and `production-editor-mobile.jpg` in the same
+  directory. No business record was created or changed for this smoke check.
+- Existing automated/staging evidence above remains the save-recovery evidence;
+  production verification did not submit a live property or payment.
