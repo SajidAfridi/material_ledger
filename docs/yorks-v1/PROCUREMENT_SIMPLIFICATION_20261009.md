@@ -26,6 +26,32 @@ to the actual workflow:
 This is a usability improvement, not a claim of perfect usability. Staff review
 on staging remains the meaningful acceptance check.
 
+## Follow-up: requested defaults and familiar table presentation
+
+The owner's 9 October review supersedes the initial blank-fresh-row default:
+
+- New editable rows propose the requested quantity automatically. Procurement
+  can reduce it, enter zero or clear it; Full/Partial/Cannot Provide Now remains
+  derived, and invalid/blank quantities still cannot complete the arrangement.
+- Account/device progress and existing saved quantities take precedence, including
+  intentionally blank, incomplete and zero input. Server projection decoding does
+  not fabricate committed quantities.
+- The desktop table uses aligned headings/controls and plain row backgrounds.
+  Optional availability stays in the source column, and shortage reasons stay
+  beside Arranged. Timing and Request Information share one header row. Sticky
+  header/first-column behavior and the focused mobile editor remain.
+- Selected warehouse availability and shelf/bin are rendered outside the input's
+  small helper text. A missing catalogue location explicitly says Shelf / bin
+  not set; selecting another item removes the old shelf information.
+- This follow-up changes presentation/defaults only. Existing source selection,
+  scheduled preparation, notifications, numbering, permission and transactional
+  behavior remain; no new migration or remote database mutation is required.
+
+Regression coverage includes requested defaults, derived quantities, saved raw
+input restoration, shelf selection/missing-location behavior, protected cost
+omission, desktop/mobile layouts and Scheduled sharing. Release evidence for
+this follow-up is appended below after verification.
+
 ## Live usage baseline
 
 PostHog project 600792, production Procurement events, last-seven-days query
@@ -132,3 +158,17 @@ Local release evidence is in `/tmp/procurement-simplification-candidate-verify.l
 `/tmp/procurement-simplification-staging-edge-deploy.log` and the focused/full gate
 logs recorded during this task. These temporary files are local review evidence,
 not durable hosted artifacts.
+
+### Follow-up validation
+
+- Full Flutter suite: **2,690 passed**, four retained fixture skips.
+- Full clean local database reset/suite: **3,853 checks in 132 files passed**.
+- Full analyzer clean; six changed Dart files passed formatting and diff checks.
+- Desktop, 360px and 390px arrangement goldens were refreshed and inspected for
+  the approved presentation changes. Initial suite failures were the six expected
+  old mobile images; the final full suite passed after updating those images.
+- A focused pointer/geometry regression verifies aligned headings, frozen item
+  identity, and blocked interaction with source controls behind the pinned column.
+- CI web startup budget and ephemeral-signed APK compilation passed. The native
+  artifact is CI build evidence, not a production-signed release.
+- No remote database or function change is part of this follow-up.

@@ -133,6 +133,33 @@ void main() {
     expect(inventory.locationBin, 'Rack B / Shelf 3');
   });
 
+  test(
+    'requested editor default never becomes a committed projection fact',
+    () {
+      final json = _workspaceJson();
+      final arrangement = (json['arrangements'] as List).single as Map;
+      final line =
+          (arrangement['lines'] as List).single as Map<String, dynamic>;
+      line['decision'] = null;
+      line['arranged_qty'] = null;
+      var result = YorksV1ArrangementWorkspace.fromRpcJson(
+        json,
+      ).currentArrangement!.lines.single;
+      expect(result.requestedQuantity, '4');
+      expect(result.arrangedQuantity, isNull);
+      expect(result.decision, isNull);
+
+      for (final saved in ['0', '2.5000', '4']) {
+        line['arranged_qty'] = saved;
+        result = YorksV1ArrangementWorkspace.fromRpcJson(
+          json,
+        ).currentArrangement!.lines.single;
+        expect(result.arrangedQuantity, saved);
+        expect(result.requestedQuantity, '4');
+      }
+    },
+  );
+
   test('save input emits complete server-recognized line decisions', () {
     final input = YorksV1SaveArrangementInput(
       requestId: 'request-1',

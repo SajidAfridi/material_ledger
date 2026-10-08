@@ -138,10 +138,30 @@ class YorksV1ArrangementScreen extends ConsumerWidget {
           language: language,
           child: Column(
             children: [
-              _ArrangementTiming(workspace: value, language: language),
-              YorksV1RequestInformationToolbar(
-                request: requestValue,
-                language: language,
+              Container(
+                decoration: const BoxDecoration(
+                  color: AppColors.surfaceContainerLowest,
+                  border: Border(bottom: BorderSide(color: AppColors.line)),
+                ),
+                padding: const EdgeInsetsDirectional.only(
+                  end: AppSpacing.md,
+                  top: AppSpacing.xs,
+                  bottom: AppSpacing.xs,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _ArrangementTiming(
+                        workspace: value,
+                        language: language,
+                      ),
+                    ),
+                    YorksV1RequestInformationButton(
+                      request: requestValue,
+                      language: language,
+                    ),
+                  ],
+                ),
               ),
               Expanded(child: content),
             ],
@@ -1356,6 +1376,7 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _progressPanel(),
+            const SizedBox(height: AppSpacing.sm),
             if (_scheduled) ...[
               _sourcingPanel(editable),
               const SizedBox(height: AppSpacing.sm),
@@ -3986,25 +4007,35 @@ class _DesktopArrangementEditor extends StatelessWidget {
       final tableWidth = constraints.maxWidth < 1060
           ? 1060.0
           : constraints.maxWidth;
+      // Match the exact row/header padding, gaps and flex totals. The pinned
+      // identity must not cover source controls when the grid scrolls.
       final identityWidth =
-          (tableWidth - AppSpacing.sm * (canManageCommercials ? 7 : 6)) *
-          30 /
-          (canManageCommercials ? 100 : 88);
-      Widget pin(Widget body, Widget identity) => Stack(
+          (tableWidth -
+              AppSpacing.md * 2 -
+              AppSpacing.md * (canManageCommercials ? 4 : 3)) *
+          32 /
+          (canManageCommercials ? 100 : 90);
+      Widget pin(Widget body, Widget identity, {bool header = false}) => Stack(
         children: [
           body,
           AnimatedBuilder(
             animation: horizontal,
             child: identity,
             builder: (context, child) => PositionedDirectional(
-              start:
-                  (horizontal.hasClients ? horizontal.offset : 0) +
-                  AppSpacing.sm,
+              start: horizontal.hasClients ? horizontal.offset : 0,
               top: 0,
-              width: identityWidth,
+              bottom: 0,
+              width: identityWidth + AppSpacing.md,
               child: Container(
-                color: AppColors.surfaceContainerLowest,
-                padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                color: header
+                    ? AppColors.surfaceContainerLow
+                    : AppColors.surfaceContainerLowest,
+                alignment: AlignmentDirectional.topStart,
+                padding: const EdgeInsetsDirectional.only(
+                  start: AppSpacing.md,
+                  top: AppSpacing.md,
+                  bottom: AppSpacing.md,
+                ),
                 child: child,
               ),
             ),
@@ -4029,8 +4060,12 @@ class _DesktopArrangementEditor extends StatelessWidget {
                   ),
                   Text(
                     YorksV1ArrangementStrings.requestedItem.active(language),
-                    style: AppTypography.labelSmall,
+                    style: AppTypography.labelSmall.copyWith(
+                      color: AppColors.muted,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
+                  header: true,
                 ),
                 Expanded(
                   child: ListView.builder(
@@ -4192,27 +4227,29 @@ class _ArrangementTableHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     color: AppColors.surfaceContainerLow,
-    padding: const EdgeInsets.symmetric(
-      horizontal: AppSpacing.sm,
-      vertical: AppSpacing.sm,
-    ),
+    padding: const EdgeInsets.all(AppSpacing.md),
     child: Row(
       children: [
         _ArrangementTableHeading(
           YorksV1ArrangementStrings.requestedItem,
-          flex: 30,
+          flex: 32,
         ),
+        const SizedBox(width: AppSpacing.md),
         _ArrangementTableHeading(
           YorksV1ArrangementStrings.supplierSource,
-          flex: 35,
+          flex: 34,
         ),
+        const SizedBox(width: AppSpacing.md),
         _ArrangementTableHeading(YorksV1ArrangementStrings.requested, flex: 10),
-        _ArrangementTableHeading(YorksV1ArrangementStrings.arranged, flex: 15),
-        if (showCommercials)
+        const SizedBox(width: AppSpacing.md),
+        _ArrangementTableHeading(YorksV1ArrangementStrings.arranged, flex: 14),
+        if (showCommercials) ...[
+          const SizedBox(width: AppSpacing.md),
           const _ArrangementTableHeading(
             YorksV1ArrangementStrings.unitCost,
             flex: 10,
           ),
+        ],
       ],
     ),
   );
@@ -4287,27 +4324,21 @@ class _ArrangementTableRow extends StatelessWidget {
     final reasonRequired =
         draft.decision == YorksV1ArrangementDecision.partial ||
         draft.decision == YorksV1ArrangementDecision.unavailable;
-    final rowColor = switch (draft.decision) {
-      YorksV1ArrangementDecision.full => AppColors.surfaceContainerLowest,
-      YorksV1ArrangementDecision.partial =>
-        AppColors.warningContainer.withValues(alpha: .32),
-      YorksV1ArrangementDecision.unavailable =>
-        AppColors.errorContainer.withValues(alpha: .28),
-      null => AppColors.surfaceContainerLowest,
-    };
+
     return Container(
-      decoration: BoxDecoration(
-        color: rowColor,
-        border: const Border(top: BorderSide(color: AppColors.line)),
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceContainerLowest,
+        border: Border(top: BorderSide(color: AppColors.line)),
       ),
-      padding: const EdgeInsets.all(AppSpacing.sm),
+      padding: const EdgeInsets.all(AppSpacing.md),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                flex: 30,
+                flex: 32,
                 child: Visibility(
                   visible: !hideIdentity,
                   maintainState: true,
@@ -4321,37 +4352,53 @@ class _ArrangementTableRow extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: AppSpacing.sm),
+              const SizedBox(width: AppSpacing.md),
               Expanded(
-                flex: 35,
-                child: _ArrangementSourceEditor(
-                  line: line,
-                  value: draft,
-                  supplier: supplier,
-                  inventoryItems: inventoryItems,
-                  enabled: enabled,
-                  onChanged: onChanged,
-                  onCreateInventoryItem: onCreateInventoryItem,
+                flex: 34,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _ArrangementSourceEditor(
+                      line: line,
+                      value: draft,
+                      supplier: supplier,
+                      inventoryItems: inventoryItems,
+                      enabled: enabled,
+                      onChanged: onChanged,
+                      onCreateInventoryItem: onCreateInventoryItem,
+                    ),
+                    if (draft.source ==
+                            YorksV1ArrangementSource.externalSupplier &&
+                        draft.decision !=
+                            YorksV1ArrangementDecision.unavailable) ...[
+                      const SizedBox(height: AppSpacing.xs),
+                      _ExternalSourceReadinessFields(
+                        value: draft,
+                        enabled: enabled,
+                        language: language,
+                        requiredByPolicy: readinessRequired,
+                        onChanged: onChanged,
+                      ),
+                    ],
+                  ],
                 ),
               ),
-              const SizedBox(width: AppSpacing.sm),
+              const SizedBox(width: AppSpacing.md),
               Expanded(
                 flex: 10,
                 child: Padding(
                   padding: const EdgeInsets.only(top: 12),
                   child: Text(
                     '${yorksV1DisplayQuantity(line.requestedQuantity)} ${line.unit}',
-                    style: AppTypography.labelLarge.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+                    style: AppTypography.labelLarge,
                   ),
                 ),
               ),
-              const SizedBox(width: AppSpacing.sm),
+              const SizedBox(width: AppSpacing.md),
               Expanded(
-                flex: 15,
+                flex: 14,
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     _QuantityField(
                       value: draft,
@@ -4360,12 +4407,23 @@ class _ArrangementTableRow extends StatelessWidget {
                       compact: true,
                     ),
                     const SizedBox(height: AppSpacing.xs),
-                    _ArrangementDecisionChip(decision: draft.decision),
+                    Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: _ArrangementDecisionChip(decision: draft.decision),
+                    ),
+                    if (reasonRequired) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      _ReasonField(
+                        value: draft,
+                        controller: reason,
+                        enabled: enabled,
+                      ),
+                    ],
                   ],
                 ),
               ),
               if (showCommercials) ...[
-                const SizedBox(width: AppSpacing.sm),
+                const SizedBox(width: AppSpacing.md),
                 Expanded(
                   flex: 10,
                   child: _UnitCostField(
@@ -4378,21 +4436,6 @@ class _ArrangementTableRow extends StatelessWidget {
               ],
             ],
           ),
-          if (reasonRequired) ...[
-            const SizedBox(height: AppSpacing.sm),
-            _ReasonField(value: draft, controller: reason, enabled: enabled),
-          ],
-          if (draft.source == YorksV1ArrangementSource.externalSupplier &&
-              draft.decision != YorksV1ArrangementDecision.unavailable) ...[
-            const SizedBox(height: AppSpacing.sm),
-            _ExternalSourceReadinessFields(
-              value: draft,
-              enabled: enabled,
-              language: language,
-              requiredByPolicy: readinessRequired,
-              onChanged: onChanged,
-            ),
-          ],
           if (validationMessages.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.sm),
             _ArrangementInlineIssue(messages: validationMessages),
@@ -4766,7 +4809,7 @@ class _QuantityField extends StatelessWidget {
         contentPadding: compact
             ? const EdgeInsets.symmetric(
                 horizontal: AppSpacing.sm,
-                vertical: AppSpacing.xs,
+                vertical: 12,
               )
             : null,
       ),
@@ -4801,7 +4844,7 @@ class _UnitCostField extends StatelessWidget {
         contentPadding: compact
             ? const EdgeInsets.symmetric(
                 horizontal: AppSpacing.sm,
-                vertical: AppSpacing.xs,
+                vertical: 12,
               )
             : null,
       ),
@@ -5068,8 +5111,9 @@ class _WarehouseItemAutocompleteState
 
   String _inventoryItemContext(YorksV1InventoryItem item) => [
     '${YorksV1ArrangementStrings.available.primary}: ${yorksV1DisplayQuantity(item.availableQuantity)} ${item.unit}',
-    if (item.locationBin?.trim().isNotEmpty == true)
-      '${YorksV1ArrangementStrings.shelfLocation.primary}: ${item.locationBin}',
+    item.locationBin?.trim().isNotEmpty == true
+        ? '${YorksV1ArrangementStrings.shelfLocation.primary}: ${item.locationBin!.trim()}'
+        : YorksV1ArrangementStrings.shelfLocationMissing.primary,
     if (item.brandOrigin?.trim().isNotEmpty == true) item.brandOrigin!,
   ].join(' · ');
 
@@ -5079,106 +5123,151 @@ class _WarehouseItemAutocompleteState
         .where((item) => item.id == widget.value.inventoryItemId)
         .firstOrNull;
     final selectedHasStock = selected != null && _hasAvailableStock(selected);
-    return RawAutocomplete<YorksV1InventoryItem>(
-      textEditingController: _controller,
-      focusNode: _focusNode,
-      displayStringForOption: _labelFor,
-      optionsBuilder: (value) => _matches(value.text),
-      onSelected: (item) {
-        _controller.text = _labelFor(item);
-        widget.onSelected(item);
-      },
-      fieldViewBuilder: (context, controller, focusNode, onSubmitted) =>
-          TextFormField(
-            key: ValueKey('warehouse-search-${widget.value.arrangementLineId}'),
-            controller: controller,
-            focusNode: focusNode,
-            enabled: widget.enabled,
-            onTap: () => setState(() {}),
-            onChanged: (_) => setState(() {}),
-            decoration: InputDecoration(
-              labelText: widget.compact
-                  ? null
-                  : YorksV1ArrangementStrings.warehouseItem.primary,
-              hintText: YorksV1ArrangementStrings.searchWarehouseItem.primary,
-              helperText:
-                  controller.text.trim().isNotEmpty &&
-                      controller.text != _selectedLabel &&
-                      _matches(controller.text).isEmpty
-                  ? YorksV1ArrangementStrings.noMatchingWarehouse.primary
-                  : selected == null
-                  ? null
-                  : _inventoryItemContext(selected),
-              helperMaxLines: 3,
-              prefixIcon: const Icon(Icons.search_rounded),
-              suffixIcon: widget.value.inventoryItemId == null
-                  ? null
-                  : Icon(
-                      selectedHasStock
-                          ? Icons.check_circle_rounded
-                          : Icons.warning_amber_rounded,
-                      color: selectedHasStock
-                          ? AppColors.muted
-                          : AppColors.error,
-                    ),
-              contentPadding: widget.compact
-                  ? const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm,
-                      vertical: AppSpacing.xs,
-                    )
-                  : null,
-            ),
-          ),
-      optionsViewBuilder: (context, onSelected, options) => Align(
-        alignment: AlignmentDirectional.topStart,
-        child: Material(
-          elevation: 8,
-          color: AppColors.surfaceContainerLowest,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 320, maxWidth: 460),
-            child: SizedBox(
-              width: 420,
-              child: ListView(
-                padding: const EdgeInsets.all(AppSpacing.xs),
-                shrinkWrap: true,
-                children: [
-                  for (final item in options)
-                    ListTile(
-                      enabled: _hasAvailableStock(item),
-                      minTileHeight: AppSpacing.minTapTarget,
-                      leading: Icon(
-                        Icons.inventory_2_outlined,
-                        color: _hasAvailableStock(item)
-                            ? AppColors.blue
-                            : AppColors.muted,
-                      ),
-                      title: Text(
-                        item.itemCode?.trim().isNotEmpty == true
-                            ? '${item.itemCode} · ${item.description}'
-                            : item.description,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTypography.titleSmall,
-                      ),
-                      subtitle: Text(
-                        _inventoryItemContext(item),
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTypography.bodySmall.copyWith(
-                          color: AppColors.muted,
+    final shelf = selected?.locationBin?.trim();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        RawAutocomplete<YorksV1InventoryItem>(
+          textEditingController: _controller,
+          focusNode: _focusNode,
+          displayStringForOption: _labelFor,
+          optionsBuilder: (value) => _matches(value.text),
+          onSelected: (item) {
+            _controller.text = _labelFor(item);
+            widget.onSelected(item);
+          },
+          fieldViewBuilder: (context, controller, focusNode, onSubmitted) =>
+              TextFormField(
+                key: ValueKey(
+                  'warehouse-search-${widget.value.arrangementLineId}',
+                ),
+                controller: controller,
+                focusNode: focusNode,
+                enabled: widget.enabled,
+                onTap: () => setState(() {}),
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                  labelText: widget.compact
+                      ? null
+                      : YorksV1ArrangementStrings.warehouseItem.primary,
+                  hintText:
+                      YorksV1ArrangementStrings.searchWarehouseItem.primary,
+                  helperText:
+                      controller.text.trim().isNotEmpty &&
+                          controller.text != _selectedLabel &&
+                          _matches(controller.text).isEmpty
+                      ? YorksV1ArrangementStrings.noMatchingWarehouse.primary
+                      : null,
+                  helperMaxLines: 3,
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: widget.value.inventoryItemId == null
+                      ? null
+                      : Icon(
+                          selectedHasStock
+                              ? Icons.check_circle_rounded
+                              : Icons.warning_amber_rounded,
+                          color: selectedHasStock
+                              ? AppColors.muted
+                              : AppColors.error,
                         ),
-                      ),
-                      onTap: _hasAvailableStock(item)
-                          ? () => onSelected(item)
-                          : null,
-                    ),
-                ],
+                  contentPadding: widget.compact
+                      ? const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.sm,
+                          vertical: AppSpacing.xs,
+                        )
+                      : null,
+                ),
+              ),
+          optionsViewBuilder: (context, onSelected, options) => Align(
+            alignment: AlignmentDirectional.topStart,
+            child: Material(
+              elevation: 8,
+              color: AppColors.surfaceContainerLowest,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxHeight: 320,
+                  maxWidth: 460,
+                ),
+                child: SizedBox(
+                  width: 420,
+                  child: ListView(
+                    padding: const EdgeInsets.all(AppSpacing.xs),
+                    shrinkWrap: true,
+                    children: [
+                      for (final item in options)
+                        ListTile(
+                          enabled: _hasAvailableStock(item),
+                          minTileHeight: AppSpacing.minTapTarget,
+                          leading: Icon(
+                            Icons.inventory_2_outlined,
+                            color: _hasAvailableStock(item)
+                                ? AppColors.blue
+                                : AppColors.muted,
+                          ),
+                          title: Text(
+                            item.itemCode?.trim().isNotEmpty == true
+                                ? '${item.itemCode} · ${item.description}'
+                                : item.description,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.titleSmall,
+                          ),
+                          subtitle: Text(
+                            _inventoryItemContext(item),
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.bodySmall.copyWith(
+                              color: AppColors.muted,
+                            ),
+                          ),
+                          onTap: _hasAvailableStock(item)
+                              ? () => onSelected(item)
+                              : null,
+                        ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
         ),
-      ),
+        if (selected != null) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            '${YorksV1ArrangementStrings.available.primary}: ${yorksV1DisplayQuantity(selected.availableQuantity)} ${selected.unit}',
+            style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Row(
+            key: ValueKey('warehouse-shelf-${widget.value.arrangementLineId}'),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(
+                Icons.location_on_outlined,
+                size: 18,
+                color: AppColors.ink,
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              Expanded(
+                child: Text(
+                  shelf?.isNotEmpty == true
+                      ? '${YorksV1ArrangementStrings.shelfLocation.primary}: $shelf'
+                      : YorksV1ArrangementStrings.shelfLocationMissing.primary,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: shelf?.isNotEmpty == true
+                        ? AppColors.ink
+                        : AppColors.muted,
+                    fontWeight: shelf?.isNotEmpty == true
+                        ? FontWeight.w700
+                        : FontWeight.w400,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
     );
   }
 }
@@ -5854,6 +5943,10 @@ class _ExternalSourceReadinessFields extends StatelessWidget {
       type: MaterialType.transparency,
       child: ExpansionTile(
         key: PageStorageKey('external-details-${value.arrangementLineId}'),
+        minTileHeight: AppSpacing.minTapTarget,
+        dense: true,
+        shape: const Border(),
+        collapsedShape: const Border(),
         initiallyExpanded:
             value.externalSourceReady ||
             value.externalExpectedDate != null ||
@@ -6299,7 +6392,12 @@ class _EditableArrangementLine {
       source: isFresh && matchingItem == null
           ? YorksV1ArrangementSource.externalSupplier
           : line.source,
-      arrangedQuantity: yorksV1DisplayQuantity(line.arrangedQuantity ?? ''),
+      // This is an editable proposal only. Restored raw input overrides it;
+      // committed projection quantities remain unchanged.
+      arrangedQuantity: yorksV1DisplayQuantity(
+        line.arrangedQuantity ??
+            (line.decision == null ? line.requestedQuantity : ''),
+      ),
       externalSupplier: line.externalSupplier,
       externalSourceReady: line.externalSourceReady,
       externalExpectedDate: line.externalExpectedDate

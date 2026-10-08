@@ -1863,9 +1863,16 @@ The owner's later usability direction simplifies Project MR arrangement:
 - Full, Partial and Cannot Provide Now are derived from valid provided quantity.
   Blank, incomplete, negative and over-request values are not decisions. Reasons
   for shortages remain required at final submission.
+- Owner refinement on 9 October 2026: new editable lines prefill Arranged with
+  the requested quantity. Procurement adjusts shortages or zero supply; the
+  status continues to be derived. This is a proposal in the editor, never an
+  invented committed quantity or stock reservation. Explicit saved/recovered
+  values, including blank, zero and incomplete input, take precedence.
 - A unique exact catalogue match may preselect Warehouse; unmatched custom items
   default to External supplier. Explicit selections and saved inputs are retained.
-  Warehouse results expose shelf/bin when present.
+  Warehouse results expose shelf/bin when present. The selected item's shelf/bin
+  is a separate visible line beside availability, with an explicit not-set state
+  when Inventory has no location recorded. Do not infer or invent a location.
 - Scheduled requests support a separate server-confirmed shared preparation
   update. It records ready quantities and expected availability without reserving
   stock, changing workflow ownership or submitting an arrangement. Private draft

@@ -15,6 +15,12 @@ abstract final class YorksV1ArrangementStrings {
     ur: 'شیلف / خانہ',
     hi: 'शेल्फ / बिन',
   );
+  static const shelfLocationMissing = TranslatableString(
+    en: 'Shelf / bin not set',
+    ar: 'لم يتم تحديد الرف / الموقع',
+    ur: 'شیلف / خانہ درج نہیں ہے',
+    hi: 'शेल्फ / बिन दर्ज नहीं है',
+  );
   static const searchItems = TranslatableString(
     en: 'Search items',
     ar: 'بحث عن المواد',
@@ -71,10 +77,10 @@ abstract final class YorksV1ArrangementStrings {
     hi: 'अनुरोधित सामग्री व्यवस्थित करें',
   );
   static const decideEveryLine = TranslatableString(
-    en: 'Enter the quantity you can provide for each item.',
-    ar: 'أدخل الكمية التي يمكنك توفيرها لكل صنف.',
-    ur: 'ہر آئٹم کی دستیاب مقدار درج کریں۔',
-    hi: 'हर वस्तु की उपलब्ध मात्रा दर्ज करें।',
+    en: 'Requested quantities are filled in. Adjust any quantity you cannot provide in full.',
+    ar: 'تمت تعبئة الكميات المطلوبة. عدّل أي كمية لا يمكنك توفيرها بالكامل.',
+    ur: 'مطلوبہ مقداریں درج ہیں۔ جو مقدار مکمل فراہم نہیں کر سکتے اسے تبدیل کریں۔',
+    hi: 'माँगी गई मात्राएँ भरी हैं। जो मात्रा पूरी नहीं दे सकते उसे बदलें।',
   );
   static const arrangeItem = TranslatableString(
     en: 'Arrange Item',

@@ -89,6 +89,81 @@ void main() {
     },
   );
 
+  for (final raw in ['', '0', '2.5', '1.']) {
+    final caseName = raw.isEmpty ? 'intentionally blank' : raw;
+    final saved = YorksV1ProcurementProgressDraft.fromJson({
+      ...draft(qty: raw).toJson(),
+      'inputs': {
+        'note': '',
+        'lines': [
+          {
+            'arrangement_line_id': 'line-1',
+            'arranged_qty': raw,
+            'source_kind': 'external_supplier',
+            'inventory_item_id': null,
+            'external_supplier': 'Chosen supplier',
+            'external_ready': false,
+            'reason': '',
+          },
+        ],
+      },
+    });
+
+    test(
+      'account progress retains $caseName quantity over requested default',
+      () async {
+        final repository = FakeRepository()
+          ..read = YorksV1ProcurementProgressRead(
+            revision: 1,
+            checkpoint: YorksV1ProcurementProgressCheckpoint(
+              draft: saved,
+              revision: 1,
+              savedAt: DateTime.utc(2026),
+            ),
+          );
+        final editor = await controller(repository);
+        addTearDown(editor.dispose);
+        await editor.initialize(draft(qty: '10'));
+
+        expect(editor.state.current!.inputs, saved.inputs);
+        expect(editor.state.accepted!.inputs, saved.inputs);
+        expect(editor.state.isDirty, isFalse);
+        expect(repository.saved, isNull);
+
+        editor.update(draft(qty: '7'));
+        await editor.discardChanges();
+        expect(editor.state.current!.inputs, saved.inputs);
+      },
+    );
+
+    test(
+      'device recovery retains $caseName quantity over requested default',
+      () async {
+        final recoveryStore = await store();
+        await recoveryStore.save(
+          draft: saved,
+          accountRevision: 0,
+          generation: 1,
+        );
+        final repository = FakeRepository();
+        final editor = await controller(repository);
+        addTearDown(editor.dispose);
+        await editor.initialize(draft(qty: '10'));
+
+        expect(editor.state.needsRecoveryChoice, isTrue);
+        editor.acceptDeviceRecovery();
+        expect(editor.state.current!.inputs, saved.inputs);
+        expect(editor.state.isDirty, isTrue);
+        expect(repository.saved, isNull);
+        await editor.flushRecovery();
+        expect(
+          (await recoveryStore.load(scope)).recovery!.draft.inputs,
+          saved.inputs,
+        );
+      },
+    );
+  }
+
   test(
     'recovery is isolated by backend actor request and arrangement',
     () async {

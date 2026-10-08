@@ -55,7 +55,7 @@ void main() {
       expectedSource: YorksV1ArrangementSource.externalSupplier,
     ),
     (
-      name: 'fresh exact match selects warehouse without claiming readiness',
+      name: 'fresh exact match selects warehouse and requested quantity',
       description: 'Motorized smoke damper',
       source: YorksV1ArrangementSource.warehouse,
       quantity: null,
@@ -74,6 +74,27 @@ void main() {
       source: YorksV1ArrangementSource.externalSupplier,
       quantity: '2',
       expectedSource: YorksV1ArrangementSource.externalSupplier,
+    ),
+    (
+      name: 'fresh matched item without shelf reports its missing location',
+      description: 'Motorized smoke damper alternate',
+      source: YorksV1ArrangementSource.warehouse,
+      quantity: null,
+      expectedSource: YorksV1ArrangementSource.warehouse,
+    ),
+    (
+      name: 'saved blank quantity remains blank and editable',
+      description: 'Motorized smoke damper',
+      source: YorksV1ArrangementSource.warehouse,
+      quantity: '',
+      expectedSource: YorksV1ArrangementSource.warehouse,
+    ),
+    (
+      name: 'saved zero quantity remains zero and editable',
+      description: 'Motorized smoke damper',
+      source: YorksV1ArrangementSource.warehouse,
+      quantity: '0',
+      expectedSource: YorksV1ArrangementSource.warehouse,
     ),
   ]) {
     testWidgets(entry.name, (tester) async {
@@ -153,40 +174,233 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(
-        tester
-            .widget<ChoiceChip>(
-              find.byKey(
-                ValueKey(
-                  'source-arrangement-line-1-${entry.expectedSource.wireValue}',
+      if (entry.quantity != '0') {
+        expect(
+          tester
+              .widget<ChoiceChip>(
+                find.byKey(
+                  ValueKey(
+                    'source-arrangement-line-1-${entry.expectedSource.wireValue}',
+                  ),
                 ),
-              ),
-            )
-            .selected,
-        isTrue,
+              )
+              .selected,
+          isTrue,
+        );
+      }
+      final quantityField = find.byKey(
+        const ValueKey('arranged-arrangement-line-1'),
       );
       expect(
-        tester
-            .widget<TextFormField>(
-              find.byKey(const ValueKey('arranged-arrangement-line-1')),
-            )
-            .controller!
-            .text,
-        entry.quantity ?? '',
+        tester.widget<TextFormField>(quantityField).controller!.text,
+        entry.quantity ?? '11',
       );
-      if (entry.quantity == null) {
+      expect(tester.widget<TextFormField>(quantityField).enabled, isTrue);
+      if (entry.quantity == '') {
         expect(find.text('Enter quantity'), findsOneWidget);
       }
       if (entry.description == 'Motorized smoke damper' &&
+          entry.quantity == null &&
           entry.expectedSource == YorksV1ArrangementSource.warehouse) {
         expect(
-          find.textContaining('Shelf / bin: Rack B / Shelf 3'),
+          find.text('Shelf / bin: Rack B / Shelf 3').hitTestable(),
           findsOneWidget,
         );
+        final search = find.byKey(
+          const ValueKey('warehouse-search-arrangement-line-1'),
+        );
+        await tester.enterText(search, 'Motorized');
+        await tester.pumpAndSettle();
+        // Every option supplies location context. A missing shelf is explicit,
+        // never copied from another inventory item or invented from its code.
+        expect(
+          find.textContaining('Shelf / bin: Rack B / Shelf 3'),
+          findsNWidgets(2),
+        );
+        expect(find.textContaining('Shelf / bin not set'), findsOneWidget);
+        await tester.tap(
+          find.text('MSD-ALT · Motorized smoke damper alternate'),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Shelf / bin not set').hitTestable(), findsOneWidget);
+        expect(find.textContaining('Rack B / Shelf 3'), findsNothing);
+      }
+      if (entry.description == 'Motorized smoke damper alternate') {
+        expect(find.text('Shelf / bin not set').hitTestable(), findsOneWidget);
+        expect(find.textContaining('Rack B / Shelf 3'), findsNothing);
+      }
+      if (entry.quantity == '' || entry.quantity == '0') {
+        await tester.enterText(quantityField, '3');
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<TextFormField>(quantityField).controller!.text,
+          '3',
+        );
+        expect(tester.widget<TextFormField>(quantityField).enabled, isTrue);
+        await tester.enterText(quantityField, '0');
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<TextFormField>(quantityField).controller!.text,
+          '0',
+        );
+        expect(tester.widget<TextFormField>(quantityField).enabled, isTrue);
+        await tester.enterText(quantityField, '');
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<TextFormField>(quantityField).controller!.text,
+          '',
+        );
+        expect(tester.widget<TextFormField>(quantityField).enabled, isTrue);
+        expect(find.text('Enter quantity'), findsOneWidget);
       }
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets(
+    'desktop scroll keeps item pinned and blocks source input beneath it',
+    (tester) async {
+      tester.view.physicalSize = const Size(1040, 1100);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final preferences = await SharedPreferences.getInstance();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            yorksV1AuthUserIdProvider.overrideWithValue(
+              'procurement-test-user',
+            ),
+            yorksV1ProcurementProgressRepositoryProvider.overrideWithValue(
+              FakeRepository(),
+            ),
+            sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+              (ref) => YorksV1TestPermissionController(
+                yorksV1TrustedFeaturePermissionState(),
+              ),
+            ),
+            yorksV1MaterialRequestDetailProvider(
+              'request-1',
+            ).overrideWith((ref) async => _request),
+            canManageCommercialsProvider.overrideWithValue(true),
+            canViewCommercialsProvider.overrideWithValue(true),
+            yorksV1ArrangementRepositoryProvider.overrideWithValue(
+              _ArrangementRepository(),
+            ),
+            yorksV1ArrangementWorkspaceProvider(
+              'request-1',
+            ).overrideWith((ref) async => _externalSupplierWorkspace),
+            yorksV1ArrangementInventoryProvider.overrideWith(
+              (ref) async => _inventoryItems,
+            ),
+          ],
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
+            home: const YorksV1ArrangementScreen(
+              requestId: 'request-1',
+              embedded: true,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Availability details (optional)'));
+      await tester.pumpAndSettle();
+
+      final identity = find.text('Cable tray hanging clamp').hitTestable();
+      final identityHeader = find.text('Requested item').hitTestable();
+      final quantity = find.byKey(
+        const ValueKey('arranged-arrangement-line-2'),
+      );
+      final quantityHeader = find.text('ARRANGED');
+      final source = find.byKey(
+        const ValueKey('source-arrangement-line-2-warehouse'),
+      );
+      final sourceHeader = find.text('SUPPLIER / SOURCE');
+      expect(
+        tester.getTopLeft(quantity).dx,
+        closeTo(tester.getTopLeft(quantityHeader).dx, 1),
+      );
+      expect(
+        tester.getTopLeft(source).dx,
+        closeTo(tester.getTopLeft(sourceHeader).dx, 1),
+      );
+      final identityBefore = tester.getTopLeft(identity);
+      final identityHeaderBefore = tester.getTopLeft(identityHeader);
+      final quantityBefore = tester.getTopLeft(quantity);
+      final horizontal = tester
+          .widget<SingleChildScrollView>(
+            find.byWidgetPredicate(
+              (widget) =>
+                  widget is SingleChildScrollView &&
+                  widget.scrollDirection == Axis.horizontal,
+            ),
+          )
+          .controller!;
+      expect(horizontal.position.maxScrollExtent, greaterThan(0));
+      horizontal.jumpTo(horizontal.position.maxScrollExtent);
+      await tester.pumpAndSettle();
+
+      expect(tester.getTopLeft(identity).dx, closeTo(identityBefore.dx, 1));
+      expect(
+        tester.getTopLeft(identityHeader).dx,
+        closeTo(identityHeaderBefore.dx, 1),
+      );
+      expect(
+        tester.getTopLeft(quantity).dx,
+        closeTo(quantityBefore.dx - horizontal.offset, 1),
+      );
+      expect(
+        tester.getTopLeft(quantity).dx,
+        closeTo(tester.getTopLeft(quantityHeader).dx, 1),
+      );
+
+      // A tall source editor must neither show through nor accept pointer input
+      // beneath the pinned item, even below its short title and edit action.
+      final expectedDate = find.byKey(
+        const ValueKey('external-expected-arrangement-line-2'),
+      );
+      final sourceBox = tester.renderObject<RenderBox>(expectedDate);
+      final sourceBounds = tester.getRect(expectedDate);
+      final pinnedBackground = find
+          .ancestor(
+            of: identity,
+            matching: find.byWidgetPredicate(
+              (widget) => widget is Container && widget.color != null,
+            ),
+          )
+          .first;
+      final pinnedBounds = tester.getRect(pinnedBackground);
+      expect(sourceBounds.top, greaterThan(tester.getBottomLeft(identity).dy));
+      expect(pinnedBounds.bottom, greaterThanOrEqualTo(sourceBounds.bottom));
+      final coveredPoint = Offset(
+        sourceBounds.left + 2,
+        sourceBounds.center.dy,
+      );
+      expect(pinnedBounds.contains(coveredPoint), isTrue);
+      expect(
+        tester
+            .hitTestOnBinding(coveredPoint)
+            .path
+            .any((entry) => entry.target == sourceBox),
+        isFalse,
+      );
+      expect(
+        tester
+            .hitTestOnBinding(
+              Offset(sourceBounds.right - 2, sourceBounds.center.dy),
+            )
+            .path
+            .any((entry) => entry.target == sourceBox),
+        isTrue,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'procurement can edit item details in the unsaved arrangement editor',

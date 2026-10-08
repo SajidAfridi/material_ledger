@@ -60,7 +60,7 @@ void main() {
         expect(find.textContaining('Oct 15'), findsOneWidget);
         expect(find.text('No preparation update yet'), findsOneWidget);
         if (size.width < 600) {
-          expect(find.text('2 / 3 quantities entered'), findsOneWidget);
+          expect(find.text('3 / 3 quantities entered'), findsOneWidget);
         }
         await expectLater(
           find.byType(MaterialApp),
