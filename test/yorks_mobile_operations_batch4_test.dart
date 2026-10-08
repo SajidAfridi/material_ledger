@@ -203,6 +203,36 @@ void main() {
     });
   }
 
+  testWidgets(
+    'mobile arrangement saves incomplete progress from the line editor',
+    (tester) async {
+      await _setViewport(tester, const Size(360, 800));
+      final progress = await _pumpArrangement(
+        tester,
+        _workingArrangementWorkspace,
+      );
+      expect(find.text('Save progress'), findsOneWidget);
+      await tester.tap(find.text('Motorized smoke damper'));
+      await tester.pumpAndSettle();
+      final quantity = find.byWidgetPredicate(
+        (widget) =>
+            widget is TextField && widget.decoration?.labelText == 'Arranged',
+      );
+      await tester.enterText(quantity, '1.');
+      final save = find.text('Save progress');
+      await Scrollable.ensureVisible(tester.element(save), alignment: .5);
+      await tester.pumpAndSettle();
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+      expect(progress.saved, isNotNull);
+      final lines = progress.saved!.inputs['lines'] as List;
+      expect((lines.first as Map)['arranged_qty'], '1.');
+      expect(find.text('Progress saved to your account'), findsOneWidget);
+      expect(find.text('Save arrangement'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('receipt requires an explicit outcome for every line', (
     tester,
   ) async {
@@ -426,13 +456,15 @@ Future<void> _golden(WidgetTester tester, String name) async {
   expect(tester.takeException(), isNull);
 }
 
-Future<void> _pumpArrangement(
+Future<FakeRepository> _pumpArrangement(
   WidgetTester tester,
   YorksV1ArrangementWorkspace workspace,
 ) async {
   final repository = _ArrangementRepository(workspace);
+  final progress = FakeRepository();
   await tester.pumpWidget(
     _app(
+      progressRepository: progress,
       overrides: [
         canManageCommercialsProvider.overrideWithValue(true),
         canViewCommercialsProvider.overrideWithValue(true),
@@ -445,6 +477,7 @@ Future<void> _pumpArrangement(
     ),
   );
   await tester.pumpAndSettle();
+  return progress;
 }
 
 Future<_OperationsRepository> _pumpLogistics(
@@ -511,27 +544,30 @@ Future<_OperationsRepository> _pumpReturns(
   return fixture;
 }
 
-Widget _app({required List<Override> overrides, required Widget child}) =>
-    ProviderScope(
-      overrides: [
-        sharedPreferencesProvider.overrideWithValue(_preferences),
-        yorksV1AuthUserIdProvider.overrideWithValue('procurement-test-user'),
-        yorksV1ProcurementProgressRepositoryProvider.overrideWithValue(
-          FakeRepository(),
-        ),
-        yorksV1CurrentPermissionSnapshotProvider.overrideWith(
-          (ref) => YorksV1TestPermissionController(
-            yorksV1TrustedFeaturePermissionState(),
-          ),
-        ),
-        ...overrides,
-      ],
-      child: MaterialApp(
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.light,
-        home: child,
+Widget _app({
+  required List<Override> overrides,
+  required Widget child,
+  FakeRepository? progressRepository,
+}) => ProviderScope(
+  overrides: [
+    sharedPreferencesProvider.overrideWithValue(_preferences),
+    yorksV1AuthUserIdProvider.overrideWithValue('procurement-test-user'),
+    yorksV1ProcurementProgressRepositoryProvider.overrideWithValue(
+      progressRepository ?? FakeRepository(),
+    ),
+    yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+      (ref) => YorksV1TestPermissionController(
+        yorksV1TrustedFeaturePermissionState(),
       ),
-    );
+    ),
+    ...overrides,
+  ],
+  child: MaterialApp(
+    debugShowCheckedModeBanner: false,
+    theme: AppTheme.light,
+    home: child,
+  ),
+);
 
 Future<void> _setViewport(
   WidgetTester tester,

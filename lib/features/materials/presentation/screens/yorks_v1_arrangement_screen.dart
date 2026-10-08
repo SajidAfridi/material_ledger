@@ -990,6 +990,17 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
     await _progress.saveProgress();
   }
 
+  Widget _progressPanel({bool mobile = false}) =>
+      YorksV1ProcurementProgressPanel(
+        controller: _progress,
+        language: widget.language,
+        onSaveProgress: mobile ? _saveProgress : null,
+        onRetryPending: _retryPending,
+        onReload: _reloadWorkspace,
+        onConfirmed: _completeRecovered,
+        onCommandAbandoned: _releaseAbandoned,
+      );
+
   String _query = '';
   YorksV1ArrangementDecision? _decisionFilter;
   String? _focusLineId;
@@ -1129,6 +1140,7 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
           }
         },
         child: _MobileArrangementFlow(
+          progressPanel: _progressPanel(mobile: true),
           workspace: widget.workspace,
           arrangement: _arrangement,
           inventoryItems: _inventoryItems,
@@ -1171,14 +1183,7 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            YorksV1ProcurementProgressPanel(
-              controller: _progress,
-              language: widget.language,
-              onRetryPending: _retryPending,
-              onReload: _reloadWorkspace,
-              onConfirmed: _completeRecovered,
-              onCommandAbandoned: _releaseAbandoned,
-            ),
+            _progressPanel(),
             if (_clarificationReviewRequired) ...[
               _ClarificationReviewBanner(language: widget.language),
               const SizedBox(height: AppSpacing.md),
@@ -2628,6 +2633,7 @@ enum _MobileArrangementStage { lines, line, review }
 
 class _MobileArrangementFlow extends StatefulWidget {
   const _MobileArrangementFlow({
+    required this.progressPanel,
     required this.workspace,
     required this.arrangement,
     required this.inventoryItems,
@@ -2650,6 +2656,7 @@ class _MobileArrangementFlow extends StatefulWidget {
     required this.onSave,
   });
 
+  final Widget progressPanel;
   final YorksV1ArrangementWorkspace workspace;
   final YorksV1ProcurementArrangement arrangement;
   final List<YorksV1InventoryItem> inventoryItems;
@@ -2701,6 +2708,8 @@ class _MobileArrangementFlowState extends State<_MobileArrangementFlow> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                widget.progressPanel,
+                const SizedBox(height: 12),
                 YorksMobilePageTitle(
                   eyebrow:
                       '${widget.workspace.requestNumber ?? widget.workspace.requestId} · ${widget.workspace.requestState}',
@@ -2784,6 +2793,8 @@ class _MobileArrangementFlowState extends State<_MobileArrangementFlow> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                widget.progressPanel,
+                const SizedBox(height: 12),
                 YorksMobilePageTitle(
                   eyebrow: YorksV1ArrangementStrings.itemPosition(
                     _lineIndex + 1,
@@ -3005,6 +3016,8 @@ class _MobileArrangementFlowState extends State<_MobileArrangementFlow> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                widget.progressPanel,
+                const SizedBox(height: 12),
                 YorksMobilePageTitle(
                   eyebrow: YorksV1ArrangementStrings.arrangementReview.active(
                     widget.language,

@@ -14,6 +14,7 @@ class YorksV1ProcurementProgressPanel extends StatelessWidget {
     required this.controller,
     required this.language,
     this.onRetryPending,
+    this.onSaveProgress,
     this.onReload,
     this.onConfirmed,
     this.onCommandAbandoned,
@@ -21,6 +22,7 @@ class YorksV1ProcurementProgressPanel extends StatelessWidget {
   final YorksV1ProcurementProgressController controller;
   final AppLanguage language;
   final Future<void> Function()? onRetryPending;
+  final Future<void> Function()? onSaveProgress;
   final VoidCallback? onReload;
   final VoidCallback? onConfirmed;
   final Future<void> Function(YorksV1ProcurementPendingCommand command)?
@@ -178,6 +180,18 @@ class YorksV1ProcurementProgressPanel extends StatelessWidget {
             : state.isDirty
             ? Icons.edit_outlined
             : Icons.check_circle_outline;
+      }
+      if (onSaveProgress != null &&
+          state.canEdit &&
+          state.error == null &&
+          state.recoveryError == null) {
+        actions.add(
+          TextButton.icon(
+            onPressed: state.isSaving ? null : onSaveProgress,
+            icon: const Icon(Icons.save_outlined, size: 18),
+            label: Text(strings.active(language)),
+          ),
+        );
       }
       return Semantics(
         liveRegion: true,

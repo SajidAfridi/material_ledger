@@ -9,6 +9,7 @@ Source branch: `codex/procurement-workspace-staging`.
 - Arrangement opens inside the universal office shell as a full workspace. The desktop editor uses a bounded lazy list, pinned item identity and column headers, search and decision filters, and persistent Save progress / Review arrangement actions. All lines remain part of validation even when filtered.
 - Warehouse selection separates a selected catalogue item from available quantity and rejects unrelated search results. Shared-item shortages identify every affected line. Existing clarification, supplier optionality, readiness policy and commercial access rules remain in force.
 - Arrangement and dispatch share private account checkpoints, raw incomplete-input recovery, explicit recovery choices and version-conflict handling. Browser recovery excludes costs and is scoped to backend, actor and editor. Account commercial progress uses a separate protected relation.
+- Mobile arrangement now exposes Save progress and the same conflict, retry and recovery controls in the list, line editor and review. A focused regression verifies that an incomplete quantity such as `1.` is preserved exactly without submitting an arrangement.
 - The universal Back/Forward controls and route exit share an unsaved-work guard. Desktop Ctrl/Cmd+S saves progress. Browser unload uses the standard browser warning; it does not attempt a workflow transaction.
 - Final arrangement/dispatch submissions freeze the exact payload and command identity before preparation. Uncertain outcomes offer status reconciliation and exact retry. Explicit abandonment is server-fenced against a delayed commit; a confirmed command cannot be reused as editable progress.
 - Dispatch preparation uses decimal-safe shared-stock suggestions and row validation, including negative, over-cap and combined stock shortages. An explicit manifest review precedes the stock command. Saved preparation moves no stock.
@@ -32,6 +33,7 @@ Rollback: restore the preceding client first; retain additive progress data and 
 
 - Full Flutter suite: **2,613 passed**, four pre-existing fixture skips.
 - Final focused dispatch suite after correcting its visual-test theme: **17 passed**.
+- Mobile follow-up: **60 focused visual/flow tests**, then **47 progress, command-preparation and mobile regressions passed**; analyzer remained clean.
 - Analyzer: **no issues**.
 - Clean local database reset and full database suite: **3,774 tests / 130 files passed**.
 - Two-connection database checks cover competing dispatches and delayed-command versus abandonment fencing in disposable local database clones.
